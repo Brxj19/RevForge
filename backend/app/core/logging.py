@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import Any
 
 import structlog
 
 
 def configure_logging(log_level: str, environment: str) -> None:
     timestamper = structlog.processors.TimeStamper(fmt="iso")
-    shared_processors = [
+    shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         timestamper,
@@ -35,4 +36,3 @@ def configure_logging(log_level: str, environment: str) -> None:
         stream=sys.stdout,
         level=getattr(logging, log_level.upper(), logging.INFO),
     )
-

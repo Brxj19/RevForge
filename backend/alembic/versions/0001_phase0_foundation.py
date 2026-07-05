@@ -11,8 +11,8 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-organization_role = sa.Enum("member", "admin", name="organization_role")
-repository_visibility = sa.Enum("private", "public", name="repository_visibility")
+organization_role = postgresql.ENUM("member", "admin", name="organization_role")
+repository_visibility = postgresql.ENUM("private", "public", name="repository_visibility")
 
 
 def upgrade() -> None:
@@ -56,7 +56,17 @@ def upgrade() -> None:
             sa.ForeignKey("users.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("role", organization_role, nullable=False, server_default="member"),
+        sa.Column(
+            "role",
+            postgresql.ENUM(
+                "member",
+                "admin",
+                name="organization_role",
+                create_type=False,
+            ),
+            nullable=False,
+            server_default="member",
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint(
             "organization_id",
@@ -78,7 +88,12 @@ def upgrade() -> None:
         sa.Column("display_name", sa.String(length=120), nullable=False),
         sa.Column(
             "visibility",
-            repository_visibility,
+            postgresql.ENUM(
+                "private",
+                "public",
+                name="repository_visibility",
+                create_type=False,
+            ),
             nullable=False,
             server_default="private",
         ),
@@ -102,4 +117,3 @@ def downgrade() -> None:
 
     repository_visibility.drop(op.get_bind(), checkfirst=True)
     organization_role.drop(op.get_bind(), checkfirst=True)
-

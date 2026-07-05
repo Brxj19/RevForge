@@ -10,4 +10,3 @@ router = APIRouter(tags=["health"])
 @router.get("/health", response_model=ApiHealthResponse)
 async def api_health() -> ApiHealthResponse:
     return ApiHealthResponse(status="ok", service="revforge-api", api_version="v1")
-

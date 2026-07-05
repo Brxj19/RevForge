@@ -226,3 +226,117 @@ Spawn the codebase explorer, mercurial protocol expert, and security reviewer in
 ## Follow-ups
 - <known limits, migration, or next slice>
 ```
+## Phase delivery and Git completion rule
+
+At the end of every completed RevForge phase, Codex must complete the full Git delivery workflow unless a required check, review, authentication requirement, or branch-protection rule prevents it.
+
+### Required sequence
+
+After implementation, reviews, and all required validation succeed:
+
+1. Inspect the final working tree and ensure only phase-related changes are included.
+2. Run the required formatter, linter, type checker, tests, migration checks, and CI-equivalent commands.
+3. Run a final review against `origin/main`.
+4. Stage only the intended files.
+5. Create a clean Conventional Commit-style commit.
+6. Push the feature branch to `origin`.
+7. Create a pull request targeting `main`.
+8. Wait for required checks and required approvals.
+9. Squash merge the pull request into `main`.
+10. Delete the remote feature branch.
+11. Switch the local repository to `main`.
+12. Pull the merged `main` branch using fast-forward only.
+13. Delete the local feature branch.
+14. Confirm that the final local working tree is clean and on updated `main`.
+
+### Safety rules
+
+* Never merge when required CI checks are failing.
+* Never bypass branch protection, required reviews, or required status checks.
+* Never force-push to `main`.
+* Never merge a pull request containing unrelated files, secrets, generated artifacts, debug output, private data, or unfinished work.
+* Use squash merge unless the repository maintainer explicitly requests another merge strategy.
+* Use `git push --force-with-lease` only when rebasing a feature branch requires it. Never use plain `git push --force`.
+* Do not self-approve a pull request when repository rules require independent human approval.
+* If GitHub CLI authentication, repository permissions, CI checks, required approvals, or merge permissions prevent completion, push the feature branch and create the PR if possible. Then stop and report the exact blocker.
+* Never delete the local feature branch until the pull request is confirmed merged.
+* Never delete the remote feature branch before the merge succeeds.
+
+### Standard commands
+
+Codex should adapt names and paths to the active phase branch.
+
+```bash
+git status
+git diff --check
+git fetch origin --prune
+
+# Run project validation before committing.
+make format
+make lint
+make test
+
+# Review the final change against main.
+git diff origin/main...HEAD
+```
+
+Stage and commit only intended files:
+
+```bash
+git add -p
+git diff --cached
+git commit -m "feat(phase): complete phase N description"
+```
+
+Push and create the pull request:
+
+```bash
+git push -u origin <feature-branch>
+
+gh pr create \
+  --base main \
+  --head <feature-branch> \
+  --title "feat: complete Phase N — <phase name>" \
+  --body-file .github/pull_request_template.md
+```
+
+Check required pull-request status checks:
+
+```bash
+gh pr checks --required --watch
+```
+
+After all required checks and approvals pass:
+
+```bash
+gh pr merge --squash --delete-branch
+```
+
+After the merge succeeds:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git branch -d <feature-branch>
+git status
+```
+
+### Required final report
+
+At phase completion, report:
+
+```text
+Git delivery
+- Feature branch:
+- Commit SHA:
+- Commit message:
+- Pull request URL:
+- Validation checks:
+- Merge method:
+- Remote feature branch deleted: yes/no
+- Local feature branch deleted: yes/no
+- Current branch:
+- Current main SHA:
+- Working tree clean: yes/no
+- Any blocker:
+```
