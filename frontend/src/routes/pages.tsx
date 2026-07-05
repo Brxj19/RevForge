@@ -1,20 +1,52 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { useState, type ButtonHTMLAttributes, type FormEvent, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
-import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import {
+  useState,
+  type ButtonHTMLAttributes,
+  type FormEvent,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from "react";
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { useAuth } from "../app/use-auth";
 import {
+  browseRepository,
   addOrganizationMember,
+  type ChangesetDetail,
+  type ChangesetDiff,
+  type ChangesetSummary,
+  type RepositoryBrowseResult,
+  type RepositoryDetail,
+  type RepositoryRef,
+  type RepositoryRefs,
+  getChangeset,
+  getChangesetDiff,
   createOrganization,
   createRepository,
   deleteOrganizationMember,
   deleteRepositoryPermission,
   getOrganization,
   getRepository,
+  getRepositoryRefs,
   listOrganizationMembers,
   listOrganizations,
+  listChangesets,
   listRepositories,
   listRepositoryPermissions,
+  provisionRepository,
   setRepositoryPermission,
   updateOrganization,
   updateOrganizationMember,
@@ -34,7 +66,9 @@ function SectionHeader({
 }) {
   return (
     <div className="mb-6">
-      <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">{eyebrow}</p>
+      <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+        {eyebrow}
+      </p>
       <h2 className="mt-2 text-2xl font-semibold text-ink-950">{title}</h2>
       <p className="mt-2 max-w-3xl text-sm text-slate-500">{description}</p>
     </div>
@@ -48,7 +82,16 @@ function Surface({
   children: ReactNode;
   className?: string;
 }) {
-  return <section className={clsx("rounded-xl border border-border bg-surface p-5 shadow-panel", className)}>{children}</section>;
+  return (
+    <section
+      className={clsx(
+        "rounded-xl border border-border bg-surface p-5 shadow-panel",
+        className,
+      )}
+    >
+      {children}
+    </section>
+  );
 }
 
 function FormField({
@@ -128,12 +171,22 @@ function Button({
   );
 }
 
-function MessageBanner({ message, tone = "error" }: { message: string; tone?: "error" | "info" }) {
+function MessageBanner({
+  message,
+  tone = "error",
+}: {
+  message: string;
+  tone?: "error" | "info";
+}) {
   const classes =
     tone === "info"
       ? "border-blue-200 bg-blue-50 text-blue-800"
       : "border-red-200 bg-red-50 text-red-800";
-  return <p className={clsx("rounded-md border px-3 py-2 text-sm", classes)}>{message}</p>;
+  return (
+    <p className={clsx("rounded-md border px-3 py-2 text-sm", classes)}>
+      {message}
+    </p>
+  );
 }
 
 function VisibilityBadge({
@@ -147,7 +200,12 @@ function VisibilityBadge({
     private: "border-slate-200 bg-slate-100 text-slate-700",
   } as const;
   return (
-    <span className={clsx("rounded-full border px-2 py-1 text-xs font-medium", classes[visibility])}>
+    <span
+      className={clsx(
+        "rounded-full border px-2 py-1 text-xs font-medium",
+        classes[visibility],
+      )}
+    >
       {visibility}
     </span>
   );
@@ -162,19 +220,21 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   }
   if (!isAuthenticated) {
     const redirect = `${location.pathname}${location.search}`;
-    return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />;
+    return (
+      <Navigate
+        to={`/login?redirect=${encodeURIComponent(redirect)}`}
+        replace
+      />
+    );
   }
   return <>{children}</>;
 }
 
-function AuthForm({
-  mode,
-}: {
-  mode: "login" | "register";
-}) {
+function AuthForm({ mode }: { mode: "login" | "register" }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { clearError, errorMessage, isAuthenticated, login, register } = useAuth();
+  const { clearError, errorMessage, isAuthenticated, login, register } =
+    useAuth();
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -185,14 +245,19 @@ function AuthForm({
     return <Navigate to="/organizations" replace />;
   }
 
-  const redirectTarget = new URLSearchParams(location.search).get("redirect") ?? "/organizations";
+  const redirectTarget =
+    new URLSearchParams(location.search).get("redirect") ?? "/organizations";
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     clearError();
     setLocalError(null);
 
-    if (!email.trim() || !password.trim() || (mode === "register" && !displayName.trim())) {
+    if (
+      !email.trim() ||
+      !password.trim() ||
+      (mode === "register" && !displayName.trim())
+    ) {
       setLocalError("Complete every required field before continuing.");
       return;
     }
@@ -210,7 +275,11 @@ function AuthForm({
       }
       navigate(redirectTarget, { replace: true });
     } catch (error) {
-      setLocalError(error instanceof Error ? error.message : "Unable to continue right now.");
+      setLocalError(
+        error instanceof Error
+          ? error.message
+          : "Unable to continue right now.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -221,7 +290,11 @@ function AuthForm({
       <Surface>
         <SectionHeader
           eyebrow={mode === "login" ? "Identity" : "Registration"}
-          title={mode === "login" ? "Sign in to the control plane" : "Create your RevForge account"}
+          title={
+            mode === "login"
+              ? "Sign in to the control plane"
+              : "Create your RevForge account"
+          }
           description={
             mode === "login"
               ? "Browser sessions use secure, opaque server-side cookies. Your password never leaves the backend as anything but a verified hash."
@@ -253,7 +326,9 @@ function AuthForm({
           <FormField label="Password">
             <TextInput
               aria-label="Password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              autoComplete={
+                mode === "login" ? "current-password" : "new-password"
+              }
               name="password"
               type="password"
               value={password}
@@ -265,23 +340,41 @@ function AuthForm({
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-slate-500">
               {mode === "login" ? "Need an account?" : "Already registered?"}{" "}
-              <Link className="text-forge-600 underline-offset-2 hover:underline" to={mode === "login" ? "/register" : "/login"}>
+              <Link
+                className="text-forge-600 underline-offset-2 hover:underline"
+                to={mode === "login" ? "/register" : "/login"}
+              >
                 {mode === "login" ? "Register here" : "Sign in"}
               </Link>
             </p>
             <Button disabled={isSubmitting} type="submit">
-              {isSubmitting ? "Working..." : mode === "login" ? "Login" : "Create account"}
+              {isSubmitting
+                ? "Working..."
+                : mode === "login"
+                  ? "Login"
+                  : "Create account"}
             </Button>
           </div>
         </form>
       </Surface>
 
       <Surface>
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">Phase 1 scope</p>
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+          Phase 1 scope
+        </p>
         <ul className="mt-4 space-y-3 text-sm text-slate-600">
-          <li>Organization owners and admins manage membership and repository metadata.</li>
-          <li>Public, internal, and private repository visibility is enforced by the backend.</li>
-          <li>Mercurial repository provisioning, clone URLs, and history browsing land in Phase 2.</li>
+          <li>
+            Organization owners and admins manage membership and repository
+            metadata.
+          </li>
+          <li>
+            Public, internal, and private repository visibility is enforced by
+            the backend.
+          </li>
+          <li>
+            Mercurial repository provisioning, clone URLs, and history browsing
+            land in Phase 2.
+          </li>
         </ul>
       </Surface>
     </div>
@@ -303,15 +396,26 @@ export function DashboardPage() {
         <Surface>
           <div className="grid gap-4 md:grid-cols-3">
             {[
-              ["Authentication", "Opaque server-side sessions with CSRF protection"],
+              [
+                "Authentication",
+                "Opaque server-side sessions with CSRF protection",
+              ],
               ["Organizations", "Owner, admin, and member role boundaries"],
-              ["Repositories", "Public, internal, and private metadata catalog"],
+              [
+                "Repositories",
+                "Public, internal, and private metadata catalog",
+              ],
             ].map(([title, detail]) => (
-              <div key={title} className="rounded-lg border border-border bg-canvas p-4">
+              <div
+                key={title}
+                className="rounded-lg border border-border bg-canvas p-4"
+              >
                 <p className="font-mono text-xs uppercase tracking-[0.2em] text-slate-500">
                   Ready
                 </p>
-                <h3 className="mt-2 text-base font-semibold text-ink-950">{title}</h3>
+                <h3 className="mt-2 text-base font-semibold text-ink-950">
+                  {title}
+                </h3>
                 <p className="mt-2 text-sm text-slate-500">{detail}</p>
               </div>
             ))}
@@ -323,9 +427,17 @@ export function DashboardPage() {
                 Current access model
               </p>
               <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                <li>Organization owners and admins inherit repository administration.</li>
-                <li>Members see internal repositories and need explicit access for private ones.</li>
-                <li>Every important control-plane change writes an audit event.</li>
+                <li>
+                  Organization owners and admins inherit repository
+                  administration.
+                </li>
+                <li>
+                  Members see internal repositories and need explicit access for
+                  private ones.
+                </li>
+                <li>
+                  Every important control-plane change writes an audit event.
+                </li>
               </ul>
             </div>
             <div className="rounded-lg border border-border p-4">
@@ -333,7 +445,9 @@ export function DashboardPage() {
                 Next phase
               </p>
               <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                <li>Mercurial repository provisioning and safe storage mapping</li>
+                <li>
+                  Mercurial repository provisioning and safe storage mapping
+                </li>
                 <li>Native clone, pull, and push transport endpoints</li>
                 <li>Changesets, file browsing, and clone guidance</li>
               </ul>
@@ -342,8 +456,15 @@ export function DashboardPage() {
 
           {isAuthenticated ? (
             <p className="mt-6 rounded-lg border border-border bg-canvas px-4 py-3 text-sm text-slate-600">
-              Signed in as <span className="font-medium text-ink-950">{user?.display_name}</span>. Head to{" "}
-              <Link className="text-forge-600 underline-offset-2 hover:underline" to="/organizations">
+              Signed in as{" "}
+              <span className="font-medium text-ink-950">
+                {user?.display_name}
+              </span>
+              . Head to{" "}
+              <Link
+                className="text-forge-600 underline-offset-2 hover:underline"
+                to="/organizations"
+              >
                 organizations
               </Link>{" "}
               to create or manage your control-plane workspace.
@@ -404,7 +525,11 @@ function OrganizationsContent() {
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
     },
     onError: (error) => {
-      setCreateError(error instanceof Error ? error.message : "Unable to create organization.");
+      setCreateError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create organization.",
+      );
     },
   });
 
@@ -418,11 +543,17 @@ function OrganizationsContent() {
 
       <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
         <Surface>
-          {organizationsQuery.isLoading ? <LoadingState label="Loading your organizations." /> : null}
+          {organizationsQuery.isLoading ? (
+            <LoadingState label="Loading your organizations." />
+          ) : null}
           {organizationsQuery.isError ? (
             <ErrorState
               title="Organizations unavailable"
-              description={organizationsQuery.error instanceof Error ? organizationsQuery.error.message : "Unable to load organizations."}
+              description={
+                organizationsQuery.error instanceof Error
+                  ? organizationsQuery.error.message
+                  : "Unable to load organizations."
+              }
             />
           ) : null}
           {organizationsQuery.data?.length ? (
@@ -435,7 +566,9 @@ function OrganizationsContent() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="text-base font-semibold text-ink-950">{organization.display_name}</h3>
+                      <h3 className="text-base font-semibold text-ink-950">
+                        {organization.display_name}
+                      </h3>
                       <p className="mt-1 font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
                         {organization.slug}
                       </p>
@@ -459,7 +592,9 @@ function OrganizationsContent() {
         </Surface>
 
         <Surface>
-          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">Create organization</p>
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Create organization
+          </p>
           <form
             className="mt-4 grid gap-4"
             onSubmit={(event) => {
@@ -472,7 +607,10 @@ function OrganizationsContent() {
                 aria-label="Organization display name"
                 value={formState.display_name}
                 onChange={(event) =>
-                  setFormState((current) => ({ ...current, display_name: event.target.value }))
+                  setFormState((current) => ({
+                    ...current,
+                    display_name: event.target.value,
+                  }))
                 }
               />
             </FormField>
@@ -480,7 +618,12 @@ function OrganizationsContent() {
               <TextInput
                 aria-label="Organization slug"
                 value={formState.slug}
-                onChange={(event) => setFormState((current) => ({ ...current, slug: event.target.value }))}
+                onChange={(event) =>
+                  setFormState((current) => ({
+                    ...current,
+                    slug: event.target.value,
+                  }))
+                }
               />
             </FormField>
             <FormField label="Description">
@@ -488,7 +631,10 @@ function OrganizationsContent() {
                 aria-label="Organization description"
                 value={formState.description}
                 onChange={(event) =>
-                  setFormState((current) => ({ ...current, description: event.target.value }))
+                  setFormState((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
                 }
               />
             </FormField>
@@ -519,7 +665,12 @@ function useOrganizationRouteData() {
     queryFn: () => listRepositories(organizationSlug),
   });
 
-  return { membersQuery, organizationQuery, organizationSlug, repositoriesQuery };
+  return {
+    membersQuery,
+    organizationQuery,
+    organizationSlug,
+    repositoriesQuery,
+  };
 }
 
 export function OrganizationDetailPage() {
@@ -533,9 +684,16 @@ export function OrganizationDetailPage() {
 function OrganizationDetailContent() {
   const queryClient = useQueryClient();
   const { csrfToken } = useAuth();
-  const { membersQuery, organizationQuery, organizationSlug, repositoriesQuery } = useOrganizationRouteData();
+  const {
+    membersQuery,
+    organizationQuery,
+    organizationSlug,
+    repositoriesQuery,
+  } = useOrganizationRouteData();
   const [memberEmail, setMemberEmail] = useState("");
-  const [memberRole, setMemberRole] = useState<"owner" | "admin" | "member">("member");
+  const [memberRole, setMemberRole] = useState<"owner" | "admin" | "member">(
+    "member",
+  );
   const [repoState, setRepoState] = useState({
     slug: "",
     display_name: "",
@@ -545,20 +703,35 @@ function OrganizationDetailContent() {
 
   const addMemberMutation = useMutation({
     mutationFn: () =>
-      addOrganizationMember(organizationSlug, { email: memberEmail, role: memberRole }, csrfToken),
+      addOrganizationMember(
+        organizationSlug,
+        { email: memberEmail, role: memberRole },
+        csrfToken,
+      ),
     onSuccess: async () => {
       setMemberEmail("");
       setMemberRole("member");
-      await queryClient.invalidateQueries({ queryKey: ["organization-members", organizationSlug] });
-      await queryClient.invalidateQueries({ queryKey: ["organization", organizationSlug] });
+      await queryClient.invalidateQueries({
+        queryKey: ["organization-members", organizationSlug],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["organization", organizationSlug],
+      });
     },
   });
 
   const createRepoMutation = useMutation({
     mutationFn: () => createRepository(organizationSlug, repoState, csrfToken),
     onSuccess: async () => {
-      setRepoState({ slug: "", display_name: "", description: "", visibility: "private" });
-      await queryClient.invalidateQueries({ queryKey: ["organization-repositories", organizationSlug] });
+      setRepoState({
+        slug: "",
+        display_name: "",
+        description: "",
+        visibility: "private",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["organization-repositories", organizationSlug],
+      });
     },
   });
 
@@ -569,7 +742,11 @@ function OrganizationDetailContent() {
     return (
       <ErrorState
         title="Organization unavailable"
-        description={organizationQuery.error instanceof Error ? organizationQuery.error.message : "Unable to load organization."}
+        description={
+          organizationQuery.error instanceof Error
+            ? organizationQuery.error.message
+            : "Unable to load organization."
+        }
       />
     );
   }
@@ -580,16 +757,25 @@ function OrganizationDetailContent() {
       <SectionHeader
         eyebrow="Organization"
         title={organization.display_name}
-        description={organization.description ?? "Organization metadata is live now. Mercurial repository provisioning arrives in Phase 2."}
+        description={
+          organization.description ??
+          "Organization metadata is live now. Mercurial repository provisioning arrives in Phase 2."
+        }
       />
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <Surface>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="font-mono text-xs uppercase tracking-[0.2em] text-slate-500">{organization.slug}</p>
+              <p className="font-mono text-xs uppercase tracking-[0.2em] text-slate-500">
+                {organization.slug}
+              </p>
               <p className="mt-3 text-sm text-slate-600">
-                Your role is <span className="font-medium text-ink-950">{organization.viewer_role}</span>.
+                Your role is{" "}
+                <span className="font-medium text-ink-950">
+                  {organization.viewer_role}
+                </span>
+                .
               </p>
             </div>
             <Link
@@ -601,8 +787,12 @@ function OrganizationDetailContent() {
           </div>
 
           <div className="mt-6">
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">Repositories</p>
-            {repositoriesQuery.isLoading ? <LoadingState label="Loading repositories." /> : null}
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+              Repositories
+            </p>
+            {repositoriesQuery.isLoading ? (
+              <LoadingState label="Loading repositories." />
+            ) : null}
             {repositoriesQuery.data?.length ? (
               <div className="mt-4 grid gap-3">
                 {repositoriesQuery.data.map((repository) => (
@@ -613,7 +803,9 @@ function OrganizationDetailContent() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-base font-semibold text-ink-950">{repository.display_name}</h3>
+                        <h3 className="text-base font-semibold text-ink-950">
+                          {repository.display_name}
+                        </h3>
                         <p className="mt-1 font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
                           {repository.slug}
                         </p>
@@ -638,16 +830,27 @@ function OrganizationDetailContent() {
         </Surface>
 
         <Surface>
-          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">Members</p>
-          {membersQuery.isLoading ? <LoadingState label="Loading members." /> : null}
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Members
+          </p>
+          {membersQuery.isLoading ? (
+            <LoadingState label="Loading members." />
+          ) : null}
           {membersQuery.data?.length ? (
             <div className="mt-4 space-y-3">
               {membersQuery.data.map((member) => (
-                <div key={member.id} className="rounded-lg border border-border bg-canvas p-3">
+                <div
+                  key={member.id}
+                  className="rounded-lg border border-border bg-canvas p-3"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-ink-950">{member.user_display_name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{member.user_email}</p>
+                      <p className="text-sm font-medium text-ink-950">
+                        {member.user_display_name}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {member.user_email}
+                      </p>
                     </div>
                     <span className="rounded-full border border-border px-2 py-1 text-xs text-slate-600">
                       {member.role}
@@ -675,7 +878,14 @@ function OrganizationDetailContent() {
                   />
                 </FormField>
                 <FormField label="Role">
-                  <Select value={memberRole} onChange={(event) => setMemberRole(event.target.value as "owner" | "admin" | "member")}>
+                  <Select
+                    value={memberRole}
+                    onChange={(event) =>
+                      setMemberRole(
+                        event.target.value as "owner" | "admin" | "member",
+                      )
+                    }
+                  >
                     <option value="member">member</option>
                     <option value="admin">admin</option>
                     <option value="owner">owner</option>
@@ -702,13 +912,18 @@ function OrganizationDetailContent() {
                   void createRepoMutation.mutateAsync();
                 }}
               >
-                <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">Create repository metadata</p>
+                <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+                  Create repository metadata
+                </p>
                 <FormField label="Display name">
                   <TextInput
                     aria-label="Repository display name"
                     value={repoState.display_name}
                     onChange={(event) =>
-                      setRepoState((current) => ({ ...current, display_name: event.target.value }))
+                      setRepoState((current) => ({
+                        ...current,
+                        display_name: event.target.value,
+                      }))
                     }
                   />
                 </FormField>
@@ -716,7 +931,12 @@ function OrganizationDetailContent() {
                   <TextInput
                     aria-label="Repository slug"
                     value={repoState.slug}
-                    onChange={(event) => setRepoState((current) => ({ ...current, slug: event.target.value }))}
+                    onChange={(event) =>
+                      setRepoState((current) => ({
+                        ...current,
+                        slug: event.target.value,
+                      }))
+                    }
                   />
                 </FormField>
                 <FormField label="Visibility">
@@ -725,7 +945,8 @@ function OrganizationDetailContent() {
                     onChange={(event) =>
                       setRepoState((current) => ({
                         ...current,
-                        visibility: event.target.value as "public" | "internal" | "private",
+                        visibility: event.target.value as
+                          "public" | "internal" | "private",
                       }))
                     }
                   >
@@ -739,7 +960,10 @@ function OrganizationDetailContent() {
                     aria-label="Repository description"
                     value={repoState.description}
                     onChange={(event) =>
-                      setRepoState((current) => ({ ...current, description: event.target.value }))
+                      setRepoState((current) => ({
+                        ...current,
+                        description: event.target.value,
+                      }))
                     }
                   />
                 </FormField>
@@ -753,13 +977,16 @@ function OrganizationDetailContent() {
                   />
                 ) : null}
                 <Button disabled={createRepoMutation.isPending} type="submit">
-                  {createRepoMutation.isPending ? "Creating..." : "Create repository"}
+                  {createRepoMutation.isPending
+                    ? "Creating..."
+                    : "Create repository"}
                 </Button>
               </form>
             </>
           ) : (
             <p className="mt-6 rounded-md border border-border bg-canvas px-3 py-2 text-sm text-slate-600">
-              Member management and repository creation stay restricted to organization owners and admins.
+              Member management and repository creation stay restricted to
+              organization owners and admins.
             </p>
           )}
         </Surface>
@@ -779,15 +1006,20 @@ export function OrganizationSettingsPage() {
 function OrganizationSettingsContent() {
   const queryClient = useQueryClient();
   const { csrfToken } = useAuth();
-  const { membersQuery, organizationQuery, organizationSlug } = useOrganizationRouteData();
+  const { membersQuery, organizationQuery, organizationSlug } =
+    useOrganizationRouteData();
   const [message, setMessage] = useState<string | null>(null);
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { display_name?: string; description?: string | null }) =>
-      updateOrganization(organizationSlug, payload, csrfToken),
+    mutationFn: (payload: {
+      display_name?: string;
+      description?: string | null;
+    }) => updateOrganization(organizationSlug, payload, csrfToken),
     onSuccess: async () => {
       setMessage("Organization settings saved.");
-      await queryClient.invalidateQueries({ queryKey: ["organization", organizationSlug] });
+      await queryClient.invalidateQueries({
+        queryKey: ["organization", organizationSlug],
+      });
     },
   });
 
@@ -798,18 +1030,28 @@ function OrganizationSettingsContent() {
     }: {
       memberId: string;
       role: "owner" | "admin" | "member";
-    }) => updateOrganizationMember(organizationSlug, memberId, { role }, csrfToken),
+    }) =>
+      updateOrganizationMember(organizationSlug, memberId, { role }, csrfToken),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["organization-members", organizationSlug] });
-      await queryClient.invalidateQueries({ queryKey: ["organization", organizationSlug] });
+      await queryClient.invalidateQueries({
+        queryKey: ["organization-members", organizationSlug],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["organization", organizationSlug],
+      });
     },
   });
 
   const memberDeleteMutation = useMutation({
-    mutationFn: (memberId: string) => deleteOrganizationMember(organizationSlug, memberId, csrfToken),
+    mutationFn: (memberId: string) =>
+      deleteOrganizationMember(organizationSlug, memberId, csrfToken),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["organization-members", organizationSlug] });
-      await queryClient.invalidateQueries({ queryKey: ["organization", organizationSlug] });
+      await queryClient.invalidateQueries({
+        queryKey: ["organization-members", organizationSlug],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["organization", organizationSlug],
+      });
     },
   });
 
@@ -820,7 +1062,11 @@ function OrganizationSettingsContent() {
     return (
       <ErrorState
         title="Organization settings unavailable"
-        description={organizationQuery.error instanceof Error ? organizationQuery.error.message : "Unable to load organization settings."}
+        description={
+          organizationQuery.error instanceof Error
+            ? organizationQuery.error.message
+            : "Unable to load organization settings."
+        }
       />
     );
   }
@@ -848,26 +1094,45 @@ function OrganizationSettingsContent() {
             }}
           >
             <FormField label="Display name">
-              <TextInput aria-label="Display name" defaultValue={organization.display_name} name="display_name" />
+              <TextInput
+                aria-label="Display name"
+                defaultValue={organization.display_name}
+                name="display_name"
+              />
             </FormField>
             <FormField label="Description">
-              <TextArea aria-label="Description" defaultValue={organization.description ?? ""} name="description" />
+              <TextArea
+                aria-label="Description"
+                defaultValue={organization.description ?? ""}
+                name="description"
+              />
             </FormField>
             {message ? <MessageBanner message={message} tone="info" /> : null}
             {updateMutation.isError ? (
               <MessageBanner
-                message={updateMutation.error instanceof Error ? updateMutation.error.message : "Unable to save organization settings."}
+                message={
+                  updateMutation.error instanceof Error
+                    ? updateMutation.error.message
+                    : "Unable to save organization settings."
+                }
               />
             ) : null}
-            <Button disabled={updateMutation.isPending || !organization.can_manage} type="submit">
+            <Button
+              disabled={updateMutation.isPending || !organization.can_manage}
+              type="submit"
+            >
               Save organization settings
             </Button>
           </form>
         </Surface>
 
         <Surface>
-          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">Member roles</p>
-          {membersQuery.isLoading ? <LoadingState label="Loading member settings." /> : null}
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Member roles
+          </p>
+          {membersQuery.isLoading ? (
+            <LoadingState label="Loading member settings." />
+          ) : null}
           <div className="mt-4 space-y-3">
             {membersQuery.data?.map((member) => (
               <form
@@ -878,28 +1143,50 @@ function OrganizationSettingsContent() {
                   const form = new FormData(event.currentTarget);
                   void memberRoleMutation.mutateAsync({
                     memberId: member.id,
-                    role: String(form.get("role")) as "owner" | "admin" | "member",
+                    role: String(form.get("role")) as
+                      "owner" | "admin" | "member",
                   });
                 }}
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="text-sm font-medium text-ink-950">{member.user_display_name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{member.user_email}</p>
+                    <p className="text-sm font-medium text-ink-950">
+                      {member.user_display_name}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {member.user_email}
+                    </p>
                   </div>
                   <div className="flex gap-2">
-                    <Select aria-label={`Role for ${member.user_email}`} defaultValue={member.role} name="role">
+                    <Select
+                      aria-label={`Role for ${member.user_email}`}
+                      defaultValue={member.role}
+                      name="role"
+                    >
                       <option value="member">member</option>
                       <option value="admin">admin</option>
                       <option value="owner">owner</option>
                     </Select>
-                    <Button disabled={!organization.can_manage || memberRoleMutation.isPending} type="submit" variant="secondary">
+                    <Button
+                      disabled={
+                        !organization.can_manage || memberRoleMutation.isPending
+                      }
+                      type="submit"
+                      variant="secondary"
+                    >
                       Save
                     </Button>
                     <Button
-                      disabled={!organization.can_manage || memberDeleteMutation.isPending}
+                      disabled={
+                        !organization.can_manage ||
+                        memberDeleteMutation.isPending
+                      }
                       onClick={() => {
-                        if (window.confirm(`Remove ${member.user_display_name} from ${organization.display_name}?`)) {
+                        if (
+                          window.confirm(
+                            `Remove ${member.user_display_name} from ${organization.display_name}?`,
+                          )
+                        ) {
                           void memberDeleteMutation.mutateAsync(member.id);
                         }
                       }}
@@ -915,12 +1202,20 @@ function OrganizationSettingsContent() {
           </div>
           {memberRoleMutation.isError ? (
             <MessageBanner
-              message={memberRoleMutation.error instanceof Error ? memberRoleMutation.error.message : "Unable to update the member role."}
+              message={
+                memberRoleMutation.error instanceof Error
+                  ? memberRoleMutation.error.message
+                  : "Unable to update the member role."
+              }
             />
           ) : null}
           {memberDeleteMutation.isError ? (
             <MessageBanner
-              message={memberDeleteMutation.error instanceof Error ? memberDeleteMutation.error.message : "Unable to remove the member."}
+              message={
+                memberDeleteMutation.error instanceof Error
+                  ? memberDeleteMutation.error.message
+                  : "Unable to remove the member."
+              }
             />
           ) : null}
         </Surface>
@@ -929,11 +1224,859 @@ function OrganizationSettingsContent() {
   );
 }
 
+type RepositorySection =
+  | "overview"
+  | "code"
+  | "commits"
+  | "changeset"
+  | "branches"
+  | "tags"
+  | "bookmarks";
+
+function RepositoryMetadataItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-canvas p-4">
+      <dt className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
+        {label}
+      </dt>
+      <dd className="mt-2 text-sm text-slate-700">{value}</dd>
+    </div>
+  );
+}
+
+function RepositoryProvisioningBadge({
+  provisioningState,
+}: {
+  provisioningState: RepositoryDetail["provisioning_state"];
+}) {
+  const tone = {
+    unprovisioned: "border-slate-300 bg-slate-100 text-slate-700",
+    provisioning: "border-blue-200 bg-blue-50 text-blue-700",
+    ready: "border-green-200 bg-green-50 text-green-700",
+    failed: "border-red-200 bg-red-50 text-red-700",
+  }[provisioningState];
+
+  return (
+    <span
+      className={clsx(
+        "rounded-full border px-3 py-1 text-xs font-medium uppercase tracking-[0.18em]",
+        tone,
+      )}
+    >
+      {provisioningState}
+    </span>
+  );
+}
+
+function QuickLinkCard({
+  title,
+  description,
+  to,
+}: {
+  title: string;
+  description: string;
+  to: string;
+}) {
+  return (
+    <Link
+      className="rounded-lg border border-border bg-canvas p-4 transition hover:border-forge-500 hover:bg-forge-100/40"
+      to={to}
+    >
+      <p className="text-sm font-semibold text-ink-950">{title}</p>
+      <p className="mt-2 text-sm text-slate-500">{description}</p>
+    </Link>
+  );
+}
+
+function resolveRepositorySection(
+  pathname: string,
+  basePath: string,
+): RepositorySection {
+  if (pathname === `${basePath}/code`) {
+    return "code";
+  }
+  if (pathname === `${basePath}/commits`) {
+    return "commits";
+  }
+  if (pathname.startsWith(`${basePath}/changesets/`)) {
+    return "changeset";
+  }
+  if (pathname === `${basePath}/branches`) {
+    return "branches";
+  }
+  if (pathname === `${basePath}/tags`) {
+    return "tags";
+  }
+  if (pathname === `${basePath}/bookmarks`) {
+    return "bookmarks";
+  }
+  return "overview";
+}
+
+function repositorySectionNode(pathname: string): string | null {
+  const node = pathname.split("/changesets/")[1];
+  return node && node.length > 0 ? decodeURIComponent(node) : null;
+}
+
+function repositorySearch(
+  search: string,
+  updates: { path?: string | null; revision?: string | null },
+) {
+  const params = new URLSearchParams(search);
+  if (updates.path === undefined) {
+    // Keep the current path untouched.
+  } else if (updates.path) {
+    params.set("path", updates.path);
+  } else {
+    params.delete("path");
+  }
+  if (updates.revision === undefined) {
+    // Keep the current revision untouched.
+  } else if (updates.revision) {
+    params.set("revision", updates.revision);
+  } else {
+    params.delete("revision");
+  }
+  const next = params.toString();
+  return next ? `?${next}` : "";
+}
+
+function formatTimestamp(value: string) {
+  return new Date(value).toLocaleString();
+}
+
+function repositoryRevisionGroups(
+  refs: RepositoryRefs | undefined,
+  selectedRevision: string | null,
+) {
+  const currentRevision = selectedRevision?.trim() ?? "";
+  const groups = [
+    { label: "Branches", refs: refs?.branches ?? [] },
+    { label: "Tags", refs: refs?.tags ?? [] },
+    { label: "Bookmarks", refs: refs?.bookmarks ?? [] },
+  ].filter((group) => group.refs.length > 0);
+
+  const hasCurrentRevision =
+    currentRevision.length > 0 &&
+    groups.some((group) =>
+      group.refs.some(
+        (ref) => ref.node === currentRevision || ref.name === currentRevision,
+      ),
+    );
+
+  return { currentRevision, groups, hasCurrentRevision };
+}
+
+function renderRepositorySection({
+  basePath,
+  browseQuery,
+  changesetNode,
+  changesetQuery,
+  changesets,
+  currentSection,
+  diffQuery,
+  historyQuery,
+  locationSearch,
+  onSelectCodeRevision,
+  refsError,
+  refsIsError,
+  refs,
+  repository,
+  revisionLabel,
+  selectedRevision,
+}: {
+  basePath: string;
+  browseQuery: {
+    data?: RepositoryBrowseResult;
+    error: unknown;
+    isError: boolean;
+    isLoading: boolean;
+  };
+  changesetNode: string | null;
+  changesetQuery: {
+    data?: ChangesetDetail;
+    error: unknown;
+    isError: boolean;
+    isLoading: boolean;
+  };
+  changesets: ChangesetSummary[];
+  currentSection: RepositorySection;
+  diffQuery: {
+    data?: ChangesetDiff;
+    error: unknown;
+    isError: boolean;
+    isLoading: boolean;
+  };
+  historyQuery: {
+    error: unknown;
+    fetchNextPage: () => Promise<unknown>;
+    hasNextPage?: boolean;
+    isError: boolean;
+    isFetchingNextPage: boolean;
+    isLoading: boolean;
+  };
+  locationSearch: string;
+  onSelectCodeRevision: (revision: string | null) => void;
+  refsError: unknown;
+  refsIsError: boolean;
+  refs: RepositoryRefs | undefined;
+  repository: RepositoryDetail;
+  revisionLabel: string;
+  selectedRevision: string | null;
+}) {
+  if (!repository.is_browsable) {
+    return (
+      <EmptyState
+        title="Mercurial repository not provisioned yet"
+        description="Provision the repository to unlock history, diffs, branches, tags, bookmarks, and code browsing."
+      />
+    );
+  }
+
+  if (currentSection === "overview") {
+    return (
+      <div className="space-y-4">
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+          Overview
+        </p>
+        <p className="text-sm text-slate-600">
+          Repository storage is provisioned and safe read-only browsing is
+          active.
+        </p>
+        <div className="grid gap-4 md:grid-cols-3">
+          <RepositoryMetadataItem
+            label="Current target"
+            value={revisionLabel}
+          />
+          <RepositoryMetadataItem
+            label="Provisioned at"
+            value={
+              repository.provisioned_at
+                ? formatTimestamp(repository.provisioned_at)
+                : "not recorded"
+            }
+          />
+          <RepositoryMetadataItem
+            label="Authorized actions"
+            value={
+              repository.can_manage
+                ? "Browse plus repository administration"
+                : "Browse only"
+            }
+          />
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <QuickLinkCard
+            title="Browse code"
+            description="Open the repository tree at the current revision target."
+            to={`${basePath}/code${repositorySearch(locationSearch, { path: "", revision: selectedRevision })}`}
+          />
+          <QuickLinkCard
+            title="View history"
+            description="Inspect paginated changesets and open full diff views."
+            to={`${basePath}/commits`}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (currentSection === "code") {
+    if (browseQuery.isLoading) {
+      return <LoadingState label="Loading repository content." />;
+    }
+    if (browseQuery.isError) {
+      return (
+        <ErrorState
+          title="Repository content unavailable"
+          description={
+            browseQuery.error instanceof Error
+              ? browseQuery.error.message
+              : "Unable to load repository content."
+          }
+        />
+      );
+    }
+
+    const browseResult = browseQuery.data;
+    if (!browseResult) {
+      return (
+        <ErrorState
+          title="Repository content unavailable"
+          description="The browser did not receive repository content."
+        />
+      );
+    }
+
+    const pathSegments =
+      browseResult.path === "" ? [] : browseResult.path.split("/");
+    const revisionOptions = repositoryRevisionGroups(refs, selectedRevision);
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+              Code
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              Browsing revision{" "}
+              <span className="font-mono text-ink-950">
+                {browseResult.revision || "empty repository"}
+              </span>
+            </p>
+          </div>
+          <label className="block text-sm text-slate-600">
+            <span className="mb-2 block font-medium text-ink-950">
+              Revision
+            </span>
+            {refsIsError ? (
+              <p className="mb-2 text-xs text-red-700">
+                {refsError instanceof Error
+                  ? refsError.message
+                  : "Unable to load repository references."}
+              </p>
+            ) : null}
+            <Select
+              aria-label="Browse revision"
+              value={selectedRevision ?? ""}
+              onChange={(event) => {
+                onSelectCodeRevision(event.target.value || null);
+              }}
+            >
+              <option value="">latest tip</option>
+              {revisionOptions.groups.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.refs.map((ref) => (
+                    <option key={`${group.label}-${ref.name}`} value={ref.name}>
+                      {ref.name} ({ref.short_node})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+              {revisionOptions.currentRevision &&
+              !revisionOptions.hasCurrentRevision ? (
+                <option value={revisionOptions.currentRevision}>
+                  {revisionOptions.currentRevision.slice(0, 12)}
+                </option>
+              ) : null}
+            </Select>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-canvas p-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <Link
+              className="text-forge-600 underline-offset-2 hover:underline"
+              to={`${basePath}/code${repositorySearch(locationSearch, { path: "", revision: selectedRevision })}`}
+            >
+              root
+            </Link>
+            {pathSegments.map((segment, index) => {
+              const nextPath = pathSegments.slice(0, index + 1).join("/");
+              const isLast = index === pathSegments.length - 1;
+              return (
+                <span key={nextPath} className="flex items-center gap-2">
+                  <span className="text-slate-400">/</span>
+                  {isLast && browseResult.kind === "file" ? (
+                    <span className="font-mono text-ink-950">{segment}</span>
+                  ) : (
+                    <Link
+                      className="font-mono text-forge-600 underline-offset-2 hover:underline"
+                      to={`${basePath}/code${repositorySearch(locationSearch, { path: nextPath, revision: selectedRevision })}`}
+                    >
+                      {segment}
+                    </Link>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        {browseResult.kind === "directory" ? (
+          browseResult.revision === "" && browseResult.entries.length === 0 ? (
+            <EmptyState
+              title="Empty repository"
+              description="This Mercurial repository is provisioned but does not contain any committed files yet."
+            />
+          ) : (
+            <div className="space-y-2">
+              {browseResult.entries.map((entry) => (
+                <Link
+                  key={entry.path}
+                  className="flex items-center justify-between rounded-lg border border-border bg-canvas px-4 py-3 text-sm text-slate-700 transition hover:border-forge-500"
+                  to={`${basePath}/code${repositorySearch(locationSearch, {
+                    path: entry.path,
+                    revision: selectedRevision,
+                  })}`}
+                >
+                  <span className="font-mono text-ink-950">{entry.name}</span>
+                  <span className="uppercase tracking-[0.18em] text-slate-500">
+                    {entry.kind}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )
+        ) : browseResult.is_binary ? (
+          <EmptyState
+            title="Binary file"
+            description="RevForge detected binary content and is intentionally withholding inline rendering."
+          />
+        ) : browseResult.is_too_large ? (
+          <EmptyState
+            title="File too large to render"
+            description="This file exceeded the configured safe inline size limit, so the browser returned metadata without file contents."
+          />
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-canvas px-4 py-3 text-sm text-slate-600">
+              <span>
+                Language hint:{" "}
+                <span className="font-mono text-ink-950">
+                  {browseResult.language_hint_when_available ?? "plain text"}
+                </span>
+              </span>
+              <Link
+                className="text-forge-600 underline-offset-2 hover:underline"
+                to={`${basePath}/changesets/${browseResult.revision}`}
+              >
+                View changeset
+              </Link>
+            </div>
+            <pre className="overflow-x-auto rounded-lg border border-border bg-canvas p-4 text-xs text-ink-950">
+              <code>{browseResult.content ?? ""}</code>
+            </pre>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (currentSection === "commits") {
+    if (historyQuery.isLoading) {
+      return <LoadingState label="Loading repository history." />;
+    }
+    if (historyQuery.isError) {
+      return (
+        <ErrorState
+          title="History unavailable"
+          description={
+            historyQuery.error instanceof Error
+              ? historyQuery.error.message
+              : "Unable to load repository history."
+          }
+        />
+      );
+    }
+    if (changesets.length === 0) {
+      return (
+        <EmptyState
+          title="No changesets yet"
+          description="The repository is provisioned, but there are not any committed revisions to display."
+        />
+      );
+    }
+    return (
+      <div className="space-y-3">
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+          History
+        </p>
+        {changesets.map((changeset) => (
+          <div
+            key={changeset.node}
+            className="rounded-lg border border-border bg-canvas p-4"
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <Link
+                  className="text-sm font-semibold text-forge-600 underline-offset-2 hover:underline"
+                  to={`${basePath}/changesets/${changeset.node}`}
+                >
+                  {changeset.message.split("\n")[0] || "(no commit message)"}
+                </Link>
+                <div className="flex flex-wrap gap-3 text-sm text-slate-500">
+                  <span className="font-mono text-ink-950">
+                    {changeset.short_node}
+                  </span>
+                  <span>{changeset.author_name}</span>
+                  <span>{formatTimestamp(changeset.timestamp)}</span>
+                  <span>branch: {changeset.branch}</span>
+                </div>
+              </div>
+              <span className="text-sm text-slate-500">
+                {changeset.files_changed_count_when_available ?? 0} file changes
+              </span>
+            </div>
+          </div>
+        ))}
+        {historyQuery.hasNextPage ? (
+          <Button
+            disabled={historyQuery.isFetchingNextPage}
+            onClick={() => {
+              void historyQuery.fetchNextPage();
+            }}
+            type="button"
+            variant="secondary"
+          >
+            {historyQuery.isFetchingNextPage
+              ? "Loading more changesets..."
+              : "Load more"}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (currentSection === "changeset") {
+    if (!changesetNode) {
+      return (
+        <ErrorState
+          title="Changeset unavailable"
+          description="No changeset identifier was provided."
+        />
+      );
+    }
+    if (changesetQuery.isLoading || diffQuery.isLoading) {
+      return <LoadingState label="Loading changeset detail." />;
+    }
+    if (changesetQuery.isError) {
+      return (
+        <ErrorState
+          title="Changeset unavailable"
+          description={
+            changesetQuery.error instanceof Error
+              ? changesetQuery.error.message
+              : "Unable to load changeset detail."
+          }
+        />
+      );
+    }
+    if (diffQuery.isError) {
+      return (
+        <ErrorState
+          title="Diff unavailable"
+          description={
+            diffQuery.error instanceof Error
+              ? diffQuery.error.message
+              : "Unable to load the unified diff."
+          }
+        />
+      );
+    }
+    if (!changesetQuery.data || !diffQuery.data) {
+      return (
+        <ErrorState
+          title="Changeset unavailable"
+          description="The browser did not receive complete changeset data."
+        />
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+              Changeset
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-ink-950">
+              {changesetQuery.data.message.split("\n")[0] ||
+                "(no commit message)"}
+            </h3>
+          </div>
+          <Link
+            className="text-sm text-forge-600 underline-offset-2 hover:underline"
+            to={`${basePath}/commits`}
+          >
+            Back to history
+          </Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <RepositoryMetadataItem
+            label="Node"
+            value={changesetQuery.data.node}
+          />
+          <RepositoryMetadataItem
+            label="Branch"
+            value={changesetQuery.data.branch}
+          />
+          <RepositoryMetadataItem
+            label="Author"
+            value={changesetQuery.data.author_name}
+          />
+          <RepositoryMetadataItem
+            label="Timestamp"
+            value={formatTimestamp(changesetQuery.data.timestamp)}
+          />
+        </div>
+        <div className="rounded-lg border border-border bg-canvas p-4">
+          <p className="whitespace-pre-wrap text-sm text-slate-700">
+            {changesetQuery.data.message}
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-border bg-canvas p-4">
+            <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
+              Parents
+            </p>
+            {changesetQuery.data.parents.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {changesetQuery.data.parents.map((parent) => (
+                  <Link
+                    key={parent}
+                    className="block font-mono text-sm text-forge-600 underline-offset-2 hover:underline"
+                    to={`${basePath}/changesets/${parent}`}
+                  >
+                    {parent}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">
+                This is a root changeset.
+              </p>
+            )}
+          </div>
+          <div className="rounded-lg border border-border bg-canvas p-4">
+            <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
+              References
+            </p>
+            <div className="mt-3 space-y-2 text-sm text-slate-700">
+              <p>
+                Tags:{" "}
+                {changesetQuery.data.tags.length > 0
+                  ? changesetQuery.data.tags.join(", ")
+                  : "none"}
+              </p>
+              <p>
+                Bookmarks:{" "}
+                {changesetQuery.data.bookmarks.length > 0
+                  ? changesetQuery.data.bookmarks.join(", ")
+                  : "none"}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-canvas p-4">
+          <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
+            Changed files
+          </p>
+          {changesetQuery.data.files_changed.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {changesetQuery.data.files_changed.map((filePath) => (
+                <Link
+                  key={filePath}
+                  className="block font-mono text-sm text-forge-600 underline-offset-2 hover:underline"
+                  to={`${basePath}/code${repositorySearch("", {
+                    path: filePath,
+                    revision: changesetQuery.data?.node ?? null,
+                  })}`}
+                >
+                  {filePath}
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">
+              No file list was returned for this changeset.
+            </p>
+          )}
+        </div>
+        {diffQuery.data.is_truncated ? (
+          <MessageBanner
+            message={`Diff output was truncated${diffQuery.data.truncation_reason_when_applicable ? ` (${diffQuery.data.truncation_reason_when_applicable})` : ""}.`}
+            tone="info"
+          />
+        ) : null}
+        <pre className="overflow-x-auto rounded-lg border border-border bg-canvas p-4 text-xs text-ink-950">
+          <code>{diffQuery.data.content}</code>
+        </pre>
+      </div>
+    );
+  }
+
+  const refCollection: RepositoryRef[] =
+    currentSection === "branches"
+      ? (refs?.branches ?? [])
+      : currentSection === "tags"
+        ? (refs?.tags ?? [])
+        : (refs?.bookmarks ?? []);
+  const refLabel =
+    currentSection === "branches"
+      ? "Branches"
+      : currentSection === "tags"
+        ? "Tags"
+        : "Bookmarks";
+
+  if (refsIsError) {
+    return (
+      <ErrorState
+        title={`${refLabel} unavailable`}
+        description={
+          refsError instanceof Error
+            ? refsError.message
+            : `Unable to load ${refLabel.toLowerCase()}.`
+        }
+      />
+    );
+  }
+
+  if (refs === undefined && currentSection !== "overview") {
+    return <LoadingState label={`Loading ${refLabel.toLowerCase()}.`} />;
+  }
+
+  if (refCollection.length === 0) {
+    return (
+      <EmptyState
+        title={`No ${refLabel.toLowerCase()} available`}
+        description={`This repository does not currently expose any ${refLabel.toLowerCase()} to browse.`}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+        {refLabel}
+      </p>
+      {refCollection.map((ref) => (
+        <div
+          key={`${refLabel}-${ref.name}`}
+          className="rounded-lg border border-border bg-canvas p-4"
+        >
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-ink-950">{ref.name}</p>
+              <p className="mt-1 font-mono text-xs text-slate-500">
+                {ref.node}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <Link
+                className="text-forge-600 underline-offset-2 hover:underline"
+                to={`${basePath}/code${repositorySearch("", { path: "", revision: ref.name })}`}
+              >
+                Browse code
+              </Link>
+              <Link
+                className="text-forge-600 underline-offset-2 hover:underline"
+                to={`${basePath}/changesets/${ref.node}`}
+              >
+                View changeset
+              </Link>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function RepositoryDetailPage() {
+  const queryClient = useQueryClient();
+  const { csrfToken } = useAuth();
   const { organizationSlug = "", repositorySlug = "" } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const basePath = `/organizations/${organizationSlug}/repositories/${repositorySlug}`;
+  const currentSection = resolveRepositorySection(location.pathname, basePath);
+  const searchParams = new URLSearchParams(location.search);
+  const selectedRevision = searchParams.get("revision");
+  const selectedPath = searchParams.get("path") ?? "";
   const repositoryQuery = useQuery({
     queryKey: ["repository", organizationSlug, repositorySlug],
     queryFn: () => getRepository(organizationSlug, repositorySlug),
+  });
+  const refsQuery = useQuery({
+    queryKey: ["repository-refs", organizationSlug, repositorySlug],
+    queryFn: () => getRepositoryRefs(organizationSlug, repositorySlug),
+    enabled: repositoryQuery.data?.is_browsable === true,
+  });
+  const browseQuery = useQuery({
+    queryKey: [
+      "repository-browse",
+      organizationSlug,
+      repositorySlug,
+      selectedRevision ?? "",
+      selectedPath,
+    ],
+    queryFn: () =>
+      browseRepository(organizationSlug, repositorySlug, {
+        revision: selectedRevision,
+        path: selectedPath,
+      }),
+    enabled:
+      repositoryQuery.data?.is_browsable === true &&
+      (currentSection === "code" || currentSection === "overview"),
+  });
+  const historyQuery = useInfiniteQuery({
+    queryKey: ["repository-changesets", organizationSlug, repositorySlug],
+    queryFn: ({ pageParam }) =>
+      listChangesets(organizationSlug, repositorySlug, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.next_cursor,
+    enabled:
+      repositoryQuery.data?.is_browsable === true &&
+      currentSection === "commits",
+  });
+  const changesetNode =
+    currentSection === "changeset"
+      ? repositorySectionNode(location.pathname)
+      : null;
+  const changesetQuery = useQuery({
+    queryKey: [
+      "repository-changeset",
+      organizationSlug,
+      repositorySlug,
+      changesetNode,
+    ],
+    queryFn: () =>
+      getChangeset(organizationSlug, repositorySlug, changesetNode ?? ""),
+    enabled:
+      repositoryQuery.data?.is_browsable === true &&
+      currentSection === "changeset" &&
+      changesetNode !== null,
+  });
+  const diffQuery = useQuery({
+    queryKey: [
+      "repository-diff",
+      organizationSlug,
+      repositorySlug,
+      changesetNode,
+    ],
+    queryFn: () =>
+      getChangesetDiff(organizationSlug, repositorySlug, changesetNode ?? ""),
+    enabled:
+      repositoryQuery.data?.is_browsable === true &&
+      currentSection === "changeset" &&
+      changesetNode !== null,
+  });
+  const provisionMutation = useMutation({
+    mutationFn: () =>
+      provisionRepository(organizationSlug, repositorySlug, csrfToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["repository", organizationSlug, repositorySlug],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["repository-refs", organizationSlug, repositorySlug],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["repository-browse", organizationSlug, repositorySlug],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["repository-changesets", organizationSlug, repositorySlug],
+      });
+      navigate(`${basePath}/code`);
+    },
   });
 
   if (repositoryQuery.isLoading) {
@@ -943,60 +2086,69 @@ export function RepositoryDetailPage() {
     return (
       <ErrorState
         title="Repository unavailable"
-        description={repositoryQuery.error instanceof Error ? repositoryQuery.error.message : "Unable to load repository."}
+        description={
+          repositoryQuery.error instanceof Error
+            ? repositoryQuery.error.message
+            : "Unable to load repository."
+        }
       />
     );
   }
 
   const repository = repositoryQuery.data;
+  const refs = refsQuery.data;
+  const historyPages = historyQuery.data?.pages ?? [];
+  const changesets = historyPages.flatMap((page) => page.changesets);
+  const sectionTabs = [
+    { key: "overview", label: "Overview", to: basePath },
+    { key: "code", label: "Code", to: `${basePath}/code` },
+    { key: "commits", label: "History", to: `${basePath}/commits` },
+    { key: "branches", label: "Branches", to: `${basePath}/branches` },
+    { key: "tags", label: "Tags", to: `${basePath}/tags` },
+    { key: "bookmarks", label: "Bookmarks", to: `${basePath}/bookmarks` },
+  ] as const;
+  const revisionLabel =
+    selectedRevision ?? browseQuery.data?.revision ?? "latest tip";
+
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Repository"
-        title={`${repository.organization_slug} / ${repository.slug}`}
-        description={repository.description ?? "Repository metadata is available. Physical Mercurial provisioning is still intentionally deferred."}
+        title={`${repository.organization_slug} / ${repository.display_name}`}
+        description={
+          repository.description ??
+          "Mercurial-backed repository browsing is available after the repository is provisioned."
+        }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-        <Surface>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold text-ink-950">{repository.display_name}</h3>
-              <p className="mt-1 font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
+      <Surface className="space-y-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                className="text-sm text-forge-600 underline-offset-2 hover:underline"
+                to={`/organizations/${organizationSlug}`}
+              >
+                {repository.organization_slug}
+              </Link>
+              <span className="text-slate-400">/</span>
+              <span className="font-mono text-sm text-ink-950">
                 {repository.slug}
-              </p>
+              </span>
             </div>
-            <VisibilityBadge visibility={repository.visibility} />
+            <div className="flex flex-wrap items-center gap-2">
+              <VisibilityBadge visibility={repository.visibility} />
+              <RepositoryProvisioningBadge
+                provisioningState={repository.provisioning_state}
+              />
+              {repository.archived_at ? (
+                <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-700">
+                  Archived
+                </span>
+              ) : null}
+            </div>
           </div>
-
-          <dl className="mt-6 grid gap-4 md:grid-cols-2">
-            <div>
-              <dt className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">Viewer role</dt>
-              <dd className="mt-2 text-sm text-slate-700">{repository.viewer_role ?? "public metadata only"}</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">Archive state</dt>
-              <dd className="mt-2 text-sm text-slate-700">{repository.archived_at ? "Archived" : "Active"}</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">Permission summary</dt>
-              <dd className="mt-2 text-sm text-slate-700">
-                {repository.can_manage ? "You can manage repository metadata and permissions." : "Read-only metadata access."}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">Provisioning status</dt>
-              <dd className="mt-2 text-sm text-slate-700">{repository.phase_status}</dd>
-            </div>
-          </dl>
-        </Surface>
-
-        <Surface>
-          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">Phase 2 note</p>
-          <p className="mt-4 text-sm text-slate-600">
-            RevForge intentionally stops at repository metadata here. Clone URLs, changesets, and Mercurial wire-protocol flows begin after the authorization model is stable.
-          </p>
-          <div className="mt-6 flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Link
               className="rounded-md border border-border px-3 py-2 text-sm text-slate-700"
               to={`/organizations/${organizationSlug}`}
@@ -1006,12 +2158,187 @@ export function RepositoryDetailPage() {
             {repository.can_manage ? (
               <Link
                 className="rounded-md border border-forge-500 bg-forge-500 px-3 py-2 text-sm font-medium text-white"
-                to={`/organizations/${organizationSlug}/repositories/${repositorySlug}/settings`}
+                to={`${basePath}/settings`}
               >
                 Repository settings
               </Link>
             ) : null}
           </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <RepositoryMetadataItem
+            label="Viewer role"
+            value={repository.viewer_role ?? "public metadata only"}
+          />
+          <RepositoryMetadataItem
+            label="Archive state"
+            value={repository.archived_at ? "Archived" : "Active"}
+          />
+          <RepositoryMetadataItem
+            label="Provisioning"
+            value={repository.phase_status}
+          />
+          <RepositoryMetadataItem
+            label="Revision target"
+            value={
+              repository.is_browsable ? revisionLabel : "not available yet"
+            }
+          />
+        </div>
+
+        <nav
+          aria-label="Repository navigation"
+          className="flex flex-wrap gap-2 border-t border-border pt-4"
+        >
+          {sectionTabs.map((tab) =>
+            repository.is_browsable || tab.key === "overview" ? (
+              <Link
+                key={tab.key}
+                className={clsx(
+                  "rounded-md px-3 py-2 text-sm font-medium",
+                  currentSection === tab.key
+                    ? "bg-forge-500 text-white"
+                    : "border border-border bg-canvas text-slate-700",
+                )}
+                to={tab.to}
+              >
+                {tab.label}
+              </Link>
+            ) : (
+              <span
+                key={tab.key}
+                className="rounded-md border border-dashed border-border px-3 py-2 text-sm text-slate-400"
+              >
+                {tab.label}
+              </span>
+            ),
+          )}
+        </nav>
+      </Surface>
+
+      <div className="grid gap-4 xl:grid-cols-[1fr_0.92fr]">
+        <Surface>
+          {renderRepositorySection({
+            basePath,
+            browseQuery,
+            changesetNode,
+            changesetQuery,
+            changesets,
+            currentSection,
+            diffQuery,
+            historyQuery,
+            locationSearch: location.search,
+            onSelectCodeRevision: (revision) => {
+              navigate(
+                `${basePath}/code${repositorySearch(location.search, {
+                  path: selectedPath,
+                  revision,
+                })}`,
+              );
+            },
+            refsError: refsQuery.error,
+            refsIsError: refsQuery.isError,
+            refs,
+            repository,
+            revisionLabel,
+            selectedRevision,
+          })}
+        </Surface>
+
+        <Surface>
+          {!repository.is_browsable ? (
+            <>
+              <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+                Provisioning
+              </p>
+              <p className="mt-4 text-sm text-slate-600">
+                {repository.phase_status}
+              </p>
+              {repository.provisioned_at ? (
+                <p className="mt-3 text-sm text-slate-500">
+                  Last provisioned at{" "}
+                  {formatTimestamp(repository.provisioned_at)}.
+                </p>
+              ) : null}
+              {repository.can_manage && !repository.archived_at ? (
+                <div className="mt-6 space-y-3">
+                  <Button
+                    disabled={
+                      provisionMutation.isPending ||
+                      repository.provisioning_state === "provisioning"
+                    }
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Provision the Mercurial repository for ${repository.display_name}?`,
+                        )
+                      ) {
+                        void provisionMutation.mutateAsync();
+                      }
+                    }}
+                    type="button"
+                  >
+                    Provision Mercurial repository
+                  </Button>
+                  {provisionMutation.isError ? (
+                    <MessageBanner
+                      message={
+                        provisionMutation.error instanceof Error
+                          ? provisionMutation.error.message
+                          : "Unable to provision the Mercurial repository."
+                      }
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              {!repository.can_manage ? (
+                <div className="mt-6">
+                  <EmptyState
+                    title="Provisioning is limited"
+                    description="Only organization owners, organization admins, and repository admins can provision Mercurial storage."
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+                Repository guide
+              </p>
+              <ul className="mt-4 space-y-3 text-sm text-slate-600">
+                <li>
+                  Use Code to browse directories and safe text file contents at
+                  a concrete revision.
+                </li>
+                <li>
+                  Use History for paginated changesets and Changeset detail for
+                  parents, files, and diff context.
+                </li>
+                <li>
+                  Branches, tags, and bookmarks resolve to concrete Mercurial
+                  nodes before the browser reads content.
+                </li>
+              </ul>
+              <div className="mt-6 grid gap-3">
+                <QuickLinkCard
+                  title="Open code browser"
+                  description="Browse the repository tree and file contents."
+                  to={`${basePath}/code${repositorySearch(location.search, { path: "", revision: selectedRevision })}`}
+                />
+                <QuickLinkCard
+                  title="Inspect history"
+                  description="Review paginated changesets with branch context."
+                  to={`${basePath}/commits`}
+                />
+                <QuickLinkCard
+                  title="Browse references"
+                  description="Jump into branches, tags, and bookmarks."
+                  to={`${basePath}/branches`}
+                />
+              </div>
+            </>
+          )}
         </Surface>
       </div>
     </div>
@@ -1041,7 +2368,9 @@ function RepositorySettingsContent() {
   });
 
   const [permissionUserId, setPermissionUserId] = useState("");
-  const [permissionRole, setPermissionRole] = useState<"read" | "write" | "admin">("read");
+  const [permissionRole, setPermissionRole] = useState<
+    "read" | "write" | "admin"
+  >("read");
 
   const updateMutation = useMutation({
     mutationFn: (payload: {
@@ -1049,10 +2378,15 @@ function RepositorySettingsContent() {
       description?: string | null;
       visibility?: "public" | "internal" | "private";
       archived?: boolean;
-    }) => updateRepository(organizationSlug, repositorySlug, payload, csrfToken),
+    }) =>
+      updateRepository(organizationSlug, repositorySlug, payload, csrfToken),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["repository", organizationSlug, repositorySlug] });
-      await queryClient.invalidateQueries({ queryKey: ["organization-repositories", organizationSlug] });
+      await queryClient.invalidateQueries({
+        queryKey: ["repository", organizationSlug, repositorySlug],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["organization-repositories", organizationSlug],
+      });
     },
   });
 
@@ -1068,15 +2402,24 @@ function RepositorySettingsContent() {
     onSuccess: async () => {
       setPermissionUserId("");
       setPermissionRole("read");
-      await queryClient.invalidateQueries({ queryKey: ["repository-permissions", organizationSlug, repositorySlug] });
+      await queryClient.invalidateQueries({
+        queryKey: ["repository-permissions", organizationSlug, repositorySlug],
+      });
     },
   });
 
   const deletePermissionMutation = useMutation({
     mutationFn: (userId: string) =>
-      deleteRepositoryPermission(organizationSlug, repositorySlug, userId, csrfToken),
+      deleteRepositoryPermission(
+        organizationSlug,
+        repositorySlug,
+        userId,
+        csrfToken,
+      ),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["repository-permissions", organizationSlug, repositorySlug] });
+      await queryClient.invalidateQueries({
+        queryKey: ["repository-permissions", organizationSlug, repositorySlug],
+      });
     },
   });
 
@@ -1087,7 +2430,11 @@ function RepositorySettingsContent() {
     return (
       <ErrorState
         title="Repository settings unavailable"
-        description={repositoryQuery.error instanceof Error ? repositoryQuery.error.message : "Unable to load repository settings."}
+        description={
+          repositoryQuery.error instanceof Error
+            ? repositoryQuery.error.message
+            : "Unable to load repository settings."
+        }
       />
     );
   }
@@ -1120,31 +2467,53 @@ function RepositorySettingsContent() {
               void updateMutation.mutateAsync({
                 display_name: String(form.get("display_name") ?? ""),
                 description: String(form.get("description") ?? ""),
-                visibility: String(form.get("visibility")) as "public" | "internal" | "private",
+                visibility: String(form.get("visibility")) as
+                  "public" | "internal" | "private",
                 archived: form.get("archived") === "on",
               });
             }}
           >
             <FormField label="Display name">
-              <TextInput aria-label="Repository display name" defaultValue={repository.display_name} name="display_name" />
+              <TextInput
+                aria-label="Repository display name"
+                defaultValue={repository.display_name}
+                name="display_name"
+              />
             </FormField>
             <FormField label="Description">
-              <TextArea aria-label="Repository description" defaultValue={repository.description ?? ""} name="description" />
+              <TextArea
+                aria-label="Repository description"
+                defaultValue={repository.description ?? ""}
+                name="description"
+              />
             </FormField>
             <FormField label="Visibility">
-              <Select aria-label="Repository visibility" defaultValue={repository.visibility} name="visibility">
+              <Select
+                aria-label="Repository visibility"
+                defaultValue={repository.visibility}
+                name="visibility"
+              >
                 <option value="private">private</option>
                 <option value="internal">internal</option>
                 <option value="public">public</option>
               </Select>
             </FormField>
             <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input aria-label="Archive repository" defaultChecked={repository.archived_at !== null} name="archived" type="checkbox" />
+              <input
+                aria-label="Archive repository"
+                defaultChecked={repository.archived_at !== null}
+                name="archived"
+                type="checkbox"
+              />
               Archive repository metadata
             </label>
             {updateMutation.isError ? (
               <MessageBanner
-                message={updateMutation.error instanceof Error ? updateMutation.error.message : "Unable to save repository settings."}
+                message={
+                  updateMutation.error instanceof Error
+                    ? updateMutation.error.message
+                    : "Unable to save repository settings."
+                }
               />
             ) : null}
             <Button disabled={updateMutation.isPending} type="submit">
@@ -1154,9 +2523,13 @@ function RepositorySettingsContent() {
         </Surface>
 
         <Surface>
-          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">Repository permissions</p>
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Repository permissions
+          </p>
           <p className="mt-2 text-sm text-slate-500">
-            Add explicit access for private repositories or grant repository-specific administration without changing organization-wide roles.
+            Add explicit access for private repositories or grant
+            repository-specific administration without changing
+            organization-wide roles.
           </p>
           <form
             className="mt-4 grid gap-3"
@@ -1174,7 +2547,14 @@ function RepositorySettingsContent() {
               />
             </FormField>
             <FormField label="Role">
-              <Select value={permissionRole} onChange={(event) => setPermissionRole(event.target.value as "read" | "write" | "admin")}>
+              <Select
+                value={permissionRole}
+                onChange={(event) =>
+                  setPermissionRole(
+                    event.target.value as "read" | "write" | "admin",
+                  )
+                }
+              >
                 <option value="read">read</option>
                 <option value="write">write</option>
                 <option value="admin">admin</option>
@@ -1182,22 +2562,40 @@ function RepositorySettingsContent() {
             </FormField>
             {permissionMutation.isError ? (
               <MessageBanner
-                message={permissionMutation.error instanceof Error ? permissionMutation.error.message : "Unable to save repository permission."}
+                message={
+                  permissionMutation.error instanceof Error
+                    ? permissionMutation.error.message
+                    : "Unable to save repository permission."
+                }
               />
             ) : null}
-            <Button disabled={permissionMutation.isPending || !permissionUserId.trim()} type="submit">
+            <Button
+              disabled={
+                permissionMutation.isPending || !permissionUserId.trim()
+              }
+              type="submit"
+            >
               Save permission
             </Button>
           </form>
 
-          {permissionsQuery.isLoading ? <LoadingState label="Loading repository permissions." /> : null}
+          {permissionsQuery.isLoading ? (
+            <LoadingState label="Loading repository permissions." />
+          ) : null}
           <div className="mt-6 space-y-3">
             {permissionsQuery.data?.map((permission) => (
-              <div key={permission.id} className="rounded-lg border border-border bg-canvas p-4">
+              <div
+                key={permission.id}
+                className="rounded-lg border border-border bg-canvas p-4"
+              >
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="text-sm font-medium text-ink-950">{permission.user_display_name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{permission.user_email}</p>
+                    <p className="text-sm font-medium text-ink-950">
+                      {permission.user_display_name}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {permission.user_email}
+                    </p>
                     <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
                       role: {permission.role}
                     </p>
@@ -1205,8 +2603,14 @@ function RepositorySettingsContent() {
                   <Button
                     disabled={deletePermissionMutation.isPending}
                     onClick={() => {
-                      if (window.confirm(`Revoke explicit access for ${permission.user_display_name}?`)) {
-                        void deletePermissionMutation.mutateAsync(permission.user_id);
+                      if (
+                        window.confirm(
+                          `Revoke explicit access for ${permission.user_display_name}?`,
+                        )
+                      ) {
+                        void deletePermissionMutation.mutateAsync(
+                          permission.user_id,
+                        );
                       }
                     }}
                     type="button"

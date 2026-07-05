@@ -5,7 +5,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.domain.enums import RepositoryRole, RepositoryVisibility
+from app.domain.enums import (
+    RepositoryProvisioningState,
+    RepositoryRole,
+    RepositoryVisibility,
+)
 
 
 class RepositoryCreateRequest(BaseModel):
@@ -49,6 +53,9 @@ class RepositorySummary(BaseModel):
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None
+    provisioning_state: RepositoryProvisioningState
+    provisioned_at: datetime | None
+    is_browsable: bool
     viewer_role: RepositoryRole | None
     can_manage: bool
     inherited_access: bool
@@ -57,3 +64,85 @@ class RepositorySummary(BaseModel):
 class RepositoryDetailResponse(RepositorySummary):
     organization_slug: str
     phase_status: str
+
+
+class RepositoryProvisionResponse(BaseModel):
+    id: UUID
+    slug: str
+    organization_slug: str
+    provisioning_state: RepositoryProvisioningState
+    provisioned_at: datetime | None
+    is_browsable: bool
+
+
+class ChangesetSummaryResponse(BaseModel):
+    node: str
+    short_node: str
+    parents: list[str]
+    author_name: str
+    author_email_when_available: str | None
+    timestamp: datetime
+    message: str
+    branch: str
+    files_changed_count_when_available: int | None
+
+
+class ChangesetListResponse(BaseModel):
+    changesets: list[ChangesetSummaryResponse]
+    next_cursor: str | None
+
+
+class ChangesetDetailResponse(BaseModel):
+    node: str
+    short_node: str
+    parents: list[str]
+    author_name: str
+    author_email_when_available: str | None
+    timestamp: datetime
+    message: str
+    branch: str
+    tags: list[str]
+    bookmarks: list[str]
+    files_changed: list[str]
+
+
+class ChangesetDiffResponse(BaseModel):
+    content: str
+    is_truncated: bool
+    truncation_reason_when_applicable: str | None = None
+
+
+class RepositoryTreeEntryResponse(BaseModel):
+    name: str
+    path: str
+    kind: str
+
+
+class RepositoryDirectoryBrowseResponse(BaseModel):
+    kind: str = "directory"
+    revision: str
+    path: str
+    entries: list[RepositoryTreeEntryResponse]
+
+
+class RepositoryFileBrowseResponse(BaseModel):
+    kind: str = "file"
+    revision: str
+    path: str
+    content: str | None = None
+    language_hint_when_available: str | None = None
+    is_binary: bool
+    is_too_large: bool
+    size_when_known: int | None = None
+
+
+class RepositoryRefResponse(BaseModel):
+    name: str
+    node: str
+    short_node: str
+
+
+class RepositoryRefsResponse(BaseModel):
+    branches: list[RepositoryRefResponse]
+    tags: list[RepositoryRefResponse]
+    bookmarks: list[RepositoryRefResponse]

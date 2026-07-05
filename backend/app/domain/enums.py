@@ -19,3 +19,10 @@ class RepositoryVisibility(StrEnum):
     PUBLIC = "public"
     INTERNAL = "internal"
     PRIVATE = "private"
+
+
+class RepositoryProvisioningState(StrEnum):
+    UNPROVISIONED = "unprovisioned"
+    PROVISIONING = "provisioning"
+    READY = "ready"
+    FAILED = "failed"

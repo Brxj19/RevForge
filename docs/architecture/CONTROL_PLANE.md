@@ -2,16 +2,17 @@
 
 ## Scope
 
-Phase 1 establishes RevForge's browser-facing control plane:
+Phases 1 and 2 establish RevForge's browser-facing control plane:
 
 - local user registration and login;
 - database-backed opaque sessions;
 - CSRF-protected cookie authentication for the React frontend;
 - organizations, members, and roles;
-- repository metadata and repository-specific permissions;
+- repository metadata, repository-specific permissions, and provisioning state;
 - structured audit events for important state changes.
 
-This phase intentionally does not provision Mercurial repositories, touch `.hg`, or expose clone/pull/push transport.
+Phase 2 provisions canonical local Mercurial repositories and exposes read-only browsing through a tightly controlled adapter.
+RevForge still does not expose clone/pull/push transport in this phase.
 
 ## Authentication and sessions
 
@@ -49,7 +50,7 @@ Policy summary:
 - The last organization owner cannot be removed or demoted.
 - Repository admins can manage repository metadata and explicit repository permissions, but do not gain organization-wide authority.
 
-## Repository metadata before provisioning
+## Repository metadata and provisioning
 
 Repository rows represent control-plane metadata only:
 
@@ -60,7 +61,34 @@ Repository rows represent control-plane metadata only:
 - archive state
 - creator identity
 
-No filesystem path is stored. Phase 2 will map canonical organization and repository identifiers onto a controlled storage strategy.
+Phase 2 adds:
+
+- provisioning state (`unprovisioned`, `provisioning`, `ready`, `failed`);
+- `provisioned_at`;
+- a safe provisioning error code.
+
+No filesystem path is stored. Physical storage is derived on demand from canonical organization and repository UUIDs.
+
+## Mercurial adapter boundary
+
+Every Mercurial-backed read request now follows this order:
+
+1. resolve actor identity when present;
+2. resolve organization and repository metadata through the database;
+3. apply visibility and repository-permission policy;
+4. derive the canonical repository path from immutable UUIDs;
+5. confirm the repository is provisioned;
+6. validate revision and repository-relative path inputs;
+7. invoke the controlled `hg` adapter;
+8. map the result into a typed API payload without leaking filesystem paths or raw Mercurial stderr.
+
+Mercurial command execution remains bounded by:
+
+- a configured executable path;
+- allow-listed environment variables;
+- per-command timeouts;
+- stdout and stderr limits;
+- safe diff and file-content size caps.
 
 ## Audit-event scope
 
@@ -76,10 +104,8 @@ Audit metadata stays minimal and excludes passwords, session tokens, CSRF values
 
 ## Deferred work
 
-Phase 2 and later will add:
+Phase 3 and later will add:
 
-- physical Mercurial repository provisioning;
-- canonical storage path mapping;
 - Mercurial HTTP and SSH transport;
 - changeset, file, and diff browsing;
 - PATs, SSH keys, and external identity providers.

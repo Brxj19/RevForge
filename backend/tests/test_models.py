@@ -36,6 +36,12 @@ def test_membership_is_unique_per_user_and_organization() -> None:
 def test_postgresql_enum_columns_persist_lowercase_values() -> None:
     assert OrganizationMember.__table__.c.role.type.enums == ["owner", "admin", "member"]
     assert Repository.__table__.c.visibility.type.enums == ["public", "internal", "private"]
+    assert Repository.__table__.c.provisioning_state.type.enums == [
+        "unprovisioned",
+        "provisioning",
+        "ready",
+        "failed",
+    ]
     assert RepositoryPermission.__table__.c.role.type.enums == ["read", "write", "admin"]
 
 
@@ -56,6 +62,7 @@ def test_user_password_credential_is_unique_per_user() -> None:
 
 def test_repository_schema_does_not_include_filesystem_path() -> None:
     assert "filesystem_path" not in Repository.__table__.columns.keys()
+    assert "storage_path" not in Repository.__table__.columns.keys()
 
 
 def test_user_session_uses_token_digest_column() -> None:

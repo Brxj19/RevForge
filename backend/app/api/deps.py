@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.db.session import get_db_session
+from app.mercurial.command_runner import HgCommandRunner
+from app.mercurial.read_service import MercurialReadService
+from app.mercurial.storage_locator import RepositoryStorageLocator
 from app.models.user import User
 from app.models.user_session import UserSession
 from app.services.authentication import get_user_from_session_token
@@ -17,6 +20,23 @@ from app.services.errors import AuthenticationError
 async def get_session() -> AsyncIterator[AsyncSession]:
     async for session in get_db_session():
         yield session
+
+
+def get_repository_storage_locator(
+    settings: Settings = Depends(get_settings),
+) -> RepositoryStorageLocator:
+    return RepositoryStorageLocator(settings)
+
+
+def get_hg_command_runner(settings: Settings = Depends(get_settings)) -> HgCommandRunner:
+    return HgCommandRunner(settings)
+
+
+def get_mercurial_read_service(
+    settings: Settings = Depends(get_settings),
+    command_runner: HgCommandRunner = Depends(get_hg_command_runner),
+) -> MercurialReadService:
+    return MercurialReadService(settings=settings, command_runner=command_runner)
 
 
 def get_request_id(request: Request) -> str | None:

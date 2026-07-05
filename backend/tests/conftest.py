@@ -19,11 +19,15 @@ def clear_settings_cache() -> None:
 
 
 @pytest.fixture
-def settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def settings_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setenv("REVFORGE_SESSION_SECRET_KEY", "test-session-secret")
     monkeypatch.setenv("REVFORGE_CORS_ALLOWED_ORIGINS", "http://localhost:5173")
     monkeypatch.setenv("REVFORGE_SESSION_COOKIE_SECURE", "false")
     monkeypatch.setenv("REVFORGE_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+    monkeypatch.setenv("REVFORGE_REPOSITORY_ROOT", str(tmp_path / "repositories"))
+    monkeypatch.setenv("REVFORGE_MAX_HISTORY_PAGE_SIZE", "2")
+    monkeypatch.setenv("REVFORGE_MAX_DIFF_BYTES", "65536")
+    monkeypatch.setenv("REVFORGE_MAX_FILE_CONTENT_BYTES", "32768")
 
 
 @pytest_asyncio.fixture

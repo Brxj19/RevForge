@@ -36,6 +36,30 @@ export const router = createBrowserRouter([
         element: <RepositoryDetailPage />,
       },
       {
+        path: "organizations/:organizationSlug/repositories/:repositorySlug/code",
+        element: <RepositoryDetailPage />,
+      },
+      {
+        path: "organizations/:organizationSlug/repositories/:repositorySlug/commits",
+        element: <RepositoryDetailPage />,
+      },
+      {
+        path: "organizations/:organizationSlug/repositories/:repositorySlug/changesets/:node",
+        element: <RepositoryDetailPage />,
+      },
+      {
+        path: "organizations/:organizationSlug/repositories/:repositorySlug/branches",
+        element: <RepositoryDetailPage />,
+      },
+      {
+        path: "organizations/:organizationSlug/repositories/:repositorySlug/tags",
+        element: <RepositoryDetailPage />,
+      },
+      {
+        path: "organizations/:organizationSlug/repositories/:repositorySlug/bookmarks",
+        element: <RepositoryDetailPage />,
+      },
+      {
         path: "organizations/:organizationSlug/repositories/:repositorySlug/settings",
         element: <RepositorySettingsPage />,
       },

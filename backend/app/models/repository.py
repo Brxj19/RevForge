@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.db.types import enum_values
-from app.domain.enums import RepositoryVisibility
+from app.domain.enums import RepositoryProvisioningState, RepositoryVisibility
 
 
 class Repository(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -34,6 +34,18 @@ class Repository(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=RepositoryVisibility.PRIVATE,
         nullable=False,
     )
+    provisioning_state: Mapped[RepositoryProvisioningState] = mapped_column(
+        Enum(
+            RepositoryProvisioningState,
+            name="repository_provisioning_state",
+            values_callable=enum_values,
+            validate_strings=True,
+        ),
+        default=RepositoryProvisioningState.UNPROVISIONED,
+        nullable=False,
+    )
+    provisioned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    provisioning_error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_by_user_id: Mapped[UUIDType] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),

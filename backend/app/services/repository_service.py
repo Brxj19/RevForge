@@ -7,7 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.security import normalize_optional_text, validate_display_name, validate_slug
-from app.domain.enums import RepositoryRole, RepositoryVisibility
+from app.domain.enums import (
+    RepositoryProvisioningState,
+    RepositoryRole,
+    RepositoryVisibility,
+)
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
 from app.models.repository import Repository
@@ -327,3 +331,19 @@ async def delete_repository_permission(
     )
     await session.delete(permission)
     await session.commit()
+
+
+def repository_is_browsable(repository: Repository) -> bool:
+    return repository.provisioning_state == RepositoryProvisioningState.READY
+
+
+def repository_phase_status(repository: Repository) -> str:
+    match repository.provisioning_state:
+        case RepositoryProvisioningState.UNPROVISIONED:
+            return "Mercurial repository not provisioned yet."
+        case RepositoryProvisioningState.PROVISIONING:
+            return "Mercurial repository provisioning is in progress."
+        case RepositoryProvisioningState.READY:
+            return "Mercurial repository is provisioned and ready for browsing."
+        case RepositoryProvisioningState.FAILED:
+            return "Mercurial provisioning failed. Try provisioning again."

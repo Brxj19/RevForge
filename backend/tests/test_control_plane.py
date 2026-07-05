@@ -259,10 +259,7 @@ def test_repository_visibility_permissions_and_cross_org_isolation(client, sessi
     private_allowed = client.get("/api/v1/organizations/acme/repositories/private-repo")
     assert private_allowed.status_code == 200
     assert private_allowed.json()["viewer_role"] == "read"
-    assert (
-        private_allowed.json()["phase_status"]
-        == "Mercurial repository provisioning is planned for Phase 2."
-    )
+    assert private_allowed.json()["phase_status"] == "Mercurial repository not provisioned yet."
 
     assert _login(client).status_code == 200
     assert (

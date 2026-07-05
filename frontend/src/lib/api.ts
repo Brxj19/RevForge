@@ -73,6 +73,9 @@ export interface RepositorySummary {
   created_at: string;
   updated_at: string;
   archived_at: string | null;
+  provisioning_state: "unprovisioned" | "provisioning" | "ready" | "failed";
+  provisioned_at: string | null;
+  is_browsable: boolean;
   viewer_role: "read" | "write" | "admin" | null;
   can_manage: boolean;
   inherited_access: boolean;
@@ -81,6 +84,91 @@ export interface RepositorySummary {
 export interface RepositoryDetail extends RepositorySummary {
   organization_slug: string;
   phase_status: string;
+}
+
+export interface RepositoryProvisionResponse {
+  id: string;
+  slug: string;
+  organization_slug: string;
+  provisioning_state: "unprovisioned" | "provisioning" | "ready" | "failed";
+  provisioned_at: string | null;
+  is_browsable: boolean;
+}
+
+export interface ChangesetSummary {
+  node: string;
+  short_node: string;
+  parents: string[];
+  author_name: string;
+  author_email_when_available: string | null;
+  timestamp: string;
+  message: string;
+  branch: string;
+  files_changed_count_when_available: number | null;
+}
+
+export interface ChangesetList {
+  changesets: ChangesetSummary[];
+  next_cursor: string | null;
+}
+
+export interface ChangesetDetail {
+  node: string;
+  short_node: string;
+  parents: string[];
+  author_name: string;
+  author_email_when_available: string | null;
+  timestamp: string;
+  message: string;
+  branch: string;
+  tags: string[];
+  bookmarks: string[];
+  files_changed: string[];
+}
+
+export interface ChangesetDiff {
+  content: string;
+  is_truncated: boolean;
+  truncation_reason_when_applicable: string | null;
+}
+
+export interface RepositoryTreeEntry {
+  name: string;
+  path: string;
+  kind: "directory" | "file";
+}
+
+export interface RepositoryBrowseDirectory {
+  kind: "directory";
+  revision: string;
+  path: string;
+  entries: RepositoryTreeEntry[];
+}
+
+export interface RepositoryBrowseFile {
+  kind: "file";
+  revision: string;
+  path: string;
+  content: string | null;
+  language_hint_when_available: string | null;
+  is_binary: boolean;
+  is_too_large: boolean;
+  size_when_known: number | null;
+}
+
+export type RepositoryBrowseResult =
+  RepositoryBrowseDirectory | RepositoryBrowseFile;
+
+export interface RepositoryRef {
+  name: string;
+  node: string;
+  short_node: string;
+}
+
+export interface RepositoryRefs {
+  branches: RepositoryRef[];
+  tags: RepositoryRef[];
+  bookmarks: RepositoryRef[];
 }
 
 export interface RepositoryPermission {
@@ -107,7 +195,8 @@ export class ApiClientError extends Error {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 async function request<T>(
   path: string,
@@ -136,7 +225,11 @@ async function request<T>(
     } catch {
       payload = undefined;
     }
-    throw new ApiClientError(payload?.error.message ?? "Request failed.", response.status, payload);
+    throw new ApiClientError(
+      payload?.error.message ?? "Request failed.",
+      response.status,
+      payload,
+    );
   }
 
   if (response.status === 204) {
@@ -154,7 +247,11 @@ export function getApiHealth() {
   return request<ApiHealth>("/api/v1/health");
 }
 
-export function registerUser(payload: { email: string; display_name: string; password: string }) {
+export function registerUser(payload: {
+  email: string;
+  display_name: string;
+  password: string;
+}) {
   return request<SessionResponse>("/api/v1/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -196,7 +293,9 @@ export function createOrganization(
 }
 
 export function getOrganization(organizationSlug: string) {
-  return request<OrganizationDetail>(`/api/v1/organizations/${organizationSlug}`);
+  return request<OrganizationDetail>(
+    `/api/v1/organizations/${organizationSlug}`,
+  );
 }
 
 export function updateOrganization(
@@ -204,15 +303,20 @@ export function updateOrganization(
   payload: { display_name?: string; description?: string | null },
   csrfToken: string | null,
 ) {
-  return request<OrganizationDetail>(`/api/v1/organizations/${organizationSlug}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-    csrfToken,
-  });
+  return request<OrganizationDetail>(
+    `/api/v1/organizations/${organizationSlug}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
 }
 
 export function listOrganizationMembers(organizationSlug: string) {
-  return request<OrganizationMember[]>(`/api/v1/organizations/${organizationSlug}/members`);
+  return request<OrganizationMember[]>(
+    `/api/v1/organizations/${organizationSlug}/members`,
+  );
 }
 
 export function addOrganizationMember(
@@ -220,11 +324,14 @@ export function addOrganizationMember(
   payload: { email: string; role: "owner" | "admin" | "member" },
   csrfToken: string | null,
 ) {
-  return request<OrganizationMember>(`/api/v1/organizations/${organizationSlug}/members`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-    csrfToken,
-  });
+  return request<OrganizationMember>(
+    `/api/v1/organizations/${organizationSlug}/members`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
 }
 
 export function updateOrganizationMember(
@@ -248,15 +355,23 @@ export function deleteOrganizationMember(
   memberId: string,
   csrfToken: string | null,
 ) {
-  return request<void>(`/api/v1/organizations/${organizationSlug}/members/${memberId}`, {
-    method: "DELETE",
-    csrfToken,
-  });
+  return request<void>(
+    `/api/v1/organizations/${organizationSlug}/members/${memberId}`,
+    {
+      method: "DELETE",
+      csrfToken,
+    },
+  );
 }
 
-export function listRepositories(organizationSlug: string, includeArchived = false) {
+export function listRepositories(
+  organizationSlug: string,
+  includeArchived = false,
+) {
   const search = includeArchived ? "?include_archived=true" : "";
-  return request<RepositorySummary[]>(`/api/v1/organizations/${organizationSlug}/repositories${search}`);
+  return request<RepositorySummary[]>(
+    `/api/v1/organizations/${organizationSlug}/repositories${search}`,
+  );
 }
 
 export function createRepository(
@@ -269,16 +384,98 @@ export function createRepository(
   },
   csrfToken: string | null,
 ) {
-  return request<RepositoryDetail>(`/api/v1/organizations/${organizationSlug}/repositories`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-    csrfToken,
-  });
+  return request<RepositoryDetail>(
+    `/api/v1/organizations/${organizationSlug}/repositories`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
 }
 
-export function getRepository(organizationSlug: string, repositorySlug: string) {
+export function getRepository(
+  organizationSlug: string,
+  repositorySlug: string,
+) {
   return request<RepositoryDetail>(
     `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}`,
+  );
+}
+
+export function provisionRepository(
+  organizationSlug: string,
+  repositorySlug: string,
+  csrfToken: string | null,
+) {
+  return request<RepositoryProvisionResponse>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/provision`,
+    {
+      method: "POST",
+      csrfToken,
+    },
+  );
+}
+
+export function listChangesets(
+  organizationSlug: string,
+  repositorySlug: string,
+  cursor?: string | null,
+) {
+  const search = new URLSearchParams();
+  if (cursor) {
+    search.set("cursor", cursor);
+  }
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  return request<ChangesetList>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/changesets${suffix}`,
+  );
+}
+
+export function getChangeset(
+  organizationSlug: string,
+  repositorySlug: string,
+  node: string,
+) {
+  return request<ChangesetDetail>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/changesets/${node}`,
+  );
+}
+
+export function getChangesetDiff(
+  organizationSlug: string,
+  repositorySlug: string,
+  node: string,
+) {
+  return request<ChangesetDiff>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/changesets/${node}/diff`,
+  );
+}
+
+export function browseRepository(
+  organizationSlug: string,
+  repositorySlug: string,
+  options: { revision?: string | null; path?: string | null } = {},
+) {
+  const search = new URLSearchParams();
+  if (options.revision) {
+    search.set("revision", options.revision);
+  }
+  if (options.path) {
+    search.set("path", options.path);
+  }
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  return request<RepositoryBrowseResult>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/browse${suffix}`,
+  );
+}
+
+export function getRepositoryRefs(
+  organizationSlug: string,
+  repositorySlug: string,
+) {
+  return request<RepositoryRefs>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/refs`,
   );
 }
 
@@ -303,7 +500,10 @@ export function updateRepository(
   );
 }
 
-export function listRepositoryPermissions(organizationSlug: string, repositorySlug: string) {
+export function listRepositoryPermissions(
+  organizationSlug: string,
+  repositorySlug: string,
+) {
   return request<RepositoryPermission[]>(
     `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/permissions`,
   );

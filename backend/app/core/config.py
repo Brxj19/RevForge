@@ -17,6 +17,20 @@ class Settings(BaseSettings):
         alias="REVFORGE_DATABASE_URL",
     )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REVFORGE_REDIS_URL")
+    repository_root: str = Field(default="./.local/repositories", alias="REVFORGE_REPOSITORY_ROOT")
+    hg_executable: str = Field(default="hg", alias="REVFORGE_HG_EXECUTABLE")
+    hg_command_timeout_seconds: int = Field(
+        default=15,
+        alias="REVFORGE_HG_COMMAND_TIMEOUT_SECONDS",
+    )
+    hg_max_stdout_bytes: int = Field(default=524288, alias="REVFORGE_HG_MAX_STDOUT_BYTES")
+    hg_max_stderr_bytes: int = Field(default=65536, alias="REVFORGE_HG_MAX_STDERR_BYTES")
+    max_diff_bytes: int = Field(default=262144, alias="REVFORGE_MAX_DIFF_BYTES")
+    max_file_content_bytes: int = Field(
+        default=131072,
+        alias="REVFORGE_MAX_FILE_CONTENT_BYTES",
+    )
+    max_history_page_size: int = Field(default=50, alias="REVFORGE_MAX_HISTORY_PAGE_SIZE")
     cors_allowed_origins: Annotated[list[str], NoDecode] = Field(
         default=["http://localhost:5173", "http://127.0.0.1:5173"],
         alias="REVFORGE_CORS_ALLOWED_ORIGINS",
@@ -67,6 +81,20 @@ class Settings(BaseSettings):
         domain = info.data.get("session_cookie_domain")
         if value.startswith("__Host-") and (not secure or domain is not None):
             raise ValueError("__Host- cookies require Secure=true and no configured cookie domain.")
+        return value
+
+    @field_validator(
+        "hg_command_timeout_seconds",
+        "hg_max_stdout_bytes",
+        "hg_max_stderr_bytes",
+        "max_diff_bytes",
+        "max_file_content_bytes",
+        "max_history_page_size",
+    )
+    @classmethod
+    def validate_positive_limits(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Mercurial limits must be positive integers.")
         return value
 
 

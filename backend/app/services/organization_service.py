@@ -166,7 +166,7 @@ async def add_member(
         raise ValidationFailure(str(exc)) from exc
 
     user = await session.scalar(select(User).where(User.email == normalized_email))
-    existing = None
+    existing: OrganizationMember | None = None
     if user is not None:
         existing = await get_membership(session, organization_id=organization.id, user_id=user.id)
     if user is None or existing is not None:
@@ -190,13 +190,13 @@ async def add_member(
         metadata_json={"member_user_id": str(user.id), "role": role.value},
     )
     await session.commit()
-    membership = await session.scalar(
+    refreshed_membership = await session.scalar(
         select(OrganizationMember)
         .options(selectinload(OrganizationMember.user))
         .where(OrganizationMember.id == membership.id)
     )
-    assert membership is not None
-    return membership
+    assert refreshed_membership is not None
+    return refreshed_membership
 
 
 async def update_member_role(

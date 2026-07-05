@@ -1,6 +1,6 @@
 # RevForge
 
-RevForge is a self-hosted Mercurial repository hosting and collaboration platform. Phase 1 now extends the foundation with local browser-session authentication, organizations, RBAC, repository metadata, repository-specific permissions, and audit events.
+RevForge is a self-hosted Mercurial repository hosting and collaboration platform. Phase 2 now extends the foundation with canonical Mercurial repository provisioning plus a read-only browser for history, diffs, files, branches, tags, and bookmarks.
 
 ## Repository layout
 
@@ -29,6 +29,9 @@ Included now:
 - repository catalog metadata with `public`, `internal`, and `private` visibility
 - explicit repository `read`, `write`, and `admin` permissions
 - audit-event persistence for core control-plane actions
+- canonical local Mercurial repository provisioning rooted at `REVFORGE_REPOSITORY_ROOT`
+- controlled `hg` command execution with timeout and output limits
+- read-only changeset history, changeset detail, unified diffs, file browsing, and refs
 - environment-based backend settings and structured logging
 - async SQLAlchemy and Alembic setup
 - React routes for registration, login, organizations, repository overview, and settings
@@ -40,8 +43,7 @@ Intentionally deferred:
 
 - Mercurial HTTP or SSH protocol gateways
 - background workers
-- repository storage provisioning and `.hg` initialization
-- clone, pull, push, changesets, diffs, and file browsing
+- clone and push transport
 - personal access tokens, SSH keys, external identity providers, and invitations
 - webhooks, review workflows, and deployment hardening beyond local Compose
 
@@ -52,6 +54,13 @@ Recommended local toolchain:
 - Python `3.12+`
 - Node.js `20.x` or `22.x` LTS
 - Docker with Compose
+- Mercurial `7.x`
+
+macOS installation:
+
+```bash
+brew install mercurial
+```
 
 1. Start local services:
 
@@ -75,6 +84,12 @@ make frontend-dev
 
 Backend defaults to `http://localhost:8000`. Frontend defaults to `http://localhost:5173`.
 
+Set a local Mercurial storage root before provisioning repositories:
+
+```bash
+export REVFORGE_REPOSITORY_ROOT=./.local/repositories
+```
+
 ## Control-plane configuration
 
 Phase 1 adds these backend environment settings:
@@ -88,6 +103,14 @@ Phase 1 adds these backend environment settings:
 - `REVFORGE_SESSION_COOKIE_DOMAIN`
 - `REVFORGE_SESSION_TTL_MINUTES`
 - `REVFORGE_PASSWORD_MIN_LENGTH`
+- `REVFORGE_REPOSITORY_ROOT`
+- `REVFORGE_HG_EXECUTABLE`
+- `REVFORGE_HG_COMMAND_TIMEOUT_SECONDS`
+- `REVFORGE_HG_MAX_STDOUT_BYTES`
+- `REVFORGE_HG_MAX_STDERR_BYTES`
+- `REVFORGE_MAX_DIFF_BYTES`
+- `REVFORGE_MAX_FILE_CONTENT_BYTES`
+- `REVFORGE_MAX_HISTORY_PAGE_SIZE`
 
 See [backend/.env.example](backend/.env.example) for local defaults.
 
@@ -109,13 +132,24 @@ make migration name="create-example"
 3. Start the backend and frontend dev servers.
 4. Open `http://localhost:5173/register`, create a user, then sign in.
 5. Create an organization, add an existing user by email, and create repository metadata.
-6. Open repository settings to verify visibility changes, archive state, and explicit permissions.
+6. Open the repository page and provision the local Mercurial repository.
+7. Use the code, history, and ref views to verify read-only Mercurial browsing.
 
 ## Architecture notes
 
 - Authentication uses opaque database-backed sessions, not browser-stored JWTs.
 - CSRF protection uses a session-bound token returned by `GET /api/v1/auth/csrf` and sent in `X-CSRF-Token`.
-- Repository metadata exists before physical Mercurial provisioning. Phase 2 will map canonical repository IDs onto safe storage paths and transport gateways.
+- Repository metadata exists independently from physical Mercurial storage.
+- Phase 2 maps canonical organization and repository UUIDs onto local repository paths under `REVFORGE_REPOSITORY_ROOT`.
+- Clone, pull, and push transport are intentionally deferred until Phase 3.
+
+## Mercurial tests
+
+Mercurial-backed backend tests require `hg` on `PATH`:
+
+```bash
+make test
+```
 
 ## Contribution
 
