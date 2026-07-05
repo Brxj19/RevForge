@@ -1,6 +1,6 @@
 # RevForge
 
-RevForge is a self-hosted Mercurial repository hosting and collaboration platform. Phase 2 now extends the foundation with canonical Mercurial repository provisioning plus a read-only browser for history, diffs, files, branches, tags, and bookmarks.
+RevForge is a self-hosted Mercurial repository hosting and collaboration platform. Phase 3 now extends the foundation with canonical Mercurial repository provisioning, a read-only browser, and native Mercurial transport gateways for clone, pull, and push.
 
 ## Repository layout
 
@@ -32,6 +32,8 @@ Included now:
 - canonical local Mercurial repository provisioning rooted at `REVFORGE_REPOSITORY_ROOT`
 - controlled `hg` command execution with timeout and output limits
 - read-only changeset history, changeset detail, unified diffs, file browsing, and refs
+- Mercurial HTTPS personal access tokens and SSH public keys
+- mounted Mercurial HTTP transport for clone, pull, and push
 - environment-based backend settings and structured logging
 - async SQLAlchemy and Alembic setup
 - React routes for registration, login, organizations, repository overview, and settings
@@ -41,10 +43,8 @@ Included now:
 
 Intentionally deferred:
 
-- Mercurial HTTP or SSH protocol gateways
 - background workers
-- clone and push transport
-- personal access tokens, SSH keys, external identity providers, and invitations
+- external identity providers and invitations
 - webhooks, review workflows, and deployment hardening beyond local Compose
 
 ## Local development
@@ -88,11 +88,13 @@ Set a local Mercurial storage root before provisioning repositories:
 
 ```bash
 export REVFORGE_REPOSITORY_ROOT=./.local/repositories
+export REVFORGE_HG_HTTP_BASE_PATH=/hg
+export REVFORGE_TRANSPORT_TOKEN_SECRET=change-me-transport-secret
 ```
 
 ## Control-plane configuration
 
-Phase 1 adds these backend environment settings:
+Phase 1 and Phase 3 add these backend environment settings:
 
 - `REVFORGE_SESSION_SECRET_KEY`
 - `REVFORGE_SESSION_COOKIE_NAME`
@@ -111,6 +113,11 @@ Phase 1 adds these backend environment settings:
 - `REVFORGE_MAX_DIFF_BYTES`
 - `REVFORGE_MAX_FILE_CONTENT_BYTES`
 - `REVFORGE_MAX_HISTORY_PAGE_SIZE`
+- `REVFORGE_HG_HTTP_BASE_PATH`
+- `REVFORGE_TRANSPORT_HG_USERNAME`
+- `REVFORGE_TRANSPORT_TOKEN_SECRET`
+- `REVFORGE_TRANSPORT_RATE_LIMIT_WINDOW_SECONDS`
+- `REVFORGE_TRANSPORT_RATE_LIMIT_MAX_ATTEMPTS`
 
 See [backend/.env.example](backend/.env.example) for local defaults.
 
@@ -133,7 +140,8 @@ make migration name="create-example"
 4. Open `http://localhost:5173/register`, create a user, then sign in.
 5. Create an organization, add an existing user by email, and create repository metadata.
 6. Open the repository page and provision the local Mercurial repository.
-7. Use the code, history, and ref views to verify read-only Mercurial browsing.
+7. Create a transport token and SSH key from `/api/v1/me/*`.
+8. Use the code, history, and ref views to verify read-only Mercurial browsing.
 
 ## Architecture notes
 
@@ -141,7 +149,7 @@ make migration name="create-example"
 - CSRF protection uses a session-bound token returned by `GET /api/v1/auth/csrf` and sent in `X-CSRF-Token`.
 - Repository metadata exists independently from physical Mercurial storage.
 - Phase 2 maps canonical organization and repository UUIDs onto local repository paths under `REVFORGE_REPOSITORY_ROOT`.
-- Clone, pull, and push transport are intentionally deferred until Phase 3.
+- Clone, pull, and push transport are mounted through the Phase 3 Mercurial HTTP gateway and SSH forced-command gateway.
 
 ## Mercurial tests
 

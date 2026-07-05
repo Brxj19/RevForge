@@ -18,6 +18,22 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REVFORGE_REDIS_URL")
     repository_root: str = Field(default="./.local/repositories", alias="REVFORGE_REPOSITORY_ROOT")
+    hg_http_base_path: str = Field(default="/hg", alias="REVFORGE_HG_HTTP_BASE_PATH")
+    transport_hg_username: str = Field(
+        default="revforge-hg", alias="REVFORGE_TRANSPORT_HG_USERNAME"
+    )
+    transport_token_secret: str = Field(
+        default="change-me-transport-secret",
+        alias="REVFORGE_TRANSPORT_TOKEN_SECRET",
+    )
+    transport_rate_limit_window_seconds: int = Field(
+        default=60,
+        alias="REVFORGE_TRANSPORT_RATE_LIMIT_WINDOW_SECONDS",
+    )
+    transport_rate_limit_max_attempts: int = Field(
+        default=30,
+        alias="REVFORGE_TRANSPORT_RATE_LIMIT_MAX_ATTEMPTS",
+    )
     hg_executable: str = Field(default="hg", alias="REVFORGE_HG_EXECUTABLE")
     hg_command_timeout_seconds: int = Field(
         default=15,
@@ -74,6 +90,14 @@ class Settings(BaseSettings):
         normalized = value.strip()
         return normalized or None
 
+    @field_validator("hg_http_base_path")
+    @classmethod
+    def normalize_hg_http_base_path(cls, value: str) -> str:
+        normalized = value.strip() or "/hg"
+        if not normalized.startswith("/"):
+            raise ValueError("Mercurial HTTP base path must start with '/'.")
+        return normalized.rstrip("/") or "/"
+
     @field_validator("session_cookie_name")
     @classmethod
     def validate_session_cookie_name(cls, value: str, info):
@@ -90,6 +114,8 @@ class Settings(BaseSettings):
         "max_diff_bytes",
         "max_file_content_bytes",
         "max_history_page_size",
+        "transport_rate_limit_window_seconds",
+        "transport_rate_limit_max_attempts",
     )
     @classmethod
     def validate_positive_limits(cls, value: int) -> int:

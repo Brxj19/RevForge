@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "0002_phase1_control_plane"
 down_revision = "0001_phase0_foundation"
@@ -27,7 +28,9 @@ def upgrade() -> None:
 
     op.add_column(
         "organization_members",
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
     )
 
     op.add_column("repositories", sa.Column("description", sa.Text(), nullable=True))
@@ -35,7 +38,9 @@ def upgrade() -> None:
         "repositories",
         sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
-    op.add_column("repositories", sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column(
+        "repositories", sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True)
+    )
     op.create_foreign_key(
         "fk_repositories_created_by_user_id_users",
         "repositories",
@@ -71,8 +76,12 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("password_hash", sa.String(length=512), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.UniqueConstraint("user_id", name="uq_user_password_credentials_user_id"),
     )
 
@@ -94,7 +103,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("token_digest", name="uq_user_sessions_token_digest"),
     )
     op.create_index("ix_user_sessions_user_id", "user_sessions", ["user_id"], unique=False)
-    op.create_index("ix_user_sessions_token_digest", "user_sessions", ["token_digest"], unique=False)
+    op.create_index(
+        "ix_user_sessions_token_digest", "user_sessions", ["token_digest"], unique=False
+    )
 
     op.create_table(
         "repository_permissions",
@@ -128,8 +139,12 @@ def upgrade() -> None:
             sa.ForeignKey("users.id", ondelete="RESTRICT"),
             nullable=False,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.UniqueConstraint(
             "repository_id",
             "user_id",
@@ -161,8 +176,12 @@ def upgrade() -> None:
         sa.Column("event_type", sa.String(length=120), nullable=False),
         sa.Column("request_id", sa.String(length=64), nullable=True),
         sa.Column("metadata_json", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
     )
     op.create_index("ix_audit_events_event_type", "audit_events", ["event_type"], unique=False)
 
@@ -176,7 +195,9 @@ def downgrade() -> None:
     op.drop_table("user_sessions")
     op.drop_table("user_password_credentials")
 
-    op.drop_constraint("fk_repositories_created_by_user_id_users", "repositories", type_="foreignkey")
+    op.drop_constraint(
+        "fk_repositories_created_by_user_id_users", "repositories", type_="foreignkey"
+    )
     op.drop_column("repositories", "archived_at")
     op.drop_column("repositories", "created_by_user_id")
     op.drop_column("repositories", "description")
