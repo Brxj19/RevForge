@@ -1,6 +1,6 @@
 # RevForge
 
-RevForge is a self-hosted Mercurial repository hosting and collaboration platform. Phase 3 now extends the foundation with canonical Mercurial repository provisioning, a read-only browser, and native Mercurial transport gateways for clone, pull, and push.
+RevForge is a self-hosted Mercurial repository hosting and collaboration platform. Phase 4 now extends the foundation with canonical Mercurial repository provisioning, a read-only browser, and a dedicated native Mercurial HTTPS transport gateway for clone, pull, and push.
 
 ## Repository layout
 
@@ -33,7 +33,7 @@ Included now:
 - controlled `hg` command execution with timeout and output limits
 - read-only changeset history, changeset detail, unified diffs, file browsing, and refs
 - Mercurial HTTPS personal access tokens and SSH public keys
-- mounted Mercurial HTTP transport for clone, pull, and push
+- mounted Mercurial HTTP transport for clone, pull, and push, plus a dedicated WSGI gateway entrypoint
 - environment-based backend settings and structured logging
 - async SQLAlchemy and Alembic setup
 - React routes for registration, login, organizations, repository overview, and settings
@@ -149,7 +149,7 @@ make migration name="create-example"
 - CSRF protection uses a session-bound token returned by `GET /api/v1/auth/csrf` and sent in `X-CSRF-Token`.
 - Repository metadata exists independently from physical Mercurial storage.
 - Phase 2 maps canonical organization and repository UUIDs onto local repository paths under `REVFORGE_REPOSITORY_ROOT`.
-- Clone, pull, and push transport are mounted through the Phase 3 Mercurial HTTP gateway and SSH forced-command gateway.
+- Clone, pull, and push transport are mounted through the Mercurial HTTP gateway, which also ships as a dedicated WSGI service entrypoint, and the SSH forced-command gateway.
 
 ## Mercurial tests
 
