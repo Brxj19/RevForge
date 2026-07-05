@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     transport_rate_limit_max_attempts: int = Field(
         default=30,
         alias="REVFORGE_TRANSPORT_RATE_LIMIT_MAX_ATTEMPTS",
+    )
+    ssh_authorized_keys_path: str = Field(
+        default="./.local/ssh/authorized_keys",
+        alias="REVFORGE_SSH_AUTHORIZED_KEYS_PATH",
     )
     hg_executable: str = Field(default="hg", alias="REVFORGE_HG_EXECUTABLE")
     hg_command_timeout_seconds: int = Field(
@@ -98,9 +102,15 @@ class Settings(BaseSettings):
             raise ValueError("Mercurial HTTP base path must start with '/'.")
         return normalized.rstrip("/") or "/"
 
+    @field_validator("ssh_authorized_keys_path")
+    @classmethod
+    def normalize_ssh_authorized_keys_path(cls, value: str) -> str:
+        normalized = value.strip() or "./.local/ssh/authorized_keys"
+        return normalized
+
     @field_validator("session_cookie_name")
     @classmethod
-    def validate_session_cookie_name(cls, value: str, info):
+    def validate_session_cookie_name(cls, value: str, info: ValidationInfo) -> str:
         secure = info.data.get("session_cookie_secure", False)
         domain = info.data.get("session_cookie_domain")
         if value.startswith("__Host-") and (not secure or domain is not None):

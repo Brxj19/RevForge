@@ -10,7 +10,7 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Install Mercurial locally before exercising Phase 2 repository provisioning, read-only browser routes, and the Phase 4 transport gateway:
+Install Mercurial locally before exercising Phase 2 repository provisioning, read-only browser routes, and the Phase 5 transport gateways:
 
 ```bash
 brew install mercurial
@@ -22,9 +22,10 @@ Local development also needs a repository root:
 export REVFORGE_REPOSITORY_ROOT=./.local/repositories
 export REVFORGE_HG_HTTP_BASE_PATH=/hg
 export REVFORGE_TRANSPORT_TOKEN_SECRET=change-me-transport-secret
+export REVFORGE_SSH_AUTHORIZED_KEYS_PATH=./.local/ssh/authorized_keys
 ```
 
-## Phase 2 and Phase 3 scope
+## Phase 2 through Phase 5 scope
 
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
@@ -45,10 +46,12 @@ export REVFORGE_TRANSPORT_TOKEN_SECRET=change-me-transport-secret
 - `POST /api/v1/me/ssh-keys`
 - `DELETE /api/v1/me/ssh-keys/{key_id}`
 - audit events for major control-plane changes
+- managed `authorized_keys` rendering for SSH key sync
 
 Phase 2 now provisions canonical local Mercurial repositories and exposes read-only history, diff, reference, and file browsing.
 Phase 3 mounts native Mercurial HTTP transport at `REVFORGE_HG_HTTP_BASE_PATH` and adds SSH transport credentials for forced-command access.
 Phase 4 exposes the HTTP transport as a dedicated WSGI application at `app.mercurial.http_gateway_service:application`.
+Phase 5 renders managed `authorized_keys` output for SSH key sync at `REVFORGE_SSH_AUTHORIZED_KEYS_PATH`.
 
 Still deferred:
 
