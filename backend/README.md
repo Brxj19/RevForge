@@ -10,7 +10,7 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Install Mercurial locally before exercising Phase 2 repository provisioning, read-only browser routes, and the Phase 3 transport gateway:
+Install Mercurial locally before exercising Phase 2 repository provisioning, read-only browser routes, and the Phase 4 transport gateway:
 
 ```bash
 brew install mercurial
@@ -48,6 +48,7 @@ export REVFORGE_TRANSPORT_TOKEN_SECRET=change-me-transport-secret
 
 Phase 2 now provisions canonical local Mercurial repositories and exposes read-only history, diff, reference, and file browsing.
 Phase 3 mounts native Mercurial HTTP transport at `REVFORGE_HG_HTTP_BASE_PATH` and adds SSH transport credentials for forced-command access.
+Phase 4 exposes the HTTP transport as a dedicated WSGI application at `app.mercurial.http_gateway_service:application`.
 
 Still deferred:
 
@@ -70,6 +71,7 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 2. Open the repository page and choose `Provision Mercurial repository`.
 3. Create a transport token from `/api/v1/me/tokens`.
 4. Use a local `hg` client against the mounted HTTP transport URL or the canonical repository root for test-only content seeding.
+   For a dedicated gateway process, point your WSGI server at `app.mercurial.http_gateway_service:application`.
 
 ## Tests
 

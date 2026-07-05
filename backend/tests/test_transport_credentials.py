@@ -15,11 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
-from app.mercurial.http_gateway import (
-    HgHttpGatewayApplication,
-    TransportCommandKind,
-    classify_hg_http_command,
-)
+from app.mercurial.http_gateway import TransportCommandKind, classify_hg_http_command
+from app.mercurial.http_gateway_service import create_http_gateway_application
 from app.mercurial.ssh_gateway import parse_ssh_original_command
 
 ORIGIN_HEADERS = {"Origin": "http://localhost:5173"}
@@ -200,7 +197,7 @@ def test_http_gateway_supports_clone_and_push(client, session_factory, tmp_path)
     token = token_create.json()["plaintext_token"]
     owner_email = quote("owner@example.com", safe="")
 
-    gateway = HgHttpGatewayApplication(
+    gateway = create_http_gateway_application(
         settings=get_settings(),
         session_factory_getter=lambda: session_factory,
     )
@@ -279,7 +276,7 @@ def test_http_gateway_rejects_read_only_push(client, session_factory, tmp_path) 
     token = token_create.json()["plaintext_token"]
     owner_email = quote("owner@example.com", safe="")
 
-    gateway = HgHttpGatewayApplication(
+    gateway = create_http_gateway_application(
         settings=get_settings(),
         session_factory_getter=lambda: session_factory,
     )
