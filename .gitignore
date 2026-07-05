@@ -1,2 +1,45 @@
+# Environment
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Python
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+backend/.venv/
+backend/.coverage
+backend/htmlcov/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+coverage/
+
+# Caches
+.cache/
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
+logs/
+
+# Local storage
+tmp/
+data/
+repos/
+repository-storage/
+
+# IDE
 .DS_Store
-graphify-out
+.idea/
+.vscode/
+graphify-out/

@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --rf-ink-950: #0b0f14;
+  --rf-ink-900: #121922;
+  --rf-ink-800: #1b2530;
+  --rf-slate-700: #3c4a59;
+  --rf-slate-500: #718096;
+  --rf-slate-300: #cbd5df;
+  --rf-slate-100: #edf2f6;
+  --rf-canvas: #f8fafb;
+  --rf-surface: #ffffff;
+  --rf-border: #d9e1e8;
+  --rf-forge-600: #c2410c;
+  --rf-forge-500: #ea580c;
+  --rf-forge-100: #ffedd5;
+}
+
+[data-theme="dark"] {
+  --rf-canvas: #0b0f14;
+  --rf-surface: #121922;
+  --rf-border: #293746;
+  --rf-slate-100: #dce6ee;
+  --rf-slate-300: #9dafc0;
+  --rf-slate-500: #8294a5;
+}
+
+html {
+  background: linear-gradient(180deg, #f8fafb 0%, #edf2f6 100%);
+}
+
+body {
+  margin: 0;
+  color: var(--rf-ink-950);
+  font-family: "Geist Sans", "Inter", system-ui, sans-serif;
+}
+
+button,
+a {
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--rf-forge-500);
+  outline-offset: 2px;
+}
+
