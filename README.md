@@ -1,6 +1,6 @@
 # RevForge
 
-RevForge is a self-hosted Mercurial repository hosting and collaboration platform. Phase 4 now extends the foundation with canonical Mercurial repository provisioning, a read-only browser, and a dedicated native Mercurial HTTPS transport gateway for clone, pull, and push.
+RevForge is a self-hosted Mercurial repository hosting and collaboration platform. Phase 5 now extends the foundation with canonical Mercurial repository provisioning, a read-only browser, native Mercurial HTTPS transport, and managed SSH key sync for forced-command access.
 
 ## Repository layout
 
@@ -33,6 +33,7 @@ Included now:
 - controlled `hg` command execution with timeout and output limits
 - read-only changeset history, changeset detail, unified diffs, file browsing, and refs
 - Mercurial HTTPS personal access tokens and SSH public keys
+- managed `authorized_keys` rendering for SSH key sync
 - mounted Mercurial HTTP transport for clone, pull, and push, plus a dedicated WSGI gateway entrypoint
 - environment-based backend settings and structured logging
 - async SQLAlchemy and Alembic setup
@@ -90,6 +91,7 @@ Set a local Mercurial storage root before provisioning repositories:
 export REVFORGE_REPOSITORY_ROOT=./.local/repositories
 export REVFORGE_HG_HTTP_BASE_PATH=/hg
 export REVFORGE_TRANSPORT_TOKEN_SECRET=change-me-transport-secret
+export REVFORGE_SSH_AUTHORIZED_KEYS_PATH=./.local/ssh/authorized_keys
 ```
 
 ## Control-plane configuration
@@ -118,6 +120,7 @@ Phase 1 and Phase 3 add these backend environment settings:
 - `REVFORGE_TRANSPORT_TOKEN_SECRET`
 - `REVFORGE_TRANSPORT_RATE_LIMIT_WINDOW_SECONDS`
 - `REVFORGE_TRANSPORT_RATE_LIMIT_MAX_ATTEMPTS`
+- `REVFORGE_SSH_AUTHORIZED_KEYS_PATH`
 
 See [backend/.env.example](backend/.env.example) for local defaults.
 
@@ -150,6 +153,7 @@ make migration name="create-example"
 - Repository metadata exists independently from physical Mercurial storage.
 - Phase 2 maps canonical organization and repository UUIDs onto local repository paths under `REVFORGE_REPOSITORY_ROOT`.
 - Clone, pull, and push transport are mounted through the Mercurial HTTP gateway, which also ships as a dedicated WSGI service entrypoint, and the SSH forced-command gateway.
+- SSH public keys are rendered into a managed `authorized_keys` file for deployment sync.
 
 ## Mercurial tests
 

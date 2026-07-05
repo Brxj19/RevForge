@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID as UUIDType
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, Uuid
+from sqlalchemy import DateTime, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -11,7 +11,6 @@ from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 class SshPublicKey(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ssh_public_keys"
-    __table_args__ = (UniqueConstraint("fingerprint_sha256"),)
 
     user_id: Mapped[UUIDType] = mapped_column(
         Uuid(as_uuid=True),
