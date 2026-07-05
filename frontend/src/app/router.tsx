@@ -6,8 +6,11 @@ import {
   LoginPage,
   NotFoundPage,
   OrganizationDetailPage,
+  OrganizationSettingsPage,
   OrganizationsPage,
+  RegisterPage,
   RepositoryDetailPage,
+  RepositorySettingsPage,
 } from "../routes/pages";
 
 export const router = createBrowserRouter([
@@ -18,17 +21,25 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: "login", element: <LoginPage /> },
+      { path: "register", element: <RegisterPage /> },
       { path: "organizations", element: <OrganizationsPage /> },
       {
         path: "organizations/:organizationSlug",
         element: <OrganizationDetailPage />,
       },
       {
+        path: "organizations/:organizationSlug/settings",
+        element: <OrganizationSettingsPage />,
+      },
+      {
         path: "organizations/:organizationSlug/repositories/:repositorySlug",
         element: <RepositoryDetailPage />,
+      },
+      {
+        path: "organizations/:organizationSlug/repositories/:repositorySlug/settings",
+        element: <RepositorySettingsPage />,
       },
       { path: "*", element: <NotFoundPage /> },
     ],
   },
 ]);
-

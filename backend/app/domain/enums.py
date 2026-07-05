@@ -4,11 +4,18 @@ from enum import StrEnum
 
 
 class OrganizationRole(StrEnum):
+    OWNER = "owner"
+    ADMIN = "admin"
     MEMBER = "member"
+
+
+class RepositoryRole(StrEnum):
+    READ = "read"
+    WRITE = "write"
     ADMIN = "admin"
 
 
 class RepositoryVisibility(StrEnum):
-    PRIVATE = "private"
     PUBLIC = "public"
-
+    INTERNAL = "internal"
+    PRIVATE = "private"

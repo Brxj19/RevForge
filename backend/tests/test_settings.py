@@ -23,4 +23,3 @@ def test_settings_use_expected_defaults() -> None:
     assert settings.api_v1_prefix == "/api/v1"
     assert settings.database_url.startswith("postgresql+asyncpg://")
     assert settings.redis_url == "redis://localhost:6379/0"
-

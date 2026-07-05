@@ -17,4 +17,3 @@ def test_api_health_endpoint(client) -> None:
         "service": "revforge-api",
         "api_version": "v1",
     }
-

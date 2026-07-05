@@ -10,4 +10,3 @@ class HealthResponse(BaseModel):
 
 class ApiHealthResponse(HealthResponse):
     api_version: str
-

@@ -14,4 +14,3 @@ async def root_health() -> HealthResponse:
 
 
 router.include_router(v1_router)
-

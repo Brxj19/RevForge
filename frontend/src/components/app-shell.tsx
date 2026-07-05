@@ -1,13 +1,18 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { clsx } from "clsx";
-
-const navItems = [
-  { to: "/", label: "Dashboard", end: true },
-  { to: "/organizations", label: "Organizations" },
-  { to: "/login", label: "Login" },
-];
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../app/use-auth";
 
 export function AppShell() {
+  const navigate = useNavigate();
+  const { isAuthenticated, logout, user } = useAuth();
+  const navItems = [
+    { to: "/", label: "Dashboard", end: true },
+    { to: "/organizations", label: "Organizations" },
+    isAuthenticated ? null : { to: "/login", label: "Login" },
+    isAuthenticated ? null : { to: "/register", label: "Register" },
+  ].filter(Boolean) as Array<{ to: string; label: string; end?: boolean }>;
+
   return (
     <div className="min-h-screen bg-canvas text-ink-950">
       <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col lg:flex-row">
@@ -45,12 +50,10 @@ export function AppShell() {
           </nav>
 
           <div className="mt-8 hidden rounded-lg border border-white/10 bg-white/5 p-4 lg:block">
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-slate-300">
-              Phase 0
-            </p>
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-slate-300">Phase 1</p>
             <p className="mt-2 text-sm text-slate-100">
-              Local-first monorepo foundation with health checks, typed API contracts, and a
-              scaffolded repository workspace.
+              Identity, organizations, RBAC, and repository metadata are ready. Mercurial
+              provisioning and history browsing follow in Phase 2.
             </p>
           </div>
         </aside>
@@ -65,14 +68,36 @@ export function AppShell() {
                 <h2 className="mt-1 text-xl font-semibold text-ink-950">
                   Self-hosted Mercurial operations, deliberately built.
                 </h2>
+                {isAuthenticated ? (
+                  <p className="mt-2 text-sm text-slate-500">
+                    Signed in as <span className="font-medium text-ink-950">{user?.display_name}</span>
+                  </p>
+                ) : null}
               </div>
               <div className="flex gap-3">
-                <button className="rounded-md border border-border px-3 py-2 text-sm text-slate-700">
-                  Browse docs
+                <button
+                  className="rounded-md border border-border px-3 py-2 text-sm text-slate-700"
+                  onClick={() => navigate("/organizations")}
+                >
+                  Browse organizations
                 </button>
-                <button className="rounded-md border border-forge-500 bg-forge-500 px-3 py-2 text-sm font-medium text-white">
-                  Create repository
-                </button>
+                {isAuthenticated ? (
+                  <button
+                    className="rounded-md border border-forge-500 bg-forge-500 px-3 py-2 text-sm font-medium text-white"
+                    onClick={() => {
+                      void logout().then(() => navigate("/login"));
+                    }}
+                  >
+                    Logout
+                  </button>
+                ) : (
+                  <button
+                    className="rounded-md border border-forge-500 bg-forge-500 px-3 py-2 text-sm font-medium text-white"
+                    onClick={() => navigate("/login")}
+                  >
+                    Sign in
+                  </button>
+                )}
               </div>
             </div>
           </header>
@@ -85,4 +110,3 @@ export function AppShell() {
     </div>
   );
 }
-
