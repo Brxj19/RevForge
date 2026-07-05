@@ -5,8 +5,10 @@ from sqlalchemy import UniqueConstraint
 from app.models.audit_event import AuditEvent
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
+from app.models.personal_access_token import PersonalAccessToken
 from app.models.repository import Repository
 from app.models.repository_permission import RepositoryPermission
+from app.models.ssh_public_key import SshPublicKey
 from app.models.user import User
 from app.models.user_password_credential import UserPasswordCredential
 from app.models.user_session import UserSession
@@ -53,6 +55,13 @@ def test_repository_slug_is_unique_within_organization() -> None:
 def test_repository_permission_is_unique_per_user_and_repository() -> None:
     unique_constraints = _unique_constraint_columns(RepositoryPermission)
     assert ("repository_id", "user_id") in unique_constraints
+
+
+def test_transport_credentials_are_unique_and_user_scoped() -> None:
+    assert PersonalAccessToken.__table__.c.token_digest.unique is True
+    assert SshPublicKey.__table__.c.fingerprint_sha256.unique is True
+    assert "user_id" in PersonalAccessToken.__table__.columns.keys()
+    assert "user_id" in SshPublicKey.__table__.columns.keys()
 
 
 def test_user_password_credential_is_unique_per_user() -> None:

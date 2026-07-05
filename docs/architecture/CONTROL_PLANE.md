@@ -12,7 +12,7 @@ Phases 1 and 2 establish RevForge's browser-facing control plane:
 - structured audit events for important state changes.
 
 Phase 2 provisions canonical local Mercurial repositories and exposes read-only browsing through a tightly controlled adapter.
-RevForge still does not expose clone/pull/push transport in this phase.
+Phase 3 adds Mercurial HTTP and SSH transport credentials plus native clone/pull/push gateways.
 
 ## Authentication and sessions
 
@@ -104,8 +104,7 @@ Audit metadata stays minimal and excludes passwords, session tokens, CSRF values
 
 ## Deferred work
 
-Phase 3 and later will add:
+Phase 4 and later will add:
 
-- Mercurial HTTP and SSH transport;
 - changeset, file, and diff browsing;
-- PATs, SSH keys, and external identity providers.
+- webhooks, review workflows, and external identity providers.

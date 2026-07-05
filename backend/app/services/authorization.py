@@ -14,6 +14,7 @@ class RepositoryAccess:
     viewer_role: RepositoryRole | None
     can_read: bool
     can_manage: bool
+    can_write: bool
     inherited_access: bool
 
 
@@ -50,6 +51,7 @@ def repository_access_for_actor(
             viewer_role=RepositoryRole.ADMIN,
             can_read=True,
             can_manage=True,
+            can_write=True,
             inherited_access=True,
         )
 
@@ -58,6 +60,11 @@ def repository_access_for_actor(
             viewer_role=explicit_permission.role,
             can_read=True,
             can_manage=explicit_permission.role == RepositoryRole.ADMIN,
+            can_write=explicit_permission.role
+            in {
+                RepositoryRole.WRITE,
+                RepositoryRole.ADMIN,
+            },
             inherited_access=False,
         )
 
@@ -66,6 +73,7 @@ def repository_access_for_actor(
             viewer_role=RepositoryRole.READ if actor is not None else None,
             can_read=True,
             can_manage=False,
+            can_write=False,
             inherited_access=True,
         )
 
@@ -78,9 +86,14 @@ def repository_access_for_actor(
             viewer_role=RepositoryRole.READ,
             can_read=True,
             can_manage=False,
+            can_write=False,
             inherited_access=True,
         )
 
     return RepositoryAccess(
-        viewer_role=None, can_read=False, can_manage=False, inherited_access=False
+        viewer_role=None,
+        can_read=False,
+        can_manage=False,
+        can_write=False,
+        inherited_access=False,
     )

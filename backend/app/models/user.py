@@ -23,6 +23,16 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         uselist=False,
     )
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    personal_access_tokens = relationship(
+        "PersonalAccessToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    ssh_public_keys = relationship(
+        "SshPublicKey",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     granted_repository_permissions = relationship(
         "RepositoryPermission",
         back_populates="granted_by_user",

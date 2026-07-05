@@ -52,6 +52,7 @@ def client(session_factory: async_sessionmaker[AsyncSession], settings_env: None
     from app.main import create_application
 
     application = create_application()
+    application.state.transport_session_factory_holder["factory"] = session_factory
 
     async def override_get_session() -> AsyncIterator[AsyncSession]:
         async with session_factory() as session:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import re
@@ -79,6 +80,47 @@ def create_csrf_token() -> str:
 
 def digest_token(secret_key: str, token: str) -> str:
     return hmac.new(secret_key.encode("utf-8"), token.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+SUPPORTED_SSH_KEY_TYPES = {
+    "ssh-ed25519",
+    "ssh-rsa",
+    "ecdsa-sha2-nistp256",
+    "ecdsa-sha2-nistp384",
+    "ecdsa-sha2-nistp521",
+}
+
+
+def normalize_ssh_public_key(public_key: str) -> tuple[str, str, str | None]:
+    normalized = " ".join(public_key.strip().split())
+    parts = normalized.split(" ", 2)
+    if len(parts) < 2 or len(parts) > 3:
+        raise ValueError("Enter a valid SSH public key.")
+    key_type, key_body = parts[0], parts[1]
+    if key_type not in SUPPORTED_SSH_KEY_TYPES:
+        raise ValueError("Unsupported SSH public key type.")
+    try:
+        key_bytes = base64.b64decode(key_body.encode("ascii"), validate=True)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise ValueError("Enter a valid SSH public key.") from exc
+    if not key_bytes:
+        raise ValueError("Enter a valid SSH public key.")
+    comment = parts[2] if len(parts) == 3 else None
+    if comment is not None and not comment.strip():
+        comment = None
+    return (
+        key_type,
+        f"{key_type} {key_body}" if comment is None else f"{key_type} {key_body} {comment}",
+        comment,
+    )
+
+
+def fingerprint_ssh_public_key(public_key: str) -> str:
+    _, normalized, _comment = normalize_ssh_public_key(public_key)
+    key_body = normalized.split(" ", 2)[1]
+    key_bytes = base64.b64decode(key_body.encode("ascii"), validate=True)
+    digest = hashlib.sha256(key_bytes).digest()
+    return "SHA256:" + base64.b64encode(digest).decode("ascii").rstrip("=")
 
 
 def utc_now() -> datetime:
