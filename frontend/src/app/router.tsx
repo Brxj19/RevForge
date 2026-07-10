@@ -2,6 +2,8 @@ import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "../components/app-shell";
 import { RouteErrorState } from "../components/states";
 import { DevUiPage } from "../routes/dev-ui";
+import { UserSettingsPage } from "../routes/user-settings";
+import { AuditPage } from "../routes/audit";
 import {
   DashboardPage,
   LoginPage,
@@ -64,6 +66,11 @@ export const router = createBrowserRouter([
         path: "organizations/:organizationSlug/repositories/:repositorySlug/settings",
         element: <RepositorySettingsPage />,
       },
+      {
+        path: "organizations/:organizationSlug/activity",
+        element: <AuditPage />,
+      },
+      { path: "settings", element: <UserSettingsPage /> },
       { path: "dev/ui", element: <DevUiPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],

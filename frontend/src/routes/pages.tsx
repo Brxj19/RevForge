@@ -59,7 +59,7 @@ import {
   updateOrganizationMember,
   updateRepository,
 } from "../lib/api";
-import { ChangesetDetail, HistoryList } from "../components/changeset-browser";
+import { ChangesetDetail as ChangesetDetailView, HistoryList } from "../components/changeset-browser";
 import { CodeBrowser } from "../components/code-browser";
 import { DevHealthCard } from "../components/dev-health-card";
 import { Badge } from "../components/ui/badge";
@@ -1659,7 +1659,7 @@ function renderRepositorySection({
     }
 
     return (
-      <ChangesetDetail
+      <ChangesetDetailView
         basePath={basePath}
         changeset={changesetQuery.data}
         diff={diffQuery.data}
@@ -2389,6 +2389,66 @@ function RepositorySettingsContent() {
             confirmVariant="danger"
           />
       </div>
+
+      {/* Danger zone */}
+      <Surface className="space-y-3 border-danger/40">
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-danger">
+          Danger zone
+        </p>
+        <p className="text-sm text-text-secondary">
+          These actions are irreversible or have significant impact. Proceed
+          with caution.
+        </p>
+        <div className="divide-y divide-border rounded-lg border border-danger/30">
+          <div className="flex items-center justify-between p-4">
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                Archive repository
+              </p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                Prevents pushes and marks the repository as read-only. Metadata
+                remains visible.
+              </p>
+            </div>
+            <Button
+              variant="danger"
+              disabled={repository.archived_at !== null}
+              onClick={() => {
+                void updateMutation.mutateAsync({ archived: true });
+              }}
+            >
+              {repository.archived_at !== null ? "Archived" : "Archive"}
+            </Button>
+          </div>
+          <div className="flex items-center justify-between p-4">
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                Rename slug
+              </p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                Changes the repository URL path. Old clone URLs will break.
+              </p>
+            </div>
+            <Button variant="danger" disabled>
+              Rename
+            </Button>
+          </div>
+          <div className="flex items-center justify-between p-4">
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                Delete repository
+              </p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                Permanently removes the repository and all data. Requires
+                typing the repository slug to confirm.
+              </p>
+            </div>
+            <Button variant="danger" disabled>
+              Delete
+            </Button>
+          </div>
+        </div>
+      </Surface>
     </div>
   );
 }
