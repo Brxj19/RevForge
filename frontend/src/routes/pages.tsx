@@ -60,7 +60,11 @@ import {
   updateRepository,
 } from "../lib/api";
 import { DevHealthCard } from "../components/dev-health-card";
+import { Badge } from "../components/ui/badge";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
+import { CopyButton } from "../components/ui/copy-button";
+import { DataTable } from "../components/ui/data-table";
+import { Input as UiInput } from "../components/ui/input";
 import { EmptyState, ErrorState, LoadingState } from "../components/states";
 
 function SectionHeader({
@@ -194,28 +198,6 @@ function MessageBanner({
     <p className={clsx("rounded-md border px-3 py-2 text-sm", classes)}>
       {message}
     </p>
-  );
-}
-
-function VisibilityBadge({
-  visibility,
-}: {
-  visibility: "public" | "internal" | "private";
-}) {
-  const classes = {
-    public: "border-blue-200 bg-blue-50 text-blue-800",
-    internal: "border-amber-200 bg-amber-50 text-amber-800",
-    private: "border-slate-200 bg-slate-100 text-slate-700",
-  } as const;
-  return (
-    <span
-      className={clsx(
-        "rounded-full border px-2 py-1 text-xs font-medium",
-        classes[visibility],
-      )}
-    >
-      {visibility}
-    </span>
   );
 }
 
@@ -708,6 +690,7 @@ function OrganizationDetailContent() {
     description: "",
     visibility: "private" as "public" | "internal" | "private",
   });
+  const [repoSearch, setRepoSearch] = useState("");
 
   const addMemberMutation = useMutation({
     mutationFn: () =>
@@ -798,36 +781,73 @@ function OrganizationDetailContent() {
             <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
               Repositories
             </p>
+            <div className="mt-3">
+              <UiInput
+                placeholder="Filter repositories..."
+                value={repoSearch}
+                onChange={(e) => setRepoSearch(e.target.value)}
+              />
+            </div>
             {repositoriesQuery.isLoading ? (
-              <LoadingState label="Loading repositories." />
+              <div className="mt-3">
+                <LoadingState label="Loading repositories." />
+              </div>
             ) : null}
             {repositoriesQuery.data?.length ? (
-              <div className="mt-4 grid gap-3">
-                {repositoriesQuery.data.map((repository) => (
-                  <Link
-                    key={repository.id}
-                    to={`/organizations/${organization.slug}/repositories/${repository.slug}`}
-                    className="rounded-lg border border-border bg-canvas p-4 hover:border-forge-500/50"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-semibold text-ink-950">
-                          {repository.display_name}
-                        </h3>
-                        <p className="mt-1 font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
-                          {repository.slug}
-                        </p>
-                      </div>
-                      <VisibilityBadge visibility={repository.visibility} />
-                    </div>
-                    <p className="mt-3 text-sm text-slate-500">
-                      {repository.description ?? "No description yet."}
-                    </p>
-                  </Link>
-                ))}
+              <div className="mt-3">
+                <DataTable
+                  columns={[
+                    {
+                      key: "name",
+                      header: "Name",
+                      render: (r) => (
+                        <Link
+                          to={`/organizations/${organization.slug}/repositories/${r.slug}`}
+                          className="font-medium text-accent hover:underline"
+                        >
+                          {r.display_name}
+                        </Link>
+                      ),
+                    },
+                    {
+                      key: "slug",
+                      header: "Slug",
+                      render: (r) => (
+                        <span className="font-mono text-xs text-text-muted">
+                          {r.slug}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "visibility",
+                      header: "Visibility",
+                      render: (r) => (
+                        <Badge variant={r.visibility === "public" ? "success" : r.visibility === "internal" ? "warning" : "default"}>
+                          {r.visibility}
+                        </Badge>
+                      ),
+                    },
+                    {
+                      key: "created_at",
+                      header: "Created",
+                      render: (r) => (
+                        <span className="text-sm text-text-muted">
+                          {formatTimestamp(r.created_at)}
+                        </span>
+                      ),
+                    },
+                  ]}
+                  data={repositoriesQuery.data.filter(
+                    (r) =>
+                      !repoSearch ||
+                      r.display_name.toLowerCase().includes(repoSearch.toLowerCase()) ||
+                      r.slug.toLowerCase().includes(repoSearch.toLowerCase()),
+                  )}
+                  keyFn={(r) => r.id}
+                />
               </div>
             ) : repositoriesQuery.isSuccess ? (
-              <div className="mt-4">
+              <div className="mt-3">
                 <EmptyState
                   title="No repositories yet"
                   description="Create repository metadata now. RevForge will attach physical Mercurial provisioning in Phase 2."
@@ -2148,128 +2168,57 @@ export function RepositoryDetailPage() {
   const refs = refsQuery.data;
   const historyPages = historyQuery.data?.pages ?? [];
   const changesets = historyPages.flatMap((page) => page.changesets);
-  const sectionTabs = [
-    { key: "overview", label: "Overview", to: basePath },
-    { key: "code", label: "Code", to: `${basePath}/code` },
-    { key: "commits", label: "History", to: `${basePath}/commits` },
-    { key: "branches", label: "Branches", to: `${basePath}/branches` },
-    { key: "tags", label: "Tags", to: `${basePath}/tags` },
-    { key: "bookmarks", label: "Bookmarks", to: `${basePath}/bookmarks` },
-    {
-      key: "pull-requests",
-      label: "Pull Requests",
-      to: `${basePath}/pull-requests`,
-    },
-  ] as const;
   const revisionLabel =
     selectedRevision ?? browseQuery.data?.revision ?? "latest tip";
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        eyebrow="Repository"
-        title={`${repository.organization_slug} / ${repository.display_name}`}
-        description={
-          repository.description ??
-          "Mercurial-backed repository browsing is available after the repository is provisioned."
-        }
-      />
+      <div className="flex items-center gap-2">
+        <Badge variant={repository.visibility === "public" ? "success" : repository.visibility === "internal" ? "warning" : "default"}>
+          {repository.visibility}
+        </Badge>
+        <RepositoryProvisioningBadge
+          provisioningState={repository.provisioning_state}
+        />
+        {repository.archived_at ? (
+          <span className="rounded border border-slate-300 bg-slate-100 px-2 py-0.5 text-2xs font-medium uppercase tracking-wider text-slate-700">
+            Archived
+          </span>
+        ) : null}
+        {repository.can_manage ? (
+          <Link
+            to={`${basePath}/settings`}
+            className="ml-auto rounded-md border border-accent bg-accent px-3 py-1.5 text-sm font-medium text-white"
+          >
+            Settings
+          </Link>
+        ) : null}
+      </div>
 
-      <Surface className="space-y-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                className="text-sm text-forge-600 underline-offset-2 hover:underline"
-                to={`/organizations/${organizationSlug}`}
-              >
-                {repository.organization_slug}
-              </Link>
-              <span className="text-slate-400">/</span>
-              <span className="font-mono text-sm text-ink-950">
-                {repository.slug}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <VisibilityBadge visibility={repository.visibility} />
-              <RepositoryProvisioningBadge
-                provisioningState={repository.provisioning_state}
-              />
-              {repository.archived_at ? (
-                <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-700">
-                  Archived
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              className="rounded-md border border-border px-3 py-2 text-sm text-slate-700"
-              to={`/organizations/${organizationSlug}`}
-            >
-              Back to organization
-            </Link>
-            {repository.can_manage ? (
-              <Link
-                className="rounded-md border border-forge-500 bg-forge-500 px-3 py-2 text-sm font-medium text-white"
-                to={`${basePath}/settings`}
-              >
-                Repository settings
-              </Link>
-            ) : null}
-          </div>
-        </div>
+      {repository.description ? (
+        <p className="text-sm text-text-secondary">{repository.description}</p>
+      ) : null}
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <RepositoryMetadataItem
-            label="Viewer role"
-            value={repository.viewer_role ?? "public metadata only"}
-          />
-          <RepositoryMetadataItem
-            label="Archive state"
-            value={repository.archived_at ? "Archived" : "Active"}
-          />
-          <RepositoryMetadataItem
-            label="Provisioning"
-            value={repository.phase_status}
-          />
-          <RepositoryMetadataItem
-            label="Revision target"
-            value={
-              repository.is_browsable ? revisionLabel : "not available yet"
-            }
-          />
-        </div>
-
-        <nav
-          aria-label="Repository navigation"
-          className="flex flex-wrap gap-2 border-t border-border pt-4"
-        >
-          {sectionTabs.map((tab) =>
-            repository.is_browsable || tab.key === "overview" ? (
-              <Link
-                key={tab.key}
-                className={clsx(
-                  "rounded-md px-3 py-2 text-sm font-medium",
-                  currentSection === tab.key
-                    ? "bg-forge-500 text-white"
-                    : "border border-border bg-canvas text-slate-700",
-                )}
-                to={tab.to}
-              >
-                {tab.label}
-              </Link>
-            ) : (
-              <span
-                key={tab.key}
-                className="rounded-md border border-dashed border-border px-3 py-2 text-sm text-slate-400"
-              >
-                {tab.label}
-              </span>
-            ),
-          )}
-        </nav>
-      </Surface>
+      <div className="grid gap-4 md:grid-cols-4">
+        <RepositoryMetadataItem
+          label="Viewer role"
+          value={repository.viewer_role ?? "public metadata only"}
+        />
+        <RepositoryMetadataItem
+          label="Archive state"
+          value={repository.archived_at ? "Archived" : "Active"}
+        />
+        <RepositoryMetadataItem
+          label="Provisioning"
+          value={repository.phase_status}
+        />
+        <RepositoryMetadataItem
+          label="Revision target"
+          value={
+            repository.is_browsable ? revisionLabel : "not available yet"
+          }
+        />
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.92fr]">
         <Surface>
@@ -2350,39 +2299,63 @@ export function RepositoryDetailPage() {
           ) : (
             <>
               <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-                Repository guide
+                Clone
               </p>
-              <ul className="mt-4 space-y-3 text-sm text-slate-600">
-                <li>
-                  Use Code to browse directories and safe text file contents at
-                  a concrete revision.
-                </li>
-                <li>
-                  Use History for paginated changesets and Changeset detail for
-                  parents, files, and diff context.
-                </li>
-                <li>
-                  Branches, tags, and bookmarks resolve to concrete Mercurial
-                  nodes before the browser reads content.
-                </li>
-              </ul>
-              <div className="mt-6 grid gap-3">
-                <QuickLinkCard
-                  title="Open code browser"
-                  description="Browse the repository tree and file contents."
-                  to={`${basePath}/code${repositorySearch(location.search, { path: "", revision: selectedRevision })}`}
-                />
-                <QuickLinkCard
-                  title="Inspect history"
-                  description="Review paginated changesets with branch context."
-                  to={`${basePath}/commits`}
-                />
-                <QuickLinkCard
-                  title="Browse references"
-                  description="Jump into branches, tags, and bookmarks."
-                  to={`${basePath}/branches`}
-                />
+              <div className="mt-4 space-y-3">
+                <div>
+                  <p className="text-xs text-text-muted">HTTPS</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 truncate rounded border border-border bg-canvas px-2 py-1.5 text-xs font-mono text-text-primary">
+                      https://{window.location.host}/hg/{organizationSlug}/{repositorySlug}
+                    </code>
+                    <CopyButton
+                      text={`https://${window.location.host}/hg/${organizationSlug}/${repositorySlug}`}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">SSH</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 truncate rounded border border-border bg-canvas px-2 py-1.5 text-xs font-mono text-text-primary">
+                      ssh://hg@{window.location.host}/{organizationSlug}/{repositorySlug}
+                    </code>
+                    <CopyButton
+                      text={`ssh://hg@${window.location.host}/${organizationSlug}/${repositorySlug}`}
+                    />
+                  </div>
+                </div>
               </div>
+
+              {changesets.length > 0 ? (
+                <div className="mt-6">
+                  <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+                    Latest changeset
+                  </p>
+                  <div className="mt-3 rounded border border-border bg-canvas p-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-text-muted">
+                        {changesets[0].short_node}
+                      </span>
+                      <span className="text-xs text-text-muted">
+                        {formatTimestamp(changesets[0].timestamp)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-text-primary line-clamp-2">
+                      {changesets[0].message.split("\n")[0]}
+                    </p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {changesets[0].author_name}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              <p className="mt-6 text-xs text-text-muted">
+                Role: <span className="font-medium text-text-primary">{repository.viewer_role ?? "none"}</span>
+                {repository.can_manage ? (
+                  <span className="ml-2 rounded border border-accent-subtle bg-accent-subtle px-1.5 py-0.5 text-2xs text-accent">admin</span>
+                ) : null}
+              </p>
             </>
           )}
           <ConfirmDialog

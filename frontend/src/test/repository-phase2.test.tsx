@@ -194,10 +194,9 @@ describe("repository phase 2 pages", () => {
       "/organizations/acme/repositories/unprovisioned-repo",
     );
 
+    expect(await screen.findByText("public")).toBeInTheDocument();
     expect(
-      await screen.findByRole("heading", {
-        name: /acme \/ unprovisioned repo/i,
-      }),
+      screen.getByText("unprovisioned"),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
