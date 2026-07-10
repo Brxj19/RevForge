@@ -8,8 +8,8 @@ import {
   CreateOrganizationMemberPage,
   CreateOrganizationPage,
   CreateRepositoryPage,
-  DashboardPage,
   LoginPage,
+  HomePage,
   NotFoundPage,
   OrganizationDetailPage,
   OrganizationRepositoriesPage,
@@ -28,7 +28,7 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     errorElement: <RouteErrorState />,
     children: [
-      { index: true, element: <DashboardPage /> },
+      { index: true, element: <HomePage /> },
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
       { path: "organizations", element: <OrganizationsPage /> },
