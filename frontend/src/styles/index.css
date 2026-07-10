@@ -34,7 +34,9 @@
   --color-text-secondary: var(--rf-slate-700);
   --color-text-muted: var(--rf-slate-500);
   --color-accent: var(--rf-forge-500);
+  --color-accent-hover: #c2410c;
   --color-accent-subtle: var(--rf-forge-100);
+  --color-accent-foreground: #ffffff;
   --color-success: var(--rf-success-600);
   --color-success-subtle: var(--rf-success-100);
   --color-warning: var(--rf-warning-700);
@@ -67,7 +69,9 @@
   --color-text-secondary: var(--rf-slate-300);
   --color-text-muted: var(--rf-slate-500);
   --color-accent: var(--rf-forge-500);
+  --color-accent-hover: #ea580c;
   --color-accent-subtle: #2d1a0a;
+  --color-accent-foreground: #0b0f14;
   --color-success: #22c55e;
   --color-success-subtle: #052e16;
   --color-warning: #eab308;
@@ -101,7 +105,9 @@
     --color-text-secondary: var(--rf-slate-300);
     --color-text-muted: var(--rf-slate-500);
     --color-accent: var(--rf-forge-500);
+    --color-accent-hover: #ea580c;
     --color-accent-subtle: #2d1a0a;
+    --color-accent-foreground: #0b0f14;
     --color-success: #22c55e;
     --color-success-subtle: #052e16;
     --color-warning: #eab308;

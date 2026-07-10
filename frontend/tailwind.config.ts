@@ -48,7 +48,9 @@ export default {
         },
         accent: {
           DEFAULT: "var(--color-accent)",
+          hover: "var(--color-accent-hover)",
           subtle: "var(--color-accent-subtle)",
+          foreground: "var(--color-accent-foreground)",
         },
       },
       boxShadow: {
