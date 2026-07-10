@@ -64,7 +64,7 @@ async def create_token(
     except ValidationFailure as exc:
         await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
 
     token = PersonalAccessTokenResponse.model_validate(result.token)
@@ -122,7 +122,7 @@ async def create_ssh_key(
     except ValidationFailure as exc:
         await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
     except ConflictError as exc:
         await session.rollback()

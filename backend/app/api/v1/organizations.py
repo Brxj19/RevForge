@@ -113,7 +113,7 @@ async def create_organization_route(
     except ValidationFailure as exc:
         await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
     except ConflictError as exc:
         await session.rollback()
@@ -180,7 +180,7 @@ async def patch_organization(
     except ValidationFailure as exc:
         await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
 
     member_count = len(await list_organization_members(session, organization=organization))
@@ -240,7 +240,7 @@ async def create_member(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND
             if isinstance(exc, NotFoundError)
-            else status.HTTP_422_UNPROCESSABLE_ENTITY,
+            else status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
     except ConflictError as exc:

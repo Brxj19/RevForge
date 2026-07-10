@@ -1474,7 +1474,7 @@ Add UI tests for:
 
 ---
 
-## 14. Redesign phasing plan
+## 14. Autonomous Mission Loop Plan
 
 ### Phase UI-0: Design foundation cleanup
 
@@ -1563,41 +1563,109 @@ A redesigned screen is acceptable only when:
 
 ---
 
-## 16. Codex prompt for UI redesign
+## 16. Deepseek Mission Loop Prompt
 
 Use this prompt to start the redesign work:
 
 ```text
 You are working in the RevForge repository.
 
-Goal:
-Redesign the entire RevForge frontend UI/UX into a serious, dense, Mercurial-native developer forge UI. Follow DESIGN.md and preserve existing backend behavior. Focus especially on a Kallithea-inspired repository code/worktree browser while borrowing the best navigation, clone, history, diff, review, and settings patterns from GitHub and GitLab.
+Mission:
+Redesign the entire RevForge frontend UI/UX according to DESIGN.md. This is not a phase-by-phase task. Work in an autonomous goal-driven loop until the complete redesign goal is achieved.
 
-Hard requirements:
-- Create a new branch for each phase.
-- Do not bypass checks, reviews, or branch protection.
-- Keep the working tree clean after each phase.
-- Commit, push, open PR, wait for checks, squash-merge, delete remote branch, switch to main, pull --ff-only, and delete local branch after every phase.
-- Preserve Mercurial vocabulary: changeset, revision, branch, bookmark, tag, clone, pull, push, compare, review.
-- Keep server state in TanStack Query.
-- Keep repository path/revision/filter state in URL params.
-- Extract shared UI components out of route files.
-- No generic SaaS dashboard visuals, neon gradients, glassmorphism, decorative charts, or excessive animation.
-- Every screen must include loading, empty, error, permission-denied, and narrow-width behavior where relevant.
-- Every destructive action must use a proper confirmation dialog, not window.confirm.
+Branch:
+Create and work only on:
 
-Recommended first phase:
-Phase UI-0 Design Foundation Cleanup
-1. Create reusable UI components: Button, IconButton, Badge, Tabs, Dialog, Drawer, DataTable, EmptyState, ErrorState, Skeleton, CopyButton.
-2. Add semantic design tokens for color, spacing, typography, radius, elevation, focus ring, and diff colors.
-3. Refactor existing page-local primitives to shared components without changing behavior.
-4. Add tests for shared component states and protected route behavior.
-5. Run format, lint, typecheck, tests, and build.
+feature/revforge-ui-redesign-mission
 
-Deliverables:
-- Updated frontend components and styles.
-- Passing frontend tests.
-- Short PR summary with screenshots or before/after notes when possible.
+Core objective:
+Transform RevForge into a serious, dense, Mercurial-native developer forge UI. The most important experience is the repository Code/worktree browser, inspired by Kallithea’s compact repository browsing, with the best code navigation, file actions, clone flow, history, diff, review, and settings patterns from GitHub and GitLab.
+
+Operating loop:
+Repeat this loop until the full goal is achieved:
+
+1. Read DESIGN.md.
+2. Inspect the current frontend implementation.
+3. Maintain an internal mission checklist based on DESIGN.md.
+4. Pick the highest-impact unfinished UI/UX area.
+5. Implement it completely.
+6. Extract reusable components when patterns repeat.
+7. Keep repository path, revision, and filter state in URL params.
+8. Keep server state in TanStack Query.
+9. Run formatting, linting, typechecking, tests, and build.
+10. Fix every failure.
+11. Review the result against DESIGN.md.
+12. Commit the completed unit of work.
+13. Continue to the next highest-impact unfinished area.
+
+Do not stop after only one page or one component. Continue until the complete UI redesign is done.
+
+Definition of Done:
+The mission is complete only when all of these are true:
+
+* App shell has a professional top bar, left rail, global navigation, user menu, and repository-aware context.
+* Dashboard is redesigned around Continue working, Needs attention, repositories, and quick actions.
+* Organization overview uses a dense searchable repository table instead of large MVP cards.
+* Repository overview clearly shows identity, visibility, provisioning state, latest changeset, clone/access, health, quick links, and README preview when available.
+* Repository Code tab has a dense Kallithea-style worktree browser.
+* Code browser preserves revision and path in URL.
+* Code browser has revision selector, path breadcrumbs, file tree, file viewer, file metadata, and file actions.
+* File actions include copy path, copy permalink, raw, history, download, and blame/annotate placeholder if backend support is not ready.
+* Binary, large, empty, unprovisioned, permission-denied, loading, and error states are handled clearly.
+* History/changesets list is dense, filterable, and Mercurial-native.
+* Changeset detail shows revision identity, message, author, timestamp, parents, refs, changed files, and diff.
+* Clone dialog supports HTTPS and SSH with safe token/key guidance.
+* Settings pages separate normal settings, access control, transport, webhooks, audit, and danger zone.
+* Destructive actions use proper confirmation dialogs, not window.confirm.
+* Shared UI components are extracted from route files.
+* Components support keyboard navigation and visible focus states.
+* UI remains readable in responsive layouts.
+* Tests are added or updated for key UI behavior.
+* format, lint, typecheck, tests, and build pass.
+
+Rules:
+
+* Do not remove existing backend behavior.
+* Do not fake backend data unless clearly marked as placeholder and isolated.
+* Do not use generic SaaS dashboard styling.
+* Do not use neon gradients, glassmorphism, animated background blobs, decorative charts, or emoji as production icons.
+* Preserve Mercurial vocabulary: repository, changeset, revision, branch, bookmark, tag, clone, pull, push, compare, review.
+* Prefer dense tables and split panels over oversized cards.
+* Every important action must have clear loading, success, error, and permission-denied behavior.
+* Every commit must be small enough to review but the overall branch should continue until the whole redesign is complete.
+
+Quality gates:
+After each meaningful implementation chunk, run:
+
+npm run format
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+
+If the project uses Makefile commands, prefer the repo-level equivalents:
+
+make format
+make lint
+make typecheck
+make test
+
+Fix all failures before continuing.
+
+Git workflow:
+
+* Work on feature/revforge-ui-redesign-mission.
+* Commit after each completed logical chunk.
+* Use clear commit messages.
+* Do not merge to main until the entire mission is complete.
+* At the end, push the branch and prepare a final PR summary with:
+
+  * what changed;
+  * major UI areas redesigned;
+  * tests run;
+  * screenshots/manual verification notes if possible;
+  * remaining known limitations.
+
 ```
 
 ---

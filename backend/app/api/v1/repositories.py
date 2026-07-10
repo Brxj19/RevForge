@@ -250,7 +250,7 @@ def _raise_read_error(exc: Exception) -> None:
         ) from exc
     if isinstance(exc, InvalidRevisionError | InvalidRepositoryPathError):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Revision or repository path is invalid.",
         ) from exc
     if isinstance(exc, RepositoryNotProvisionedError):
@@ -392,7 +392,7 @@ async def create_repository_route(
     except ValidationFailure as exc:
         await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
     except ConflictError as exc:
         await session.rollback()
@@ -738,7 +738,7 @@ async def patch_repository(
     except ValidationFailure as exc:
         await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
 
     return _serialize_repository_detail(
