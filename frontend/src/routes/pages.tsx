@@ -60,6 +60,7 @@ import {
   updateRepository,
 } from "../lib/api";
 import { DevHealthCard } from "../components/dev-health-card";
+import { ConfirmDialog } from "../components/ui/confirm-dialog";
 import { EmptyState, ErrorState, LoadingState } from "../components/states";
 
 function SectionHeader({
@@ -1049,6 +1050,7 @@ function OrganizationSettingsContent() {
     },
   });
 
+  const [removeMemberTarget, setRemoveMemberTarget] = useState<{ id: string; name: string } | null>(null);
   const memberDeleteMutation = useMutation({
     mutationFn: (memberId: string) =>
       deleteOrganizationMember(organizationSlug, memberId, csrfToken),
@@ -1188,15 +1190,12 @@ function OrganizationSettingsContent() {
                         !organization.can_manage ||
                         memberDeleteMutation.isPending
                       }
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Remove ${member.user_display_name} from ${organization.display_name}?`,
-                          )
-                        ) {
-                          void memberDeleteMutation.mutateAsync(member.id);
-                        }
-                      }}
+                      onClick={() =>
+                        setRemoveMemberTarget({
+                          id: member.id,
+                          name: member.user_display_name,
+                        })
+                      }
                       type="button"
                       variant="danger"
                     >
@@ -1225,6 +1224,20 @@ function OrganizationSettingsContent() {
               }
             />
           ) : null}
+          <ConfirmDialog
+            open={removeMemberTarget !== null}
+            onClose={() => setRemoveMemberTarget(null)}
+            onConfirm={() => {
+              if (removeMemberTarget) {
+                void memberDeleteMutation.mutateAsync(removeMemberTarget.id);
+              }
+              setRemoveMemberTarget(null);
+            }}
+            title="Remove member"
+            message={`Remove ${removeMemberTarget?.name ?? "this member"} from ${organization.display_name}?`}
+            confirmLabel="Remove"
+            confirmVariant="danger"
+          />
         </Surface>
       </div>
     </div>
@@ -2094,6 +2107,7 @@ export function RepositoryDetailPage() {
       currentSection === "changeset" &&
       changesetNode !== null,
   });
+  const [provisionConfirmOpen, setProvisionConfirmOpen] = useState(false);
   const provisionMutation = useMutation({
     mutationFn: () =>
       provisionRepository(organizationSlug, repositorySlug, csrfToken),
@@ -2308,15 +2322,7 @@ export function RepositoryDetailPage() {
                       provisionMutation.isPending ||
                       repository.provisioning_state === "provisioning"
                     }
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Provision the Mercurial repository for ${repository.display_name}?`,
-                        )
-                      ) {
-                        void provisionMutation.mutateAsync();
-                      }
-                    }}
+                    onClick={() => setProvisionConfirmOpen(true)}
                     type="button"
                   >
                     Provision Mercurial repository
@@ -2379,6 +2385,17 @@ export function RepositoryDetailPage() {
               </div>
             </>
           )}
+          <ConfirmDialog
+            open={provisionConfirmOpen}
+            onClose={() => setProvisionConfirmOpen(false)}
+            onConfirm={() => {
+              setProvisionConfirmOpen(false);
+              void provisionMutation.mutateAsync();
+            }}
+            title="Provision Mercurial repository"
+            message={`Provision the Mercurial repository for ${repository.display_name}? This will create the underlying storage.`}
+            confirmLabel="Provision"
+          />
         </Surface>
       </div>
     </div>
@@ -2448,6 +2465,7 @@ function RepositorySettingsContent() {
     },
   });
 
+  const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
   const deletePermissionMutation = useMutation({
     mutationFn: (userId: string) =>
       deleteRepositoryPermission(
@@ -2642,17 +2660,12 @@ function RepositorySettingsContent() {
                   </div>
                   <Button
                     disabled={deletePermissionMutation.isPending}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Revoke explicit access for ${permission.user_display_name}?`,
-                        )
-                      ) {
-                        void deletePermissionMutation.mutateAsync(
-                          permission.user_id,
-                        );
-                      }
-                    }}
+                    onClick={() =>
+                      setRevokeTarget({
+                        id: permission.user_id,
+                        name: permission.user_display_name,
+                      })
+                    }
                     type="button"
                     variant="danger"
                   >
@@ -2671,6 +2684,20 @@ function RepositorySettingsContent() {
             </div>
           ) : null}
         </Surface>
+          <ConfirmDialog
+            open={revokeTarget !== null}
+            onClose={() => setRevokeTarget(null)}
+            onConfirm={() => {
+              if (revokeTarget) {
+                void deletePermissionMutation.mutateAsync(revokeTarget.id);
+              }
+              setRevokeTarget(null);
+            }}
+            title="Revoke access"
+            message={`Revoke explicit access for ${revokeTarget?.name ?? "this user"}?`}
+            confirmLabel="Revoke"
+            confirmVariant="danger"
+          />
       </div>
     </div>
   );

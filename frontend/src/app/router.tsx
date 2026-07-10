@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "../components/app-shell";
 import { RouteErrorState } from "../components/states";
+import { DevUiPage } from "../routes/dev-ui";
 import {
   DashboardPage,
   LoginPage,
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
         path: "organizations/:organizationSlug/repositories/:repositorySlug/settings",
         element: <RepositorySettingsPage />,
       },
+      { path: "dev/ui", element: <DevUiPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },
