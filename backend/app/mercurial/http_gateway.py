@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -133,6 +134,9 @@ class HgHttpGatewayApplication:
 
     def __call__(self, environ: dict[str, Any], start_response) -> list[bytes]:
         request_id = environ.get("HTTP_X_REQUEST_ID") or str(uuid4())
+        event_spool_dir = os.environ.get("REVFORGE_EVENT_SPOOL_DIR", "")
+        if event_spool_dir:
+            os.environ["REVFORGE_EVENT_SPOOL_DIR"] = event_spool_dir
         path_info = environ.get("PATH_INFO", "")
         path_segments = [segment for segment in path_info.split("/") if segment]
         if len(path_segments) != 2:
@@ -217,6 +221,18 @@ class HgHttpGatewayApplication:
                 b"hooks",
                 hook_name,
                 b"python:app.mercurial.transport_hooks.deny_read_only_write",
+                b"revforge",
+            )
+        if auth_result.actor is not None:
+            os.environ["REVFORGE_REPOSITORY_ID"] = str(auth_result.repository.id)
+            os.environ["REVFORGE_ACTOR_USER_ID"] = str(auth_result.actor.id)
+            os.environ["REVFORGE_AUTH_METHOD"] = "http_token" if basic_auth else "session"
+            os.environ["REVFORGE_SOURCE_IP"] = remote_addr
+            os.environ["REVFORGE_REQUEST_ID"] = request_id
+            baseui.setconfig(
+                b"hooks",
+                b"changegroup.revforge",
+                b"python:app.mercurial.transport_hooks.spool_push_event",
                 b"revforge",
             )
 

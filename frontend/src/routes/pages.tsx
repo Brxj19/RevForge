@@ -35,9 +35,16 @@ import {
   getChangeset,
   getChangesetDiff,
   createOrganization,
+  createPullRequest,
   createRepository,
   deleteOrganizationMember,
   deleteRepositoryPermission,
+  listPullRequests,
+  getPullRequest,
+  getPullRequestDiff,
+  addPullRequestComment,
+  addPullRequestReview,
+  closePullRequest,
   getOrganization,
   getRepository,
   getRepositoryRefs,
@@ -1231,7 +1238,9 @@ type RepositorySection =
   | "changeset"
   | "branches"
   | "tags"
-  | "bookmarks";
+  | "bookmarks"
+  | "pull-requests"
+  | "pull-request";
 
 function RepositoryMetadataItem({
   label,
@@ -1315,6 +1324,12 @@ function resolveRepositorySection(
   }
   if (pathname === `${basePath}/bookmarks`) {
     return "bookmarks";
+  }
+  if (pathname === `${basePath}/pull-requests`) {
+    return "pull-requests";
+  }
+  if (pathname.startsWith(`${basePath}/pull-requests/`)) {
+    return "pull-request";
   }
   return "overview";
 }
@@ -1903,6 +1918,14 @@ function renderRepositorySection({
     );
   }
 
+  if (currentSection === "pull-requests") {
+    return <PullRequestListContent basePath={basePath} repositorySlug={repository.slug} organizationSlug={repository.organization_slug} />;
+  }
+
+  if (currentSection === "pull-request") {
+    return <PullRequestDetailContent basePath={basePath} repositorySlug={repository.slug} organizationSlug={repository.organization_slug} />;
+  }
+
   const refCollection: RepositoryRef[] =
     currentSection === "branches"
       ? (refs?.branches ?? [])
@@ -2106,6 +2129,7 @@ export function RepositoryDetailPage() {
     { key: "branches", label: "Branches", to: `${basePath}/branches` },
     { key: "tags", label: "Tags", to: `${basePath}/tags` },
     { key: "bookmarks", label: "Bookmarks", to: `${basePath}/bookmarks` },
+    { key: "pull-requests", label: "Pull Requests", to: `${basePath}/pull-requests` },
   ] as const;
   const revisionLabel =
     selectedRevision ?? browseQuery.data?.revision ?? "latest tip";
@@ -2632,6 +2656,408 @@ function RepositorySettingsContent() {
           ) : null}
         </Surface>
       </div>
+    </div>
+  );
+}
+
+function usePrQuery(organizationSlug: string, repositorySlug: string) {
+  return useQuery({
+    queryKey: ["pull-requests", organizationSlug, repositorySlug],
+    queryFn: () => listPullRequests(organizationSlug, repositorySlug),
+  });
+}
+
+function PullRequestListContent({
+  basePath,
+  organizationSlug,
+  repositorySlug,
+}: {
+  basePath: string;
+  organizationSlug: string;
+  repositorySlug: string;
+}) {
+  const { user, csrfToken } = useAuth();
+  const prQuery = usePrQuery(organizationSlug, repositorySlug);
+  const queryClient = useQueryClient();
+
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [sourceRevision, setSourceRevision] = useState("");
+  const [targetRevision, setTargetRevision] = useState("tip");
+  const [sourceBranch, setSourceBranch] = useState("");
+  const [targetBranch, setTargetBranch] = useState("");
+  const [draft, setDraft] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createPullRequest(
+        organizationSlug,
+        repositorySlug,
+        {
+          title,
+          description: description || null,
+          source_revision: sourceRevision,
+          target_revision: targetRevision,
+          source_branch: sourceBranch || null,
+          target_branch: targetBranch || null,
+          draft,
+        },
+        csrfToken,
+      ),
+    onSuccess: async () => {
+      setShowForm(false);
+      setTitle("");
+      setDescription("");
+      setSourceRevision("");
+      setTargetRevision("tip");
+      setSourceBranch("");
+      setTargetBranch("");
+      setDraft(false);
+      setFormError(null);
+      await queryClient.invalidateQueries({
+        queryKey: ["pull-requests", organizationSlug, repositorySlug],
+      });
+    },
+    onError: (error) => {
+      setFormError(error instanceof Error ? error.message : "Failed to create pull request.");
+    },
+  });
+
+  if (prQuery.isLoading) return <LoadingState label="Loading pull requests." />;
+  if (prQuery.isError) {
+    return (
+      <ErrorState
+        title="Pull requests unavailable"
+        description={prQuery.error instanceof Error ? prQuery.error.message : "Unable to load pull requests."}
+      />
+    );
+  }
+
+  const prs = prQuery.data ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+          Pull Requests
+        </p>
+        {user ? (
+          <Button onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Cancel" : "New Pull Request"}
+          </Button>
+        ) : null}
+      </div>
+
+      {showForm ? (
+        <Surface className="space-y-4">
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Create Pull Request
+          </p>
+          {formError ? <MessageBanner message={formError} tone="error" /> : null}
+          <FormField label="Title">
+            <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Pull request title" />
+          </FormField>
+          <FormField label="Description">
+            <TextArea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" />
+          </FormField>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Source revision">
+              <TextInput value={sourceRevision} onChange={(e) => setSourceRevision(e.target.value)} placeholder="e.g. 1a2b3c4d5e or branch name" />
+            </FormField>
+            <FormField label="Target revision">
+              <TextInput value={targetRevision} onChange={(e) => setTargetRevision(e.target.value)} placeholder="default: tip" />
+            </FormField>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Source branch (optional)">
+              <TextInput value={sourceBranch} onChange={(e) => setSourceBranch(e.target.value)} placeholder="feature-branch" />
+            </FormField>
+            <FormField label="Target branch (optional)">
+              <TextInput value={targetBranch} onChange={(e) => setTargetBranch(e.target.value)} placeholder="default" />
+            </FormField>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} className="rounded border-border" />
+            Create as draft
+          </label>
+          <div className="flex gap-3">
+            <Button
+              variant="primary"
+              disabled={createMutation.isPending || !title.trim() || !sourceRevision.trim()}
+              onClick={() => void createMutation.mutateAsync()}
+            >
+              {createMutation.isPending ? "Creating..." : "Create"}
+            </Button>
+            <Button variant="secondary" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+          </div>
+        </Surface>
+      ) : null}
+
+      {prs.length === 0 && !showForm ? (
+        <EmptyState
+          title="No pull requests yet"
+          description="Pull requests let you propose changes and collaborate with your team."
+        />
+      ) : (
+        <div className="space-y-3">
+          {prs.map((pr) => (
+            <Link
+              key={pr.id}
+              to={`${basePath}/pull-requests/${pr.id}`}
+              className="block rounded-lg border border-border bg-canvas p-4 transition hover:border-forge-500"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-semibold text-ink-950">
+                    #{pr.number} — {pr.title}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {pr.author_id.slice(0, 8)} &middot; {formatTimestamp(pr.created_at)}
+                  </p>
+                </div>
+                <PullRequestStateBadge state={pr.state} />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                <span>{pr.approval_count} approvals</span>
+                <span>{pr.changes_requested_count} changes requested</span>
+                <span>{pr.comment_count} comments</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PullRequestStateBadge({ state }: { state: string }) {
+  const tone =
+    state === "open"
+      ? "border-green-200 bg-green-50 text-green-700"
+      : state === "draft"
+        ? "border-slate-300 bg-slate-100 text-slate-700"
+        : state === "merged"
+          ? "border-purple-200 bg-purple-50 text-purple-700"
+          : "border-red-200 bg-red-50 text-red-700";
+  return (
+    <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] ${tone}`}>
+      {state}
+    </span>
+  );
+}
+
+function PullRequestDetailContent({
+  basePath,
+  organizationSlug,
+  repositorySlug,
+}: {
+  basePath: string;
+  organizationSlug: string;
+  repositorySlug: string;
+}) {
+  const { pullRequestId } = useParams<{ pullRequestId: string }>();
+  const { user, csrfToken } = useAuth();
+  const queryClient = useQueryClient();
+
+  const prQuery = useQuery({
+    queryKey: ["pull-request", organizationSlug, repositorySlug, pullRequestId],
+    queryFn: () => getPullRequest(organizationSlug, repositorySlug, pullRequestId!),
+    enabled: !!pullRequestId,
+  });
+
+  const diffQuery = useQuery({
+    queryKey: ["pull-request-diff", organizationSlug, repositorySlug, pullRequestId],
+    queryFn: () => getPullRequestDiff(organizationSlug, repositorySlug, pullRequestId!),
+    enabled: !!pullRequestId && prQuery.data?.state === "open",
+  });
+
+  const [commentBody, setCommentBody] = useState("");
+  const [reviewDecision, setReviewDecision] = useState<"approved" | "changes_requested" | "comment">("comment");
+  const [reviewBody, setReviewBody] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const commentMutation = useMutation({
+    mutationFn: () =>
+      addPullRequestComment(organizationSlug, repositorySlug, pullRequestId!, { body: commentBody }, csrfToken),
+    onSuccess: async () => {
+      setCommentBody("");
+      setActionError(null);
+      await queryClient.invalidateQueries({ queryKey: ["pull-request", organizationSlug, repositorySlug, pullRequestId] });
+    },
+    onError: (error) => setActionError(error instanceof Error ? error.message : "Failed to add comment."),
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: () =>
+      addPullRequestReview(organizationSlug, repositorySlug, pullRequestId!, { decision: reviewDecision, body: reviewBody || null }, csrfToken),
+    onSuccess: async () => {
+      setReviewBody("");
+      setReviewDecision("comment");
+      setActionError(null);
+      await queryClient.invalidateQueries({ queryKey: ["pull-request", organizationSlug, repositorySlug, pullRequestId] });
+    },
+    onError: (error) => setActionError(error instanceof Error ? error.message : "Failed to submit review."),
+  });
+
+  const closeMutation = useMutation({
+    mutationFn: () => closePullRequest(organizationSlug, repositorySlug, pullRequestId!, csrfToken),
+    onSuccess: async () => {
+      setActionError(null);
+      await queryClient.invalidateQueries({ queryKey: ["pull-request", organizationSlug, repositorySlug, pullRequestId] });
+      await queryClient.invalidateQueries({ queryKey: ["pull-requests", organizationSlug, repositorySlug] });
+    },
+    onError: (error) => setActionError(error instanceof Error ? error.message : "Failed to close pull request."),
+  });
+
+  if (prQuery.isLoading) return <LoadingState label="Loading pull request." />;
+  if (prQuery.isError) {
+    return (
+      <ErrorState title="Pull request not found" description={prQuery.error instanceof Error ? prQuery.error.message : "Unable to load pull request."} />
+    );
+  }
+  const pr = prQuery.data!;
+
+  return (
+    <div className="space-y-4">
+      {actionError ? <MessageBanner message={actionError} tone="error" /> : null}
+
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            #{pr.number}
+          </p>
+          <p className="mt-1 text-lg font-semibold text-ink-950">{pr.title}</p>
+          {pr.description ? (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{pr.description}</p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <PullRequestStateBadge state={pr.state} />
+            <span>by {pr.author_id.slice(0, 8)}</span>
+            <span>{formatTimestamp(pr.created_at)}</span>
+            <span>{pr.source_revision.slice(0, 8)} &rarr; {pr.target_revision.slice(0, 8)}</span>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          {pr.state === "open" && user ? (
+            <>
+              <Button
+                variant="danger"
+                disabled={closeMutation.isPending}
+                onClick={() => void closeMutation.mutateAsync()}
+              >
+                {closeMutation.isPending ? "Closing..." : "Close"}
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Diff */}
+      {diffQuery.data ? (
+        <Surface className="space-y-2">
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Changes ({diffQuery.data.total_files} files, +{diffQuery.data.total_additions}/-{diffQuery.data.total_deletions})
+          </p>
+          <div className="space-y-2">
+            {diffQuery.data.changed_files.map((f, i) => (
+              <div key={i} className="flex items-center justify-between rounded border border-border bg-canvas px-3 py-2 text-sm">
+                <span className="font-mono text-xs text-ink-950">{f.path}</span>
+                <span className="text-xs text-slate-500">+{f.additions}/-{f.deletions}</span>
+              </div>
+            ))}
+          </div>
+        </Surface>
+      ) : null}
+
+      {/* Comments */}
+      {pr.comments.length > 0 ? (
+        <Surface className="space-y-3">
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Comments ({pr.comments.length})
+          </p>
+          {pr.comments.map((c) => (
+            <div key={c.id} className="rounded-lg border border-border bg-canvas p-3">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>{c.author_id.slice(0, 8)}</span>
+                <span>{formatTimestamp(c.created_at)}</span>
+                {c.outdated ? <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">outdated</span> : null}
+              </div>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-ink-950">{c.body}</p>
+              {c.file_path ? (
+                <p className="mt-1 text-xs text-slate-500">on {c.file_path}{c.line_number ? `:${c.line_number}` : ""}</p>
+              ) : null}
+            </div>
+          ))}
+        </Surface>
+      ) : null}
+
+      {/* Reviews */}
+      {pr.reviews.length > 0 ? (
+        <Surface className="space-y-3">
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Reviews ({pr.reviews.length})
+          </p>
+          {pr.reviews.map((r) => (
+            <div key={r.id} className="rounded-lg border border-border bg-canvas p-3">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="font-medium text-ink-950">{r.decision}</span>
+                <span className="text-slate-500">by {r.reviewer_id.slice(0, 8)}</span>
+                <span className="text-slate-500">{formatTimestamp(r.created_at)}</span>
+              </div>
+              {r.body ? <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{r.body}</p> : null}
+            </div>
+          ))}
+        </Surface>
+      ) : null}
+
+      {/* Add comment */}
+      {user && (pr.state === "open" || pr.state === "draft") ? (
+        <Surface className="space-y-3">
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Add Comment
+          </p>
+          <TextArea value={commentBody} onChange={(e) => setCommentBody(e.target.value)} placeholder="Leave a comment..." />
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              disabled={commentMutation.isPending || !commentBody.trim()}
+              onClick={() => void commentMutation.mutateAsync()}
+            >
+              {commentMutation.isPending ? "Posting..." : "Comment"}
+            </Button>
+          </div>
+        </Surface>
+      ) : null}
+
+      {/* Add review */}
+      {user && pr.state === "open" ? (
+        <Surface className="space-y-3">
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+            Submit Review
+          </p>
+          <Select value={reviewDecision} onChange={(e) => setReviewDecision(e.target.value as typeof reviewDecision)}>
+            <option value="comment">Comment</option>
+            <option value="approved">Approve</option>
+            <option value="changes_requested">Request Changes</option>
+          </Select>
+          <TextArea value={reviewBody} onChange={(e) => setReviewBody(e.target.value)} placeholder="Review summary (optional)..." />
+          <Button
+            variant="primary"
+            disabled={reviewMutation.isPending}
+            onClick={() => void reviewMutation.mutateAsync()}
+          >
+            {reviewMutation.isPending ? "Submitting..." : "Submit Review"}
+          </Button>
+        </Surface>
+      ) : null}
+
+      <Link className="text-sm text-forge-600 underline-offset-2 hover:underline" to={`${basePath}/pull-requests`}>
+        &larr; Back to pull requests
+      </Link>
     </div>
   );
 }

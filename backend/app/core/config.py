@@ -38,6 +38,7 @@ class Settings(BaseSettings):
         default="./.local/ssh/authorized_keys",
         alias="REVFORGE_SSH_AUTHORIZED_KEYS_PATH",
     )
+    event_spool_dir: str = Field(default="./.local/event-spool", alias="REVFORGE_EVENT_SPOOL_DIR")
     hg_executable: str = Field(default="hg", alias="REVFORGE_HG_EXECUTABLE")
     hg_command_timeout_seconds: int = Field(
         default=15,

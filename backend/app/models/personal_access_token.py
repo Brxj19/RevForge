@@ -26,7 +26,7 @@ class PersonalAccessToken(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     capability: Mapped[RepositoryRole] = mapped_column(
         Enum(
             RepositoryRole,
-            name="personal_access_token_capability",
+            name="repository_role",
             values_callable=enum_values,
             validate_strings=True,
         ),

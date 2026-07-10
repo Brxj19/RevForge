@@ -9,7 +9,14 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
-from app.models import organization, organization_member, repository, user  # noqa: F401
+from app.models import (  # noqa: F401
+    organization,
+    organization_member,
+    repository,
+    repository_event,
+    user,
+    webhook,
+)
 
 config = context.config
 settings = get_settings()

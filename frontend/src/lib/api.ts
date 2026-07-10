@@ -526,6 +526,258 @@ export function setRepositoryPermission(
   );
 }
 
+export interface PullRequestSummary {
+  id: string;
+  repository_id: string;
+  number: number;
+  title: string;
+  description: string | null;
+  state: "open" | "draft" | "merged" | "closed";
+  source_revision: string;
+  target_revision: string;
+  source_branch: string | null;
+  target_branch: string | null;
+  author_id: string;
+  merger_id: string | null;
+  merged_revision: string | null;
+  merged_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  approval_count: number;
+  changes_requested_count: number;
+  reviewer_count: number;
+  comment_count: number;
+}
+
+export interface PullRequestComment {
+  id: string;
+  pull_request_id: string;
+  author_id: string;
+  body: string;
+  reply_to_comment_id: string | null;
+  file_path: string | null;
+  line_number: number | null;
+  base_revision: string | null;
+  head_revision: string | null;
+  outdated: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PullRequestReview {
+  id: string;
+  pull_request_id: string;
+  reviewer_id: string;
+  decision: "approved" | "changes_requested" | "comment";
+  body: string | null;
+  created_at: string;
+}
+
+export interface PullRequestReviewer {
+  id: string;
+  pull_request_id: string;
+  reviewer_id: string;
+  required: boolean;
+}
+
+export interface PullRequestDetail extends PullRequestSummary {
+  comments: PullRequestComment[];
+  reviews: PullRequestReview[];
+  reviewers: PullRequestReviewer[];
+}
+
+export interface PullRequestDiff {
+  changed_files: Array<{
+    path: string;
+    additions: number;
+    deletions: number;
+  }>;
+  total_additions: number;
+  total_deletions: number;
+  total_files: number;
+}
+
+export function listPullRequests(
+  organizationSlug: string,
+  repositorySlug: string,
+  options: { state?: string; limit?: number; offset?: number } = {},
+) {
+  const search = new URLSearchParams();
+  if (options.state) search.set("state", options.state);
+  if (options.limit) search.set("limit", String(options.limit));
+  if (options.offset) search.set("offset", String(options.offset));
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  return request<PullRequestSummary[]>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests${suffix}`,
+  );
+}
+
+export function createPullRequest(
+  organizationSlug: string,
+  repositorySlug: string,
+  payload: {
+    title: string;
+    description?: string | null;
+    source_revision: string;
+    target_revision: string;
+    source_branch?: string | null;
+    target_branch?: string | null;
+    draft?: boolean;
+  },
+  csrfToken: string | null,
+) {
+  return request<PullRequestDetail>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
+}
+
+export function getPullRequest(
+  organizationSlug: string,
+  repositorySlug: string,
+  pullRequestId: string,
+) {
+  return request<PullRequestDetail>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests/${pullRequestId}`,
+  );
+}
+
+export function updatePullRequest(
+  organizationSlug: string,
+  repositorySlug: string,
+  pullRequestId: string,
+  payload: { title?: string; description?: string | null; state?: "open" | "draft" | "merged" | "closed" },
+  csrfToken: string | null,
+) {
+  return request<PullRequestDetail>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests/${pullRequestId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
+}
+
+export function closePullRequest(
+  organizationSlug: string,
+  repositorySlug: string,
+  pullRequestId: string,
+  csrfToken: string | null,
+) {
+  return request<PullRequestDetail>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests/${pullRequestId}/close`,
+    {
+      method: "POST",
+      csrfToken,
+    },
+  );
+}
+
+export function addPullRequestComment(
+  organizationSlug: string,
+  repositorySlug: string,
+  pullRequestId: string,
+  payload: {
+    body: string;
+    reply_to_comment_id?: string | null;
+    file_path?: string | null;
+    line_number?: number | null;
+    base_revision?: string | null;
+    head_revision?: string | null;
+  },
+  csrfToken: string | null,
+) {
+  return request<PullRequestComment>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests/${pullRequestId}/comments`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
+}
+
+export function addPullRequestReview(
+  organizationSlug: string,
+  repositorySlug: string,
+  pullRequestId: string,
+  payload: { decision: "approved" | "changes_requested" | "comment"; body?: string | null },
+  csrfToken: string | null,
+) {
+  return request<PullRequestReview>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests/${pullRequestId}/reviews`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
+}
+
+export function addPullRequestReviewer(
+  organizationSlug: string,
+  repositorySlug: string,
+  pullRequestId: string,
+  payload: { reviewer_id: string; required: boolean },
+  csrfToken: string | null,
+) {
+  return request<PullRequestReviewer>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests/${pullRequestId}/reviewers`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
+}
+
+export function removePullRequestReviewer(
+  organizationSlug: string,
+  repositorySlug: string,
+  pullRequestId: string,
+  reviewerId: string,
+  csrfToken: string | null,
+) {
+  return request<void>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests/${pullRequestId}/reviewers/${reviewerId}`,
+    {
+      method: "DELETE",
+      csrfToken,
+    },
+  );
+}
+
+export function getPullRequestDiff(
+  organizationSlug: string,
+  repositorySlug: string,
+  pullRequestId: string,
+) {
+  return request<PullRequestDiff>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests/${pullRequestId}/diff`,
+  );
+}
+
+export function mergePullRequest(
+  organizationSlug: string,
+  repositorySlug: string,
+  pullRequestId: string,
+  csrfToken: string | null,
+) {
+  return request<PullRequestDetail>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/pull-requests/${pullRequestId}/merge`,
+    {
+      method: "POST",
+      csrfToken,
+    },
+  );
+}
+
 export function deleteRepositoryPermission(
   organizationSlug: string,
   repositorySlug: string,

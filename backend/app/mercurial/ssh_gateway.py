@@ -163,6 +163,17 @@ class MercurialSshGateway:
                     b"python:app.mercurial.transport_hooks.deny_read_only_write",
                     b"revforge",
                 )
+            os.environ["REVFORGE_REPOSITORY_ID"] = str(repository.id)
+            os.environ["REVFORGE_ACTOR_USER_ID"] = str(actor.id)
+            os.environ["REVFORGE_AUTH_METHOD"] = "ssh_key"
+            os.environ["REVFORGE_CREDENTIAL_ID"] = str(key.id)
+            os.environ["REVFORGE_REQUEST_ID"] = os.environ.get("REVFORGE_REQUEST_ID", "")
+            baseui.setconfig(
+                b"hooks",
+                b"changegroup.revforge",
+                b"python:app.mercurial.transport_hooks.spool_push_event",
+                b"revforge",
+            )
 
             repo = hg.repository(baseui, bytes(str(repository_path), "utf-8"))
             await record_audit_event(

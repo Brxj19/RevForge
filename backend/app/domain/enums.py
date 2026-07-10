@@ -26,3 +26,16 @@ class RepositoryProvisioningState(StrEnum):
     PROVISIONING = "provisioning"
     READY = "ready"
     FAILED = "failed"
+
+
+class PullRequestState(StrEnum):
+    OPEN = "open"
+    DRAFT = "draft"
+    MERGED = "merged"
+    CLOSED = "closed"
+
+
+class ReviewDecision(StrEnum):
+    APPROVED = "approved"
+    CHANGES_REQUESTED = "changes_requested"
+    COMMENT = "comment"
