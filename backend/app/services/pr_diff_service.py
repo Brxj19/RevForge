@@ -12,25 +12,6 @@ async def compute_diff(
     source_revision: str,
     target_revision: str,
 ) -> tuple[list[dict], int, int, int]:
-    try:
-        await command_runner.run_json(
-            [
-                "log",
-                "--template",
-                "{" '"path": "{file_adds|json}",'
-                ' "adds": "{file_adds|count}",'
-                ' "dels": "{file_dels|count}"'
-                "}\n",
-                "--rev",
-                f"{target_revision}::{source_revision}",
-                "--stat",
-            ],
-            repository_path=repository_path,
-            stdout_limit=5 * 1024 * 1024,
-        )
-    except Exception:
-        pass
-
     full_diff_output = await command_runner.run(
         [
             "diff",
@@ -60,14 +41,10 @@ async def compute_diff(
         elif line.startswith("+") and not line.startswith("+++"):
             total_additions += 1
             if changed_files:
-                changed_files[-1]["additions"] = (
-                    changed_files[-1].get("additions", 0) + 1
-                )
+                changed_files[-1]["additions"] = changed_files[-1].get("additions", 0) + 1
         elif line.startswith("-") and not line.startswith("---"):
             total_deletions += 1
             if changed_files:
-                changed_files[-1]["deletions"] = (
-                    changed_files[-1].get("deletions", 0) + 1
-                )
+                changed_files[-1]["deletions"] = changed_files[-1].get("deletions", 0) + 1
 
     return changed_files, total_additions, total_deletions, total_files

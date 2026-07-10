@@ -42,10 +42,10 @@ class RevForgeWorker:
     async def run_forever(self) -> None:
         self._running = True
         logger.info(
-                "worker.started",
-                poll_interval=self._poll_interval,
-                batch_size=self._batch_size,
-            )
+            "worker.started",
+            poll_interval=self._poll_interval,
+            batch_size=self._batch_size,
+        )
         while self._running:
             try:
                 await self._import_file_spool()
@@ -71,17 +71,13 @@ class RevForgeWorker:
 
     async def _process_batch(self) -> None:
         async with self._session_factory() as session:
-            entries = await self._event_service.claim_events(
-                session, batch_size=self._batch_size
-            )
+            entries = await self._event_service.claim_events(session, batch_size=self._batch_size)
             if not entries:
                 return
             for entry in entries:
                 try:
                     await self._process_entry(session, entry)
-                    await self._event_service.mark_event_completed(
-                        session, entry_id=entry.id
-                    )
+                    await self._event_service.mark_event_completed(session, entry_id=entry.id)
                 except Exception as exc:
                     await self._event_service.mark_event_failed(
                         session,

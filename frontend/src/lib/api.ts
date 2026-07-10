@@ -651,7 +651,11 @@ export function updatePullRequest(
   organizationSlug: string,
   repositorySlug: string,
   pullRequestId: string,
-  payload: { title?: string; description?: string | null; state?: "open" | "draft" | "merged" | "closed" },
+  payload: {
+    title?: string;
+    description?: string | null;
+    state?: "open" | "draft" | "merged" | "closed";
+  },
   csrfToken: string | null,
 ) {
   return request<PullRequestDetail>(
@@ -707,7 +711,10 @@ export function addPullRequestReview(
   organizationSlug: string,
   repositorySlug: string,
   pullRequestId: string,
-  payload: { decision: "approved" | "changes_requested" | "comment"; body?: string | null },
+  payload: {
+    decision: "approved" | "changes_requested" | "comment";
+    body?: string | null;
+  },
   csrfToken: string | null,
 ) {
   return request<PullRequestReview>(

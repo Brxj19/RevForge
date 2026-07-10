@@ -5,6 +5,7 @@ Revises: 0004_phase3_secure_transport
 Create Date: 2026-07-09
 
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa

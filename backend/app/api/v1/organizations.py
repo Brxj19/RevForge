@@ -203,6 +203,8 @@ async def get_members(
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
     members = await list_organization_members(session, organization=organization)
     return [_serialize_member(member) for member in members]

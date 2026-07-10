@@ -51,8 +51,10 @@ class HgCommandRunner:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        assert process.stdout is not None
-        assert process.stderr is not None
+        if process.stdout is None:
+            raise HgCommandFailedError(code="hg_process_init_failed")
+        if process.stderr is None:
+            raise HgCommandFailedError(code="hg_process_init_failed")
 
         stdout_task = asyncio.create_task(self._read_stream(process.stdout, stdout_cap))
         stderr_task = asyncio.create_task(self._read_stream(process.stderr, stderr_cap))
@@ -61,21 +63,22 @@ class HgCommandRunner:
         timeout_deadline = time.monotonic() + self._settings.hg_command_timeout_seconds
         stdout_bytes = b""
         stderr_bytes = b""
+        pending = {stdout_task, stderr_task, wait_task}
         while True:
             remaining = timeout_deadline - time.monotonic()
             if remaining <= 0:
                 await self._terminate(process)
-                await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+                await asyncio.gather(*pending, return_exceptions=True)
                 raise HgCommandTimeoutError()
 
-            done, _ = await asyncio.wait(
-                {stdout_task, stderr_task, wait_task},
+            done, pending = await asyncio.wait(
+                pending,
                 timeout=remaining,
                 return_when=asyncio.FIRST_COMPLETED,
             )
             if not done:
                 await self._terminate(process)
-                await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+                await asyncio.gather(*pending, return_exceptions=True)
                 raise HgCommandTimeoutError()
 
             if stdout_task in done and stdout_task.result()[1]:

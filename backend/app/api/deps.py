@@ -66,7 +66,7 @@ async def get_current_identity(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required."
         ) from exc
 
-    await session.commit()
+    await session.flush()
     return SessionIdentity(user=user, session=user_session)
 
 
@@ -89,7 +89,7 @@ async def get_optional_identity(
         await session.rollback()
         return None
 
-    await session.commit()
+    await session.flush()
     return SessionIdentity(user=user, session=user_session)
 
 

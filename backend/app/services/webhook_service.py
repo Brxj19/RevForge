@@ -35,18 +35,24 @@ class WebhookService:
 
     def _check_ssrf(self, url: str) -> bool:
         import ipaddress
+        import socket
         from urllib.parse import urlparse
 
         parsed = urlparse(url)
         if not parsed.hostname:
             return False
         try:
-            addr = ipaddress.ip_address(parsed.hostname)
+            addrs = socket.getaddrinfo(parsed.hostname, None)
+        except OSError:
+            return False
+        for addr in addrs:
+            try:
+                ip = ipaddress.ip_address(addr[4][0])
+            except ValueError:
+                return False
             for blocked in self._ssrf_blocked_ranges:
-                if addr in ipaddress.ip_network(blocked):
+                if ip in ipaddress.ip_network(blocked):
                     return False
-        except ValueError:
-            pass
         return True
 
     async def list_webhooks(
@@ -72,6 +78,10 @@ class WebhookService:
         secret: str | None,
         created_by_user_id: UUID,
     ) -> Webhook:
+        if not self._check_ssrf(url):
+            from app.services.errors import ValidationFailure
+
+            raise ValidationFailure("Webhook URL points to a blocked or unresolvable address.")
         resolved_secret = secret or uuid4().hex
         webhook = Webhook(
             repository_id=repository_id,
@@ -163,8 +173,7 @@ class WebhookService:
             event_type=event_type,
             request_url=webhook.url,
             request_headers_json={
-                k: v for k, v in headers.items()
-                if k != "X-RevForge-Signature-256"
+                k: v for k, v in headers.items() if k != "X-RevForge-Signature-256"
             },
             request_body_truncated=body_str[:32000],
             status="delivering",
@@ -184,8 +193,7 @@ class WebhookService:
             delivery.response_body_truncated = response.text[:10000]
             delivery.status = "delivered" if response.status_code < 500 else "failed"
             delivery.error_message = (
-                None if response.status_code < 500
-                else f"HTTP {response.status_code}"
+                None if response.status_code < 500 else f"HTTP {response.status_code}"
             )
         except httpx.TimeoutException:
             delivery.status = "failed"

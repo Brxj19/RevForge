@@ -73,7 +73,12 @@ async def list_repository_events(
         offset=offset,
         event_type=event_type,
     )
+    total_count = await service.count_repository_events(
+        session,
+        repository_id=repository.id,
+        event_type=event_type,
+    )
     return RepositoryEventListResponse(
         events=[_serialize_event(e) for e in events],
-        total_count=len(events),
+        total_count=total_count,
     )

@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID as UUIDType
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, Uuid
+from sqlalchemy import false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -97,7 +98,7 @@ class PullRequestComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     line_number: Mapped[int | None] = mapped_column(nullable=True)
     base_revision: Mapped[str | None] = mapped_column(String(40), nullable=True)
     head_revision: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    outdated: Mapped[bool] = mapped_column(default=False, nullable=False)
+    outdated: Mapped[bool] = mapped_column(default=False, server_default=sa_false(), nullable=False)
 
     pull_request = relationship("PullRequest", back_populates="comments")
     author = relationship("User")

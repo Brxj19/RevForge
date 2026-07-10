@@ -55,6 +55,7 @@ async def _get_repo_for_admin(
 
 def _get_webhook_service() -> WebhookService:
     from app.core.config import get_settings
+
     return WebhookService(get_settings())
 
 
@@ -95,8 +96,10 @@ async def list_webhooks(
 ) -> list[WebhookResponse]:
     try:
         repository = await _get_repo_for_admin(
-            session, organization_slug=organization_slug,
-            repository_slug=repository_slug, identity=identity,
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
         )
         service = _get_webhook_service()
         webhooks = await service.list_webhooks(session, repository_id=repository.id)
@@ -117,8 +120,10 @@ async def create_webhook(
 ) -> WebhookResponse:
     try:
         repository = await _get_repo_for_admin(
-            session, organization_slug=organization_slug,
-            repository_slug=repository_slug, identity=identity,
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
         )
         service = _get_webhook_service()
         webhook = await service.create_webhook(
@@ -151,8 +156,10 @@ async def update_webhook(
 ) -> WebhookResponse:
     try:
         await _get_repo_for_admin(
-            session, organization_slug=organization_slug,
-            repository_slug=repository_slug, identity=identity,
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
         )
         service = _get_webhook_service()
         webhook = await service.update_webhook(
@@ -184,8 +191,10 @@ async def delete_webhook(
 ) -> None:
     try:
         await _get_repo_for_admin(
-            session, organization_slug=organization_slug,
-            repository_slug=repository_slug, identity=identity,
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
         )
         service = _get_webhook_service()
         deleted = await service.delete_webhook(session, webhook_id=webhook_id)
@@ -210,12 +219,15 @@ async def list_webhook_deliveries(
 ) -> list[WebhookDeliveryResponse]:
     try:
         await _get_repo_for_admin(
-            session, organization_slug=organization_slug,
-            repository_slug=repository_slug, identity=identity,
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
         )
         service = _get_webhook_service()
         deliveries = await service.list_deliveries(
-            session, webhook_id=webhook_id,
+            session,
+            webhook_id=webhook_id,
         )
     except ForbiddenError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc

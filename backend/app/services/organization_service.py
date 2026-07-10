@@ -195,7 +195,8 @@ async def add_member(
         .options(selectinload(OrganizationMember.user))
         .where(OrganizationMember.id == membership.id)
     )
-    assert refreshed_membership is not None
+    if refreshed_membership is None:
+        raise RuntimeError("Failed to reload created membership.")
     return refreshed_membership
 
 
@@ -253,7 +254,8 @@ async def update_member_role(
         .options(selectinload(OrganizationMember.user))
         .where(OrganizationMember.id == membership.id)
     )
-    assert membership is not None
+    if membership is None:
+        raise RuntimeError("Failed to reload updated membership.")
     return membership
 
 

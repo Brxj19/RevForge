@@ -20,7 +20,10 @@ function renderWithProviders(route: string) {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/organizations" element={<OrganizationsPage />} />
-          <Route path="/organizations/:organizationSlug" element={<OrganizationDetailPage />} />
+          <Route
+            path="/organizations/:organizationSlug"
+            element={<OrganizationDetailPage />}
+          />
           <Route
             path="/organizations/:organizationSlug/repositories/:repositorySlug"
             element={<RepositoryDetailPage />}
@@ -52,15 +55,25 @@ beforeEach(() => {
 
       if (url.includes("/api/v1/health")) {
         return Promise.resolve(
-          new Response(JSON.stringify({ status: "ok", service: "revforge-api", api_version: "v1" }), {
-            status: 200,
-          }),
+          new Response(
+            JSON.stringify({
+              status: "ok",
+              service: "revforge-api",
+              api_version: "v1",
+            }),
+            {
+              status: 200,
+            },
+          ),
         );
       }
 
       if (url.endsWith("/health")) {
         return Promise.resolve(
-          new Response(JSON.stringify({ status: "ok", service: "revforge-backend" }), { status: 200 }),
+          new Response(
+            JSON.stringify({ status: "ok", service: "revforge-backend" }),
+            { status: 200 },
+          ),
         );
       }
 
@@ -97,20 +110,26 @@ describe("app routes", () => {
   test("renders the login route", () => {
     renderWithProviders("/login");
 
-    expect(screen.getByRole("heading", { name: /sign in to the control plane/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /sign in to the control plane/i }),
+    ).toBeInTheDocument();
   });
 
   test("renders the register route", () => {
     renderWithProviders("/register");
 
-    expect(screen.getByRole("heading", { name: /create your revforge account/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /create your revforge account/i }),
+    ).toBeInTheDocument();
   });
 
   test("redirects anonymous users away from protected organization routes", async () => {
     renderWithProviders("/organizations");
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /sign in to the control plane/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: /sign in to the control plane/i }),
+      ).toBeInTheDocument();
     });
   });
 });

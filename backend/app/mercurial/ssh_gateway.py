@@ -7,6 +7,7 @@ import sys
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
+from threading import Lock
 from time import monotonic
 from uuid import UUID
 
@@ -44,16 +45,18 @@ class TransportRateLimiter:
         self._max_attempts = max_attempts
         self._window_seconds = window_seconds
         self._attempts: dict[str, list[float]] = defaultdict(list)
+        self._lock = Lock()
 
     def allow(self, key: str) -> bool:
         now = monotonic()
         window_start = now - self._window_seconds
-        attempts = [attempt for attempt in self._attempts[key] if attempt >= window_start]
-        self._attempts[key] = attempts
-        if len(attempts) >= self._max_attempts:
-            return False
-        attempts.append(now)
-        return True
+        with self._lock:
+            attempts = [attempt for attempt in self._attempts[key] if attempt >= window_start]
+            self._attempts[key] = attempts
+            if len(attempts) >= self._max_attempts:
+                return False
+            attempts.append(now)
+            return True
 
 
 def parse_ssh_original_command(value: str | None) -> SshTransportRequest:
@@ -163,11 +166,23 @@ class MercurialSshGateway:
                     b"python:app.mercurial.transport_hooks.deny_read_only_write",
                     b"revforge",
                 )
-            os.environ["REVFORGE_REPOSITORY_ID"] = str(repository.id)
-            os.environ["REVFORGE_ACTOR_USER_ID"] = str(actor.id)
-            os.environ["REVFORGE_AUTH_METHOD"] = "ssh_key"
-            os.environ["REVFORGE_CREDENTIAL_ID"] = str(key.id)
-            os.environ["REVFORGE_REQUEST_ID"] = os.environ.get("REVFORGE_REQUEST_ID", "")
+            baseui.setconfig(
+                b"revforge", b"repository_id", str(repository.id).encode(), b"revforge"
+            )
+            baseui.setconfig(b"revforge", b"actor_user_id", str(actor.id).encode(), b"revforge")
+            baseui.setconfig(b"revforge", b"auth_method", b"ssh_key", b"revforge")
+            baseui.setconfig(b"revforge", b"credential_id", str(key.id).encode(), b"revforge")
+            baseui.setconfig(
+                b"revforge",
+                b"request_id",
+                (os.environ.get("REVFORGE_REQUEST_ID") or "").encode(),
+                b"revforge",
+            )
+            event_spool_dir = os.environ.get("REVFORGE_EVENT_SPOOL_DIR", "")
+            if event_spool_dir:
+                baseui.setconfig(
+                    b"revforge", b"event_spool_dir", event_spool_dir.encode(), b"revforge"
+                )
             baseui.setconfig(
                 b"hooks",
                 b"changegroup.revforge",

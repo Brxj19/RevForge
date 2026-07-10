@@ -8,6 +8,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from threading import Lock
 from time import monotonic
 from typing import Any
 from urllib.parse import parse_qs
@@ -77,16 +78,18 @@ class TransportRateLimiter:
         self._max_attempts = max_attempts
         self._window_seconds = window_seconds
         self._attempts: dict[str, list[float]] = defaultdict(list)
+        self._lock = Lock()
 
     def allow(self, key: str) -> bool:
         now = monotonic()
         window_start = now - self._window_seconds
-        attempts = [attempt for attempt in self._attempts[key] if attempt >= window_start]
-        self._attempts[key] = attempts
-        if len(attempts) >= self._max_attempts:
-            return False
-        attempts.append(now)
-        return True
+        with self._lock:
+            attempts = [attempt for attempt in self._attempts[key] if attempt >= window_start]
+            self._attempts[key] = attempts
+            if len(attempts) >= self._max_attempts:
+                return False
+            attempts.append(now)
+            return True
 
 
 def classify_hg_http_command(query_string: str) -> TransportCommandKind:
@@ -134,9 +137,6 @@ class HgHttpGatewayApplication:
 
     def __call__(self, environ: dict[str, Any], start_response) -> list[bytes]:
         request_id = environ.get("HTTP_X_REQUEST_ID") or str(uuid4())
-        event_spool_dir = os.environ.get("REVFORGE_EVENT_SPOOL_DIR", "")
-        if event_spool_dir:
-            os.environ["REVFORGE_EVENT_SPOOL_DIR"] = event_spool_dir
         path_info = environ.get("PATH_INFO", "")
         path_segments = [segment for segment in path_info.split("/") if segment]
         if len(path_segments) != 2:
@@ -224,11 +224,25 @@ class HgHttpGatewayApplication:
                 b"revforge",
             )
         if auth_result.actor is not None:
-            os.environ["REVFORGE_REPOSITORY_ID"] = str(auth_result.repository.id)
-            os.environ["REVFORGE_ACTOR_USER_ID"] = str(auth_result.actor.id)
-            os.environ["REVFORGE_AUTH_METHOD"] = "http_token" if basic_auth else "session"
-            os.environ["REVFORGE_SOURCE_IP"] = remote_addr
-            os.environ["REVFORGE_REQUEST_ID"] = request_id
+            baseui.setconfig(
+                b"revforge", b"repository_id", str(auth_result.repository.id).encode(), b"revforge"
+            )
+            baseui.setconfig(
+                b"revforge", b"actor_user_id", str(auth_result.actor.id).encode(), b"revforge"
+            )
+            baseui.setconfig(
+                b"revforge",
+                b"auth_method",
+                b"http_token" if basic_auth else b"session",
+                b"revforge",
+            )
+            baseui.setconfig(b"revforge", b"source_ip", remote_addr.encode(), b"revforge")
+            baseui.setconfig(b"revforge", b"request_id", request_id.encode(), b"revforge")
+            event_spool_dir = os.environ.get("REVFORGE_EVENT_SPOOL_DIR", "")
+            if event_spool_dir:
+                baseui.setconfig(
+                    b"revforge", b"event_spool_dir", event_spool_dir.encode(), b"revforge"
+                )
             baseui.setconfig(
                 b"hooks",
                 b"changegroup.revforge",

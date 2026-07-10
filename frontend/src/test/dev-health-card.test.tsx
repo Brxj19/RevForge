@@ -12,13 +12,20 @@ describe("dev health card", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: "ok", service: "revforge-backend" }), {
-          status: 200,
-        }),
+        new Response(
+          JSON.stringify({ status: "ok", service: "revforge-backend" }),
+          {
+            status: 200,
+          },
+        ),
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ status: "ok", service: "revforge-api", api_version: "v1" }),
+          JSON.stringify({
+            status: "ok",
+            service: "revforge-api",
+            api_version: "v1",
+          }),
           {
             status: 200,
           },
@@ -34,9 +41,12 @@ describe("dev health card", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/revforge-backend reported ok/i)).toBeInTheDocument();
-      expect(screen.getByText(/revforge-api v1 reported ok/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/revforge-backend reported ok/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/revforge-api v1 reported ok/i),
+      ).toBeInTheDocument();
     });
   });
 });
-

@@ -58,18 +58,24 @@ async def list_visible_repositories(
         .order_by(Repository.created_at.asc())
     )
     repositories = list(result.scalars())
+
+    permissions_by_repo: dict[UUID, RepositoryPermission | None] = {}
+    if actor is not None:
+        rows = await session.execute(
+            select(RepositoryPermission).where(
+                RepositoryPermission.repository_id.in_([r.id for r in repositories]),
+                RepositoryPermission.user_id == actor.id,
+            )
+        )
+        for perm in rows.scalars():
+            permissions_by_repo[perm.repository_id] = perm
+
     visible: list[tuple[Repository, RepositoryRole | None, bool, bool]] = []
 
     for repository in repositories:
         if repository.archived_at is not None and not include_archived:
             continue
-        explicit_permission = None
-        if actor is not None:
-            explicit_permission = await get_permission(
-                session,
-                repository_id=repository.id,
-                user_id=actor.id,
-            )
+        explicit_permission = permissions_by_repo.get(repository.id)
         access = repository_access_for_actor(actor, membership, repository, explicit_permission)
         if access.can_read:
             visible.append(
@@ -297,7 +303,8 @@ async def upsert_repository_permission(
         .options(selectinload(RepositoryPermission.user))
         .where(RepositoryPermission.id == permission.id)
     )
-    assert permission is not None
+    if permission is None:
+        raise RuntimeError("Failed to reload created permission.")
     return permission
 
 

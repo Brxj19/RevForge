@@ -16,18 +16,21 @@ def deny_read_only_write(*, ui, repo, hooktype, **kwargs) -> bool:
 
 
 def spool_push_event(*, ui, repo, hooktype, node=None, source=None, url=None, **kwargs) -> bool:
-    spool_dir = os.environ.get("REVFORGE_EVENT_SPOOL_DIR")
+    spool_dir = ui.config(b"revforge", b"event_spool_dir")
     if not spool_dir:
         return False
     try:
+        spool_dir = spool_dir.decode("utf-8")
         os.makedirs(spool_dir, exist_ok=True)
 
-        repository_id = os.environ.get("REVFORGE_REPOSITORY_ID", "unknown")
-        actor_user_id = os.environ.get("REVFORGE_ACTOR_USER_ID")
-        authentication_method = os.environ.get("REVFORGE_AUTH_METHOD", "unknown")
-        credential_id = os.environ.get("REVFORGE_CREDENTIAL_ID")
-        source_ip = os.environ.get("REVFORGE_SOURCE_IP", "unknown")
-        request_id = os.environ.get("REVFORGE_REQUEST_ID", str(uuid4()))
+        repository_id = ui.config(b"revforge", b"repository_id", b"unknown").decode("utf-8")
+        actor_user_id = ui.config(b"revforge", b"actor_user_id")
+        actor_user_id = actor_user_id.decode("utf-8") if actor_user_id else None
+        authentication_method = ui.config(b"revforge", b"auth_method", b"unknown").decode("utf-8")
+        credential_id = ui.config(b"revforge", b"credential_id")
+        credential_id = credential_id.decode("utf-8") if credential_id else None
+        source_ip = ui.config(b"revforge", b"source_ip", b"unknown").decode("utf-8")
+        request_id = ui.config(b"revforge", b"request_id", str(uuid4()).encode()).decode("utf-8")
 
         pushed_nodes = []
         if node:

@@ -86,7 +86,8 @@ async def provision_repository(
         raise ProvisioningFailedError(safe_provisioning_error_code(exc)) from exc
 
     repository = await session.scalar(select(Repository).where(Repository.id == repository.id))
-    assert repository is not None
+    if repository is None:
+        raise ProvisioningFailedError("repository_not_found_after_provision")
     repository.provisioning_state = RepositoryProvisioningState.READY
     repository.provisioned_at = utc_now()
     repository.provisioning_error_code = None

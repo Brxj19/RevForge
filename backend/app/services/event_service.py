@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.repository_event import EventSpoolEntry, RepositoryEvent
@@ -69,7 +69,7 @@ class EventService:
                 "authentication_method": authentication_method or "unknown",
             },
         )
-        await session.flush()
+        await session.commit()
 
     async def claim_events(
         self,
@@ -123,11 +123,24 @@ class EventService:
         if entry.retry_count >= max_retries:
             entry.status = "dead_letter"
         else:
-            backoff = 2 ** entry.retry_count
+            backoff = 2**entry.retry_count
             entry.scheduled_for = datetime.now(UTC) + timedelta(seconds=backoff)
             entry.status = "pending"
         entry.claimed_at = None
         await session.flush()
+
+    async def count_repository_events(
+        self,
+        session: AsyncSession,
+        *,
+        repository_id: UUID,
+        event_type: str | None = None,
+    ) -> int:
+        query = select(func.count()).where(RepositoryEvent.repository_id == repository_id)
+        if event_type:
+            query = query.where(RepositoryEvent.event_type == event_type)
+        result = await session.scalar(query)
+        return result or 0
 
     async def list_repository_events(
         self,

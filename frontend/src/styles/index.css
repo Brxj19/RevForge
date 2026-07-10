@@ -39,7 +39,10 @@ body {
 
 button,
 a {
-  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
 }
 
 * {
@@ -50,4 +53,3 @@ a {
   outline: 2px solid var(--rf-forge-500);
   outline-offset: 2px;
 }
-

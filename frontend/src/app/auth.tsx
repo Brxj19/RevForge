@@ -1,4 +1,9 @@
-import { createContext, useEffect, useState, type PropsWithChildren } from "react";
+import {
+  createContext,
+  useEffect,
+  useState,
+  type PropsWithChildren,
+} from "react";
 import {
   ApiClientError,
   type CurrentUser,
@@ -19,7 +24,11 @@ interface AuthContextValue {
   login: (payload: { email: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
-  register: (payload: { email: string; display_name: string; password: string }) => Promise<void>;
+  register: (payload: {
+    email: string;
+    display_name: string;
+    password: string;
+  }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -46,7 +55,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setCsrfToken(null);
         setErrorMessage(null);
       } else {
-        setErrorMessage(error instanceof Error ? error.message : "Unable to restore session.");
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unable to restore session.",
+        );
       }
     } finally {
       setIsLoading(false);
@@ -57,7 +68,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void refreshSession();
   }, []);
 
-  const register = async (payload: { email: string; display_name: string; password: string }) => {
+  const register = async (payload: {
+    email: string;
+    display_name: string;
+    password: string;
+  }) => {
     const response = await registerUser(payload);
     setUser(response.user);
     setCsrfToken(response.csrf_token);

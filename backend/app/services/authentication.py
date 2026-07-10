@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -58,7 +59,11 @@ async def register_user(
 
     user = User(email=normalized_email, display_name=normalized_name, is_active=True)
     session.add(user)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ConflictError("Email is already registered.") from exc
 
     credential = UserPasswordCredential(
         user_id=user.id,

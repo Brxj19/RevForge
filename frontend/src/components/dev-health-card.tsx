@@ -23,7 +23,9 @@ function HealthRow({
         <p className="font-medium text-ink-950">{label}</p>
         <p className="text-sm text-slate-500">{detail}</p>
       </div>
-      <span className={`rounded-full border px-2 py-1 text-xs font-medium uppercase ${tone}`}>
+      <span
+        className={`rounded-full border px-2 py-1 text-xs font-medium uppercase ${tone}`}
+      >
         {status}
       </span>
     </div>
@@ -46,7 +48,9 @@ export function DevHealthCard() {
         <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
           Development only
         </p>
-        <h3 className="mt-2 text-lg font-semibold text-ink-950">Connectivity probe</h3>
+        <h3 className="mt-2 text-lg font-semibold text-ink-950">
+          Connectivity probe
+        </h3>
         <p className="mt-1 text-sm text-slate-500">
           Checks both the service root and versioned API health endpoints.
         </p>
@@ -56,7 +60,11 @@ export function DevHealthCard() {
         <HealthRow
           label="Backend service"
           status={
-            serviceQuery.isPending ? "loading" : serviceQuery.isError ? "error" : "ok"
+            serviceQuery.isPending
+              ? "loading"
+              : serviceQuery.isError
+                ? "error"
+                : "ok"
           }
           detail={
             serviceQuery.data
@@ -66,7 +74,9 @@ export function DevHealthCard() {
         />
         <HealthRow
           label="API namespace"
-          status={apiQuery.isPending ? "loading" : apiQuery.isError ? "error" : "ok"}
+          status={
+            apiQuery.isPending ? "loading" : apiQuery.isError ? "error" : "ok"
+          }
           detail={
             apiQuery.data
               ? `${apiQuery.data.service} ${apiQuery.data.api_version} reported ${apiQuery.data.status}`
@@ -77,4 +87,3 @@ export function DevHealthCard() {
     </section>
   );
 }
-

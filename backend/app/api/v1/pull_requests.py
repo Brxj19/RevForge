@@ -9,11 +9,19 @@ from app.api.deps import (
     SessionIdentity,
     get_current_identity,
     get_hg_command_runner,
+    get_optional_identity,
+    get_repository_storage_locator,
     get_session,
     require_csrf,
 )
 from app.domain.enums import PullRequestState, ReviewDecision
 from app.mercurial.command_runner import HgCommandRunner
+from app.mercurial.errors import (
+    HgCommandFailedError,
+    HgCommandOutputLimitError,
+    HgCommandTimeoutError,
+)
+from app.mercurial.storage_locator import RepositoryStorageLocator
 from app.models.repository import Repository
 from app.schemas.pull_requests import (
     PullRequestCommentCreateRequest,
@@ -104,9 +112,7 @@ def _serialize_pr(
 ) -> PullRequestResponse:
     pr_comments = comments if comments is not None else getattr(pr, "comments", [])
     pr_reviews = reviews if reviews is not None else getattr(pr, "reviews", [])
-    pr_reviewers = (
-        reviewers if reviewers is not None else getattr(pr, "reviewers", [])
-    )
+    pr_reviewers = reviewers if reviewers is not None else getattr(pr, "reviewers", [])
     return PullRequestResponse(
         id=pr.id,
         repository_id=pr.repository_id,
@@ -125,13 +131,9 @@ def _serialize_pr(
         closed_at=pr.closed_at,
         created_at=pr.created_at,
         updated_at=pr.updated_at,
-        approval_count=sum(
-            1 for r in pr_reviews if r.decision == ReviewDecision.APPROVED
-        ),
+        approval_count=sum(1 for r in pr_reviews if r.decision == ReviewDecision.APPROVED),
         changes_requested_count=sum(
-            1
-            for r in pr_reviews
-            if r.decision == ReviewDecision.CHANGES_REQUESTED
+            1 for r in pr_reviews if r.decision == ReviewDecision.CHANGES_REQUESTED
         ),
         reviewer_count=len(pr_reviewers),
         comment_count=len(pr_comments),
@@ -158,38 +160,24 @@ async def list_pull_requests_route(
     state: str | None = Query(default=None),
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    identity: SessionIdentity | None = Depends(get_current_identity),
+    identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
 ) -> list[PullRequestResponse]:
     try:
-        await _get_repo_for_read(
+        repo = await _get_repo_for_read(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
             identity=identity,
-        )
-        org = await get_organization_by_slug_for_repo_routes(
-            session, organization_slug=organization_slug
-        )
-        repo, _vr, _cw, _ia = await get_repository_for_actor(
-            session,
-            organization=org,
-            repository_slug=repository_slug,
-            actor=identity.user if identity else None,
-            allow_archived=False,
         )
         pr_state = PullRequestState(state) if state else None
         prs, _total = await list_pull_requests(
             session, repository_id=repo.id, state=pr_state, limit=limit, offset=offset
         )
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
@@ -232,19 +220,13 @@ async def create_pull_request_route(
         pr = await get_pull_request(session, pull_request_id=pr.id)
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _serialize_detail(pr)
 
 
@@ -268,13 +250,9 @@ async def get_pull_request_route(
         )
         pr = await get_pull_request(session, pull_request_id=pull_request_id)
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _serialize_detail(pr)
 
 
@@ -309,19 +287,13 @@ async def update_pull_request_route(
         pr = await get_pull_request(session, pull_request_id=pr.id)
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _serialize_detail(pr)
 
 
@@ -348,19 +320,13 @@ async def close_pull_request_route(
         pr = await get_pull_request(session, pull_request_id=pr.id)
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _serialize_detail(pr)
 
 
@@ -378,7 +344,7 @@ async def add_comment_route(
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestCommentResponse:
     try:
-        await _get_repo_for_read(
+        await _get_repo_for_write(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
@@ -398,19 +364,13 @@ async def add_comment_route(
         await session.commit()
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return PullRequestCommentResponse.model_validate(comment)
 
 
@@ -428,7 +388,7 @@ async def add_review_route(
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestReviewResponse:
     try:
-        await _get_repo_for_read(
+        await _get_repo_for_write(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
@@ -444,19 +404,13 @@ async def add_review_route(
         await session.commit()
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return PullRequestReviewResponse.model_validate(review)
 
 
@@ -474,7 +428,7 @@ async def add_reviewer_route(
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestReviewerResponse:
     try:
-        await _get_repo_for_read(
+        await _get_repo_for_write(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
@@ -489,19 +443,13 @@ async def add_reviewer_route(
         await session.commit()
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return PullRequestReviewerResponse.model_validate(reviewer)
 
 
@@ -533,19 +481,13 @@ async def remove_reviewer_route(
         await session.commit()
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.get(
@@ -559,38 +501,40 @@ async def get_pull_request_diff_route(
     identity: SessionIdentity | None = Depends(get_current_identity),
     session: AsyncSession = Depends(get_session),
     command_runner: HgCommandRunner = Depends(get_hg_command_runner),
+    storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
 ) -> PullRequestDiffResponse:
     try:
-        await _get_repo_for_read(
+        repo = await _get_repo_for_read(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
             identity=identity,
         )
-        org = await get_organization_by_slug_for_repo_routes(
-            session, organization_slug=organization_slug
-        )
-        repo, _vr, _cw, _ia = await get_repository_for_actor(
-            session,
-            organization=org,
-            repository_slug=repository_slug,
-            actor=identity.user if identity else None,
-            allow_archived=False,
-        )
         pr = await get_pull_request(session, pull_request_id=pull_request_id)
         files, adds, dels, total = await compute_diff(
             command_runner,
-            repository_path=repo.fs_path,
+            repository_path=storage_locator.repository_path(repo),
             source_revision=pr.source_revision,
             target_revision=pr.target_revision,
         )
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except HgCommandFailedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Mercurial operation failed.",
+        ) from exc
+    except HgCommandTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mercurial operation timed out.",
+        ) from exc
+    except HgCommandOutputLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Mercurial output exceeded size limit.",
         ) from exc
     return PullRequestDiffResponse(
         changed_files=files,
@@ -611,6 +555,7 @@ async def merge_pull_request_route(
     identity: SessionIdentity = Depends(require_csrf),
     session: AsyncSession = Depends(get_session),
     command_runner: HgCommandRunner = Depends(get_hg_command_runner),
+    storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
 ) -> PullRequestDetailResponse:
     try:
         repo = await _get_repo_for_write(
@@ -620,10 +565,9 @@ async def merge_pull_request_route(
             identity=identity,
         )
         pr = await get_pull_request(session, pull_request_id=pull_request_id)
-        # Capture the head revision from the source for merge record
         head_result = await command_runner.run(
             ["identify", "--rev", pr.source_revision, "--id"],
-            repository_path=repo.fs_path,
+            repository_path=storage_locator.repository_path(repo),
         )
         merged_revision = head_result.stdout.decode("utf-8").strip()
 
@@ -637,17 +581,29 @@ async def merge_pull_request_route(
         pr = await get_pull_request(session, pull_request_id=pr.id)
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except HgCommandFailedError as exc:
+        await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Mercurial operation failed.",
+        ) from exc
+    except HgCommandTimeoutError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mercurial operation timed out.",
+        ) from exc
+    except HgCommandOutputLimitError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Mercurial output exceeded size limit.",
         ) from exc
     return _serialize_detail(pr)

@@ -3,7 +3,9 @@ import { useRouteError } from "react-router-dom";
 export function LoadingState({ label }: { label: string }) {
   return (
     <div className="rounded-xl border border-border bg-surface p-6">
-      <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">Loading</p>
+      <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+        Loading
+      </p>
       <p className="mt-2 text-sm text-slate-500">{label}</p>
     </div>
   );
@@ -41,8 +43,10 @@ export function ErrorState({
 
 export function RouteErrorState() {
   const error = useRouteError();
-  const message = error instanceof Error ? error.message : "An unexpected route error occurred.";
+  const message =
+    error instanceof Error
+      ? error.message
+      : "An unexpected route error occurred.";
 
   return <ErrorState title="Route unavailable" description={message} />;
 }
-

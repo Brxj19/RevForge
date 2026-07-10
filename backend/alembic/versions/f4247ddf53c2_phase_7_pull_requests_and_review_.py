@@ -66,9 +66,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_pull_requests")),
     )
-    op.create_index(
-        op.f("ix_pull_requests_number"), "pull_requests", ["number"], unique=False
-    )
+    op.create_index(op.f("ix_pull_requests_number"), "pull_requests", ["number"], unique=False)
     op.create_index(
         op.f("ix_pull_requests_repository_id"),
         "pull_requests",
@@ -114,9 +112,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["reply_to_comment_id"],
             ["pull_request_comments.id"],
-            name=op.f(
-                "fk_pull_request_comments_reply_to_comment_id_pull_request_comments"
-            ),
+            name=op.f("fk_pull_request_comments_reply_to_comment_id_pull_request_comments"),
             ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_pull_request_comments")),
@@ -160,9 +156,7 @@ def upgrade() -> None:
         sa.Column("reviewer_id", sa.Uuid(), nullable=False),
         sa.Column(
             "decision",
-            sa.Enum(
-                "approved", "changes_requested", "comment", name="review_decision"
-            ),
+            sa.Enum("approved", "changes_requested", "comment", name="review_decision"),
             nullable=False,
         ),
         sa.Column("body", sa.Text(), nullable=True),
@@ -216,8 +210,6 @@ def downgrade() -> None:
         table_name="pull_request_comments",
     )
     op.drop_table("pull_request_comments")
-    op.drop_index(
-        op.f("ix_pull_requests_repository_id"), table_name="pull_requests"
-    )
+    op.drop_index(op.f("ix_pull_requests_repository_id"), table_name="pull_requests")
     op.drop_index(op.f("ix_pull_requests_number"), table_name="pull_requests")
     op.drop_table("pull_requests")

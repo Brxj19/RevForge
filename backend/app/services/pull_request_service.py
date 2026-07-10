@@ -41,15 +41,14 @@ async def _load_pr_with_relations(
             selectinload(PullRequest.reviewers),
         )
         .where(PullRequest.id == pull_request_id)
+        .with_for_update()
     )
     if result is None:
         raise NotFoundError("Pull request not found.")
     return result
 
 
-def _count_by_decision(
-    reviews: list[PullRequestReview], decision: ReviewDecision
-) -> int:
+def _count_by_decision(reviews: list[PullRequestReview], decision: ReviewDecision) -> int:
     return sum(1 for r in reviews if r.decision == decision)
 
 
@@ -154,11 +153,11 @@ async def list_pull_requests(
     offset: int = 0,
 ) -> tuple[list[PullRequest], int]:
     base = select(PullRequest).where(PullRequest.repository_id == repository_id)
-    count_q = select(func.count()).select_from(base.subquery())  # type: ignore[name-defined]
 
     if state is not None:
         base = base.where(PullRequest.state == state)
 
+    count_q = select(func.count()).select_from(base.subquery())  # type: ignore[name-defined]
     total = await session.scalar(count_q) or 0
     rows = await session.scalars(
         base.options(

@@ -20,12 +20,15 @@ from app.domain.enums import RepositoryRole
 from app.mercurial.command_runner import HgCommandRunner
 from app.mercurial.errors import (
     HgCommandFailedError,
+    HgCommandOutputLimitError,
+    HgCommandTimeoutError,
     InvalidRepositoryPathError,
     InvalidRevisionError,
     MercurialNotFoundError,
     ProvisioningFailedError,
     ProvisioningInProgressError,
     RepositoryNotProvisionedError,
+    RepositoryStorageError,
 )
 from app.mercurial.provisioning_service import provision_repository
 from app.mercurial.read_service import MercurialReadService
@@ -63,6 +66,19 @@ from app.services.repository_service import (
     repository_phase_status,
     update_repository,
     upsert_repository_permission,
+)
+
+_KNOWN_READ_ERRORS = (
+    HgCommandFailedError,
+    HgCommandTimeoutError,
+    HgCommandOutputLimitError,
+    InvalidRevisionError,
+    InvalidRepositoryPathError,
+    MercurialNotFoundError,
+    RepositoryNotProvisionedError,
+    RepositoryStorageError,
+    NotFoundError,
+    ForbiddenError,
 )
 
 router = APIRouter(prefix="/organizations/{organization_slug}/repositories", tags=["repositories"])
@@ -216,9 +232,21 @@ def _raise_read_error(exc: Exception) -> None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Repository content not found."
         ) from exc
+    if isinstance(exc, HgCommandFailedError) and exc.code in {
+        "hg_invalid_json",
+        "hg_command_failed",
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Mercurial operation failed.",
+        ) from exc
     if isinstance(exc, NotFoundError | MercurialNotFoundError):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Repository content not found."
+        ) from exc
+    if isinstance(exc, ForbiddenError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied."
         ) from exc
     if isinstance(exc, InvalidRevisionError | InvalidRepositoryPathError):
         raise HTTPException(
@@ -229,6 +257,21 @@ def _raise_read_error(exc: Exception) -> None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Repository is not provisioned for Mercurial browsing yet.",
+        ) from exc
+    if isinstance(exc, HgCommandTimeoutError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mercurial operation timed out.",
+        ) from exc
+    if isinstance(exc, HgCommandOutputLimitError):
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Mercurial output exceeded size limit.",
+        ) from exc
+    if isinstance(exc, RepositoryStorageError):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Repository storage error.",
         ) from exc
     raise exc
 
@@ -445,6 +488,8 @@ async def get_repository(
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
     return _serialize_repository_detail(
         repository=repository,
@@ -481,7 +526,7 @@ async def list_changesets_route(
             storage_locator=storage_locator,
         )
         page = await read_service.list_changesets(repository_path, cursor=cursor)
-    except Exception as exc:
+    except _KNOWN_READ_ERRORS as exc:
         _raise_read_error(exc)
 
     return ChangesetListResponse(
@@ -516,7 +561,7 @@ async def get_changeset_route(
             storage_locator=storage_locator,
         )
         changeset = await read_service.get_changeset(repository_path, node)
-    except Exception as exc:
+    except _KNOWN_READ_ERRORS as exc:
         _raise_read_error(exc)
 
     return _serialize_changeset_detail(changeset)
@@ -548,7 +593,7 @@ async def get_changeset_diff_route(
             storage_locator=storage_locator,
         )
         diff = await read_service.get_diff(repository_path, node)
-    except Exception as exc:
+    except _KNOWN_READ_ERRORS as exc:
         _raise_read_error(exc)
 
     return ChangesetDiffResponse(
@@ -592,7 +637,7 @@ async def browse_repository_route(
             revision=revision,
             path=path,
         )
-    except Exception as exc:
+    except _KNOWN_READ_ERRORS as exc:
         _raise_read_error(exc)
 
     return _serialize_browse_response(browse_result)
@@ -623,7 +668,7 @@ async def get_refs_route(
             storage_locator=storage_locator,
         )
         refs = await read_service.list_refs(repository_path)
-    except Exception as exc:
+    except _KNOWN_READ_ERRORS as exc:
         _raise_read_error(exc)
 
     return RepositoryRefsResponse(

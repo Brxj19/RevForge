@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from datetime import UTC, datetime
@@ -38,7 +39,7 @@ class FileEventSpoolReader:
         self,
         session: AsyncSession,
     ) -> int:
-        events = self.read_pending_events()
+        events = await asyncio.to_thread(self.read_pending_events)
         imported = 0
         for data in events:
             repo_id_str = data.get("repository_id")

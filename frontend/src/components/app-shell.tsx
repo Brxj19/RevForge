@@ -22,14 +22,19 @@ export function AppShell() {
               <p className="font-mono text-xs uppercase tracking-[0.24em] text-forge-100">
                 Mercurial Forge
               </p>
-              <h1 className="mt-2 text-2xl font-semibold text-white">RevForge</h1>
+              <h1 className="mt-2 text-2xl font-semibold text-white">
+                RevForge
+              </h1>
               <p className="mt-2 max-w-xs text-sm text-slate-300">
                 Mercurial hosting, code review, and repository operations.
               </p>
             </div>
           </div>
 
-          <nav className="mt-6 flex flex-wrap gap-2 lg:flex-col" aria-label="Primary">
+          <nav
+            className="mt-6 flex flex-wrap gap-2 lg:flex-col"
+            aria-label="Primary"
+          >
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -50,10 +55,12 @@ export function AppShell() {
           </nav>
 
           <div className="mt-8 hidden rounded-lg border border-white/10 bg-white/5 p-4 lg:block">
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-slate-300">Phase 1</p>
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-slate-300">
+              Phase 1
+            </p>
             <p className="mt-2 text-sm text-slate-100">
-              Identity, organizations, RBAC, and repository metadata are ready. Mercurial
-              provisioning and history browsing follow in Phase 2.
+              Identity, organizations, RBAC, and repository metadata are ready.
+              Mercurial provisioning and history browsing follow in Phase 2.
             </p>
           </div>
         </aside>
@@ -70,7 +77,10 @@ export function AppShell() {
                 </h2>
                 {isAuthenticated ? (
                   <p className="mt-2 text-sm text-slate-500">
-                    Signed in as <span className="font-medium text-ink-950">{user?.display_name}</span>
+                    Signed in as{" "}
+                    <span className="font-medium text-ink-950">
+                      {user?.display_name}
+                    </span>
                   </p>
                 ) : null}
               </div>

@@ -20,7 +20,7 @@ class UserSummary(BaseModel):
 class RegisterRequest(BaseModel):
     email: EmailStr
     display_name: str = Field(min_length=1, max_length=120)
-    password: str = Field(min_length=8, max_length=256)
+    password: str = Field(min_length=12, max_length=256)
 
 
 class LoginRequest(BaseModel):
