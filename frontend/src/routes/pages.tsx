@@ -59,6 +59,7 @@ import {
   updateOrganizationMember,
   updateRepository,
 } from "../lib/api";
+import { CodeBrowser } from "../components/code-browser";
 import { DevHealthCard } from "../components/dev-health-card";
 import { Badge } from "../components/ui/badge";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
@@ -1372,7 +1373,7 @@ function repositorySectionNode(pathname: string): string | null {
   return node && node.length > 0 ? decodeURIComponent(node) : null;
 }
 
-function repositorySearch(
+export function repositorySearch(
   search: string,
   updates: { path?: string | null; revision?: string | null },
 ) {
@@ -1399,7 +1400,7 @@ function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
 }
 
-function repositoryRevisionGroups(
+export function repositoryRevisionGroups(
   refs: RepositoryRefs | undefined,
   selectedRevision: string | null,
 ) {
@@ -1562,149 +1563,17 @@ function renderRepositorySection({
       );
     }
 
-    const pathSegments =
-      browseResult.path === "" ? [] : browseResult.path.split("/");
-    const revisionOptions = repositoryRevisionGroups(refs, selectedRevision);
-
     return (
-      <div className="space-y-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-              Code
-            </p>
-            <p className="mt-2 text-sm text-slate-500">
-              Browsing revision{" "}
-              <span className="font-mono text-ink-950">
-                {browseResult.revision || "empty repository"}
-              </span>
-            </p>
-          </div>
-          <label className="block text-sm text-slate-600">
-            <span className="mb-2 block font-medium text-ink-950">
-              Revision
-            </span>
-            {refsIsError ? (
-              <p className="mb-2 text-xs text-red-700">
-                {refsError instanceof Error
-                  ? refsError.message
-                  : "Unable to load repository references."}
-              </p>
-            ) : null}
-            <Select
-              aria-label="Browse revision"
-              value={selectedRevision ?? ""}
-              onChange={(event) => {
-                onSelectCodeRevision(event.target.value || null);
-              }}
-            >
-              <option value="">latest tip</option>
-              {revisionOptions.groups.map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {group.refs.map((ref) => (
-                    <option key={`${group.label}-${ref.name}`} value={ref.name}>
-                      {ref.name} ({ref.short_node})
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-              {revisionOptions.currentRevision &&
-              !revisionOptions.hasCurrentRevision ? (
-                <option value={revisionOptions.currentRevision}>
-                  {revisionOptions.currentRevision.slice(0, 12)}
-                </option>
-              ) : null}
-            </Select>
-          </label>
-        </div>
-
-        <div className="rounded-lg border border-border bg-canvas p-4">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Link
-              className="text-forge-600 underline-offset-2 hover:underline"
-              to={`${basePath}/code${repositorySearch(locationSearch, { path: "", revision: selectedRevision })}`}
-            >
-              root
-            </Link>
-            {pathSegments.map((segment, index) => {
-              const nextPath = pathSegments.slice(0, index + 1).join("/");
-              const isLast = index === pathSegments.length - 1;
-              return (
-                <span key={nextPath} className="flex items-center gap-2">
-                  <span className="text-slate-400">/</span>
-                  {isLast && browseResult.kind === "file" ? (
-                    <span className="font-mono text-ink-950">{segment}</span>
-                  ) : (
-                    <Link
-                      className="font-mono text-forge-600 underline-offset-2 hover:underline"
-                      to={`${basePath}/code${repositorySearch(locationSearch, { path: nextPath, revision: selectedRevision })}`}
-                    >
-                      {segment}
-                    </Link>
-                  )}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-
-        {browseResult.kind === "directory" ? (
-          browseResult.revision === "" && browseResult.entries.length === 0 ? (
-            <EmptyState
-              title="Empty repository"
-              description="This Mercurial repository is provisioned but does not contain any committed files yet."
-            />
-          ) : (
-            <div className="space-y-2">
-              {browseResult.entries.map((entry) => (
-                <Link
-                  key={entry.path}
-                  className="flex items-center justify-between rounded-lg border border-border bg-canvas px-4 py-3 text-sm text-slate-700 transition hover:border-forge-500"
-                  to={`${basePath}/code${repositorySearch(locationSearch, {
-                    path: entry.path,
-                    revision: selectedRevision,
-                  })}`}
-                >
-                  <span className="font-mono text-ink-950">{entry.name}</span>
-                  <span className="uppercase tracking-[0.18em] text-slate-500">
-                    {entry.kind}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )
-        ) : browseResult.is_binary ? (
-          <EmptyState
-            title="Binary file"
-            description="RevForge detected binary content and is intentionally withholding inline rendering."
-          />
-        ) : browseResult.is_too_large ? (
-          <EmptyState
-            title="File too large to render"
-            description="This file exceeded the configured safe inline size limit, so the browser returned metadata without file contents."
-          />
-        ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-canvas px-4 py-3 text-sm text-slate-600">
-              <span>
-                Language hint:{" "}
-                <span className="font-mono text-ink-950">
-                  {browseResult.language_hint_when_available ?? "plain text"}
-                </span>
-              </span>
-              <Link
-                className="text-forge-600 underline-offset-2 hover:underline"
-                to={`${basePath}/changesets/${browseResult.revision}`}
-              >
-                View changeset
-              </Link>
-            </div>
-            <pre className="overflow-x-auto rounded-lg border border-border bg-canvas p-4 text-xs text-ink-950">
-              <code>{browseResult.content ?? ""}</code>
-            </pre>
-          </div>
-        )}
-      </div>
+      <CodeBrowser
+        basePath={basePath}
+        browseResult={browseResult}
+        locationSearch={locationSearch}
+        onSelectCodeRevision={onSelectCodeRevision}
+        refs={refs}
+        refsError={refsError}
+        refsIsError={refsIsError}
+        selectedRevision={selectedRevision}
+      />
     );
   }
 

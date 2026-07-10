@@ -221,15 +221,14 @@ describe("repository phase 2 pages", () => {
   test("renders the code browser for a ready repository", async () => {
     renderRepositoryRoute("/organizations/acme/repositories/ready-repo/code");
 
-    expect(await screen.findByText(/Browsing revision/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("combobox", { name: /Browse revision/i }),
+      await screen.findByRole("combobox", { name: /Browse revision/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /src directory/i }),
+      screen.getByRole("treeitem", { name: /^src$/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /README.md file/i }),
+      screen.getByRole("treeitem", { name: /^README.md$/i }),
     ).toBeInTheDocument();
   });
 });
