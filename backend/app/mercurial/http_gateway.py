@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import parse_qs
 from uuid import uuid4
 
+from anyio import from_thread
 from mercurial import initialization
 from mercurial import ui as uimod
 from mercurial.hgweb import hgweb_mod
@@ -153,7 +154,7 @@ class HgHttpGatewayApplication:
         remote_addr = environ.get("REMOTE_ADDR", "unknown")
 
         try:
-            auth_result = asyncio.run(
+            auth_result = self._run_coroutine(
                 self._authorize(
                     organization_slug=organization_slug,
                     repository_slug=repository_slug,
@@ -268,6 +269,8 @@ class HgHttpGatewayApplication:
             f"{script_name.rstrip('/')}/{organization_slug}/{repository_slug}".rstrip("/")
         )
         hg_environ["PATH_INFO"] = "/"
+        if "SERVER_PORT" in hg_environ:
+            hg_environ["SERVER_PORT"] = str(hg_environ["SERVER_PORT"])
         result = hg_app(hg_environ, capture_start_response)
         try:
             payload = list(result)
@@ -275,7 +278,7 @@ class HgHttpGatewayApplication:
             close = getattr(result, "close", None)
             if callable(close):
                 close()
-        asyncio.run(
+        self._run_coroutine(
             self._record_access(
                 request_id=request_id,
                 organization_slug=organization_slug,
@@ -285,6 +288,16 @@ class HgHttpGatewayApplication:
             )
         )
         return payload
+
+    def _run_coroutine(self, coroutine):
+        try:
+            return from_thread.run(self._await_coroutine, coroutine)
+        except RuntimeError:
+            return asyncio.run(coroutine)
+
+    @staticmethod
+    async def _await_coroutine(coroutine):
+        return await coroutine
 
     async def _authorize(
         self,

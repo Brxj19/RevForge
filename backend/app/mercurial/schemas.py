@@ -59,6 +59,30 @@ class HgFileBrowse:
 
 
 @dataclass(slots=True)
+class HgBlameLine:
+    line_number: int
+    revision: str
+    short_revision: str
+    author_name: str
+    author_email_when_available: str | None
+    path: str
+    content: str
+
+
+@dataclass(slots=True)
+class HgBlame:
+    revision: str
+    path: str
+    lines: list[HgBlameLine]
+
+
+@dataclass(slots=True)
+class HgFileSearchMatch:
+    path: str
+    language_hint: str | None
+
+
+@dataclass(slots=True)
 class HgReference:
     name: str
     node: str

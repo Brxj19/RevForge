@@ -136,6 +136,33 @@ class RepositoryFileBrowseResponse(BaseModel):
     size_when_known: int | None = None
 
 
+class RepositoryBlameLineResponse(BaseModel):
+    line_number: int
+    revision: str
+    short_revision: str
+    author_name: str
+    author_email_when_available: str | None
+    path: str
+    content: str
+
+
+class RepositoryBlameResponse(BaseModel):
+    revision: str
+    path: str
+    lines: list[RepositoryBlameLineResponse]
+
+
+class RepositoryFileSearchMatchResponse(BaseModel):
+    path: str
+    language_hint_when_available: str | None = None
+
+
+class RepositoryFileSearchResponse(BaseModel):
+    revision: str
+    query: str
+    results: list[RepositoryFileSearchMatchResponse]
+
+
 class RepositoryRefResponse(BaseModel):
     name: str
     node: str

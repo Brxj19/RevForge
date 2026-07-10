@@ -1,0 +1,61 @@
+.rf-code-shell {
+  background: var(--rf-editor-canvas);
+  border-top: 1px solid var(--rf-editor-border);
+}
+
+.rf-code-line {
+  border-bottom: 1px solid rgba(48, 54, 61, 0.56);
+}
+
+.rf-code-line:hover {
+  background: var(--rf-editor-line-hover);
+}
+
+.rf-code-line.is-selected {
+  background: var(--color-accent-subtle);
+}
+
+.rf-code-gutter {
+  background: var(--rf-editor-gutter);
+  border-right: 1px solid var(--rf-editor-border);
+}
+
+.rf-code-anchor {
+  color: var(--color-text-muted);
+}
+
+.rf-code-anchor:hover {
+  color: var(--color-accent);
+}
+
+.rf-token-keyword {
+  color: #ff7b72;
+}
+
+.rf-token-type {
+  color: #79c0ff;
+}
+
+.rf-token-string {
+  color: #a5d6ff;
+}
+
+.rf-token-comment {
+  color: #6e7681;
+}
+
+.rf-token-number {
+  color: #d2a8ff;
+}
+
+.rf-token-function {
+  color: #d2a8ff;
+}
+
+.rf-token-operator {
+  color: #f2cc60;
+}
+
+.rf-token-punctuation {
+  color: #8b949e;
+}

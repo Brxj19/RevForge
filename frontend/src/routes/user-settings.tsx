@@ -1,50 +1,25 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../app/use-auth";
+import { useAccentPreference } from "../app/accent-preference";
 import { PageHeader } from "../components/layout/page-header";
 import { EmptyState, ErrorState, LoadingState } from "../components/states";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { CopyButton } from "../components/ui/copy-button";
+import { FormField } from "../components/ui/form-field";
+import { Input } from "../components/ui/input";
+import { Select } from "../components/ui/select";
 import { Surface } from "../components/ui/surface";
-
-interface SshKey {
-  id: string;
-  title: string;
-  fingerprint: string;
-  created_at: string;
-  last_used_at: string | null;
-}
-
-interface Token {
-  id: string;
-  name: string;
-  scopes: string[];
-  created_at: string;
-  expires_at: string | null;
-  last_used_at: string | null;
-}
-
-const PLACEHOLDER_SSH_KEYS: SshKey[] = [
-  {
-    id: "key_1",
-    title: "Work laptop",
-    fingerprint: "SHA256:abc123def456ghi789jkl012mno345pqr678stu901vwx",
-    created_at: "2026-06-15T10:00:00Z",
-    last_used_at: "2026-07-09T18:20:00Z",
-  },
-];
-
-const PLACEHOLDER_TOKENS: Token[] = [
-  {
-    id: "tok_1",
-    name: "CI pipeline",
-    scopes: ["repo:read", "repo:write"],
-    created_at: "2026-06-20T08:00:00Z",
-    expires_at: "2026-12-20T08:00:00Z",
-    last_used_at: "2026-07-08T14:30:00Z",
-  },
-];
+import {
+  createPersonalAccessToken,
+  createSshPublicKey,
+  listPersonalAccessTokens,
+  listSshPublicKeys,
+  revokePersonalAccessToken,
+  revokeSshPublicKey,
+} from "../lib/api";
 
 function formatDate(value: string | null) {
   if (!value) return "Not recorded";
@@ -77,31 +52,24 @@ function getCurrentTab(search: string): UserSettingsTab {
 export function UserSettingsPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { csrfToken, isAuthenticated, isLoading, user } = useAuth();
+  const {
+    accentPaletteId,
+    accentPalettes: accentPaletteOptions,
+    setAccentPaletteId,
+  } = useAccentPreference();
   const currentTab = getCurrentTab(location.search);
-  const [newTokenPlaintext] = useState<string | null>(null);
-
-  const sshKeysQuery = useQuery({
-    queryKey: ["user-ssh-keys"],
-    queryFn: async () => PLACEHOLDER_SSH_KEYS,
-  });
-
-  const tokensQuery = useQuery({
-    queryKey: ["user-tokens"],
-    queryFn: async () => PLACEHOLDER_TOKENS,
-  });
-
-  if (sshKeysQuery.isLoading || tokensQuery.isLoading) {
-    return <LoadingState label="Loading user settings." />;
-  }
-
-  if (sshKeysQuery.isError || tokensQuery.isError) {
-    return (
-      <ErrorState
-        title="User settings unavailable"
-        description="Unable to load SSH keys or access tokens."
-      />
-    );
-  }
+  const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(
+    null,
+  );
+  const [tokenName, setTokenName] = useState("");
+  const [tokenCapability, setTokenCapability] = useState<
+    "read" | "write" | "admin"
+  >("write");
+  const [sshLabel, setSshLabel] = useState("");
+  const [sshPublicKey, setSshPublicKey] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
 
   const tabs: Array<{ id: UserSettingsTab; label: string }> = [
     { id: "profile", label: "Profile" },
@@ -111,6 +79,114 @@ export function UserSettingsPage() {
     { id: "preferences", label: "Preferences" },
   ];
 
+  const sshKeysQuery = useQuery({
+    queryKey: ["user-ssh-keys"],
+    queryFn: listSshPublicKeys,
+    enabled: isAuthenticated,
+  });
+
+  const tokensQuery = useQuery({
+    queryKey: ["user-tokens"],
+    queryFn: listPersonalAccessTokens,
+    enabled: isAuthenticated,
+  });
+
+  const createTokenMutation = useMutation({
+    mutationFn: () =>
+      createPersonalAccessToken(
+        { name: tokenName, capability: tokenCapability },
+        csrfToken,
+      ),
+    onSuccess: async (token) => {
+      setNewTokenPlaintext(token.plaintext_token);
+      setTokenName("");
+      setTokenCapability("write");
+      setFormError(null);
+      await queryClient.invalidateQueries({ queryKey: ["user-tokens"] });
+    },
+    onError: (error) => {
+      setFormError(
+        error instanceof Error ? error.message : "Unable to create token.",
+      );
+    },
+  });
+
+  const revokeTokenMutation = useMutation({
+    mutationFn: (tokenId: string) =>
+      revokePersonalAccessToken(tokenId, csrfToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["user-tokens"] });
+    },
+  });
+
+  const createSshKeyMutation = useMutation({
+    mutationFn: () =>
+      createSshPublicKey(
+        { label: sshLabel, public_key: sshPublicKey },
+        csrfToken,
+      ),
+    onSuccess: async () => {
+      setSshLabel("");
+      setSshPublicKey("");
+      setFormError(null);
+      await queryClient.invalidateQueries({ queryKey: ["user-ssh-keys"] });
+    },
+    onError: (error) => {
+      setFormError(
+        error instanceof Error ? error.message : "Unable to add SSH key.",
+      );
+    },
+  });
+
+  const revokeSshKeyMutation = useMutation({
+    mutationFn: (keyId: string) => revokeSshPublicKey(keyId, csrfToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["user-ssh-keys"] });
+    },
+  });
+
+  if (isLoading) {
+    return <LoadingState label="Loading user settings." />;
+  }
+
+  if (!isAuthenticated) {
+    const redirect = `${location.pathname}${location.search}`;
+    return (
+      <Navigate
+        replace
+        to={`/login?redirect=${encodeURIComponent(redirect)}`}
+      />
+    );
+  }
+
+  if (sshKeysQuery.isError || tokensQuery.isError) {
+    return (
+      <ErrorState
+        title="User settings unavailable"
+        description={
+          sshKeysQuery.error instanceof Error
+            ? sshKeysQuery.error.message
+            : tokensQuery.error instanceof Error
+              ? tokensQuery.error.message
+              : "Unable to load SSH keys or access tokens."
+        }
+      />
+    );
+  }
+
+  function onCreateToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNewTokenPlaintext(null);
+    setFormError(null);
+    void createTokenMutation.mutateAsync();
+  }
+
+  function onCreateSshKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    void createSshKeyMutation.mutateAsync();
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -119,12 +195,6 @@ export function UserSettingsPage() {
         description="SSH keys, access tokens, sessions, and preferences stay in one place so repository clone setup remains trustworthy."
       />
 
-      <Surface className="rounded-md border border-warning/30 bg-warning-subtle px-4 py-3 text-sm text-text-secondary">
-        User settings currently use isolated placeholder records until live SSH
-        key and token APIs are connected. The table layout and safety copy are
-        production-intended.
-      </Surface>
-
       <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
         <Surface className="h-fit p-2">
           <nav className="grid gap-1" aria-label="User settings sections">
@@ -132,9 +202,9 @@ export function UserSettingsPage() {
               <button
                 key={tab.id}
                 type="button"
-                className={`rounded-md px-3 py-2 text-left text-sm ${
+                className={`w-full px-3 py-2 text-left text-sm transition-colors ${
                   currentTab === tab.id
-                    ? "bg-accent-subtle font-medium text-text-primary"
+                    ? "bg-accent-subtle font-medium text-accent"
                     : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
                 }`}
                 onClick={() => navigate(`?tab=${tab.id}`)}
@@ -151,10 +221,24 @@ export function UserSettingsPage() {
               <h2 className="text-base font-semibold text-text-primary">
                 Profile
               </h2>
-              <p className="text-sm text-text-secondary">
-                Profile editing will connect here once the backend exposes user
-                profile mutation endpoints.
-              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-border bg-surface-subtle px-4 py-3">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-muted">
+                    Display name
+                  </div>
+                  <div className="mt-2 text-sm text-text-primary">
+                    {user?.display_name ?? "Unknown"}
+                  </div>
+                </div>
+                <div className="rounded-md border border-border bg-surface-subtle px-4 py-3">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-muted">
+                    Email
+                  </div>
+                  <div className="mt-2 text-sm text-text-primary">
+                    {user?.email ?? "Unknown"}
+                  </div>
+                </div>
+              </div>
             </Surface>
           ) : null}
 
@@ -166,37 +250,88 @@ export function UserSettingsPage() {
                     SSH keys
                   </h2>
                   <p className="mt-1 text-sm text-text-secondary">
-                    Manage key fingerprints, creation time, and last-used
-                    visibility for SSH clone and push flows.
+                    Register public keys for SSH clone and push through the
+                    forced-command gateway.
                   </p>
                 </div>
-                <Button>Add SSH key</Button>
               </div>
-              {sshKeysQuery.data && sshKeysQuery.data.length > 0 ? (
+
+              <form className="grid gap-4" onSubmit={onCreateSshKey}>
+                <FormField
+                  label="Label"
+                  hint="A short name such as Work laptop."
+                >
+                  <Input
+                    value={sshLabel}
+                    onChange={(event) => setSshLabel(event.target.value)}
+                    placeholder="Work laptop"
+                  />
+                </FormField>
+                <FormField
+                  label="Public key"
+                  hint="Paste the full public key line from your .pub file."
+                >
+                  <textarea
+                    className="min-h-28 w-full rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-panel outline-none placeholder:text-text-muted focus:border-border-strong focus:bg-surface-subtle"
+                    value={sshPublicKey}
+                    onChange={(event) => setSshPublicKey(event.target.value)}
+                    placeholder="ssh-ed25519 AAAA..."
+                  />
+                </FormField>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="submit"
+                    loading={createSshKeyMutation.isPending}
+                  >
+                    Add SSH key
+                  </Button>
+                  {formError ? (
+                    <span className="text-sm text-danger">{formError}</span>
+                  ) : null}
+                </div>
+              </form>
+
+              {sshKeysQuery.isLoading ? (
+                <LoadingState label="Loading SSH keys." />
+              ) : sshKeysQuery.data && sshKeysQuery.data.length > 0 ? (
                 <div className="grid gap-3">
                   {sshKeysQuery.data.map((key) => (
                     <div
                       key={key.id}
-                      className="rounded-md border border-border bg-canvas p-4"
+                      className="rounded-md border border-border bg-surface-subtle p-4"
                     >
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-text-primary">
-                            {key.title}
+                            {key.label}
                           </div>
                           <div className="mt-2 font-mono text-xs text-text-muted">
-                            {key.fingerprint}
+                            {key.fingerprint_sha256}
                           </div>
                           <div className="mt-2 text-xs text-text-secondary">
-                            Created {formatDate(key.created_at)} · Last used{" "}
+                            Type {key.key_type} · Created{" "}
+                            {formatDate(key.created_at)} · Last used{" "}
                             {formatDate(key.last_used_at)}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          <Badge variant="success">Active</Badge>
-                          <Button size="sm" variant="danger">
-                            Revoke
-                          </Button>
+                          <Badge
+                            variant={key.revoked_at ? "danger" : "success"}
+                          >
+                            {key.revoked_at ? "Revoked" : "Active"}
+                          </Badge>
+                          {!key.revoked_at ? (
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              loading={revokeSshKeyMutation.isPending}
+                              onClick={() =>
+                                void revokeSshKeyMutation.mutateAsync(key.id)
+                              }
+                            >
+                              Revoke
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -219,60 +354,116 @@ export function UserSettingsPage() {
                     Personal access tokens
                   </h2>
                   <p className="mt-1 text-sm text-text-secondary">
-                    Use tokens as HTTPS passwords. Tokens should never appear in
-                    clone URLs.
+                    Use tokens as HTTPS passwords. Keep tokens out of clone URLs
+                    and shell history.
                   </p>
                 </div>
-                <Button>Create token</Button>
               </div>
+
+              <form
+                className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px_auto]"
+                onSubmit={onCreateToken}
+              >
+                <FormField label="Token name">
+                  <Input
+                    value={tokenName}
+                    onChange={(event) => setTokenName(event.target.value)}
+                    placeholder="Local clone"
+                  />
+                </FormField>
+                <FormField label="Capability">
+                  <Select
+                    value={tokenCapability}
+                    onChange={(event) =>
+                      setTokenCapability(
+                        event.target.value as "read" | "write" | "admin",
+                      )
+                    }
+                  >
+                    <option value="read">read</option>
+                    <option value="write">write</option>
+                    <option value="admin">admin</option>
+                  </Select>
+                </FormField>
+                <div className="flex items-end">
+                  <Button type="submit" loading={createTokenMutation.isPending}>
+                    Create token
+                  </Button>
+                </div>
+              </form>
+
+              {formError ? (
+                <div className="text-sm text-danger">{formError}</div>
+              ) : null}
+
               {newTokenPlaintext ? (
-                <div className="rounded-md border border-info/30 bg-info-subtle p-4">
+                <div className="rounded-md border border-info-border bg-info-subtle p-4">
                   <div className="text-sm font-medium text-text-primary">
                     New token
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <code className="rounded-sm bg-surface px-3 py-2 font-mono text-xs text-text-primary">
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Copy this token now. RevForge will only show it once.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <code className="rounded-sm border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary">
                       {newTokenPlaintext}
                     </code>
                     <CopyButton label="Copy token" text={newTokenPlaintext} />
                   </div>
                 </div>
               ) : null}
-              {tokensQuery.data && tokensQuery.data.length > 0 ? (
+
+              {tokensQuery.isLoading ? (
+                <LoadingState label="Loading personal access tokens." />
+              ) : tokensQuery.data && tokensQuery.data.length > 0 ? (
                 <div className="grid gap-3">
                   {tokensQuery.data.map((token) => (
                     <div
                       key={token.id}
-                      className="rounded-md border border-border bg-canvas p-4"
+                      className="rounded-md border border-border bg-surface-subtle p-4"
                     >
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-text-primary">
                             {token.name}
                           </div>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {token.scopes.map((scope) => (
-                              <Badge key={scope} variant="default">
-                                {scope}
-                              </Badge>
-                            ))}
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <Badge variant="default">{token.capability}</Badge>
+                            <span className="font-mono text-xs text-text-muted">
+                              Prefix {token.token_prefix}
+                            </span>
                           </div>
                           <div className="mt-2 text-xs text-text-secondary">
-                            Created {formatDate(token.created_at)} · Expires{" "}
-                            {formatDate(token.expires_at)} · Last used{" "}
+                            Created {formatDate(token.created_at)} · Last used{" "}
                             {formatDate(token.last_used_at)}
                           </div>
                         </div>
-                        <Button size="sm" variant="danger">
-                          Revoke
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge
+                            variant={token.revoked_at ? "danger" : "success"}
+                          >
+                            {token.revoked_at ? "Revoked" : "Active"}
+                          </Badge>
+                          {!token.revoked_at ? (
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              loading={revokeTokenMutation.isPending}
+                              onClick={() =>
+                                void revokeTokenMutation.mutateAsync(token.id)
+                              }
+                            >
+                              Revoke
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <EmptyState
-                  title="No personal access tokens"
+                  title="No personal access tokens yet"
                   description="Create a token when you need HTTPS clone, pull, or push access."
                 />
               )}
@@ -285,20 +476,70 @@ export function UserSettingsPage() {
                 Sessions
               </h2>
               <p className="text-sm text-text-secondary">
-                Active session management will appear here when backend session
-                enumeration is available.
+                Session inspection is not exposed yet. Your current browser
+                session remains protected by CSRF and secure cookie settings.
               </p>
             </Surface>
           ) : null}
 
           {currentTab === "preferences" ? (
-            <Surface className="grid gap-3">
+            <Surface className="grid gap-4">
               <h2 className="text-base font-semibold text-text-primary">
                 Preferences
               </h2>
               <p className="text-sm text-text-secondary">
-                Theme, keyboard, and repository browsing preferences will land
-                here as backend-free settings mature.
+                Choose the accent palette that drives active states, selection
+                highlights, and the primary button treatment across RevForge.
+              </p>
+              <fieldset className="grid gap-3">
+                <legend className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
+                  Accent palette
+                </legend>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {accentPaletteOptions.map((palette) => {
+                    const selected = palette.id === accentPaletteId;
+
+                    return (
+                      <button
+                        key={palette.id}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setAccentPaletteId(palette.id)}
+                        className={`grid gap-3 px-4 py-4 text-left transition-colors ${
+                          selected
+                            ? "bg-accent-subtle text-text-primary"
+                            : "bg-surface-subtle text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold">
+                              {palette.label}
+                            </div>
+                            <div className="mt-1 text-xs text-text-muted">
+                              {palette.description}
+                            </div>
+                          </div>
+                          {selected ? (
+                            <Badge variant="primary">Active</Badge>
+                          ) : null}
+                        </div>
+                        <div className="flex gap-2">
+                          {palette.swatches.map((color) => (
+                            <span
+                              key={color}
+                              className="h-3 flex-1 border border-border"
+                              style={{ backgroundColor: color }}
+                            />
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              <p className="text-xs text-text-muted">
+                Changes apply immediately and persist in this browser.
               </p>
             </Surface>
           ) : null}

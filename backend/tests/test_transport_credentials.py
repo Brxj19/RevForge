@@ -175,6 +175,27 @@ def test_transport_credential_lifecycle(client, session_factory) -> None:
         shutil.rmtree(ssh_key_dir, ignore_errors=True)
 
 
+def test_mounted_http_gateway_capabilities_request_succeeds(client, session_factory) -> None:
+    _register(client)
+    _create_org_and_repo(client, "acme", "public")
+
+    from app.mercurial.storage_locator import RepositoryStorageLocator
+    from app.models.repository import Repository
+
+    repo = _run_query(
+        session_factory,
+        select(Repository).where(Repository.slug == "public-repo"),
+    )
+    assert repo is not None
+    repo_path = RepositoryStorageLocator(get_settings()).repository_path(repo)
+    assert repo_path.exists()
+    _seed_repository(repo_path)
+
+    response = client.get("/hg/acme/public-repo?cmd=capabilities")
+    assert response.status_code == 200
+    assert b"lookup" in response.content
+
+
 def test_http_gateway_supports_clone_and_push(client, session_factory, tmp_path) -> None:
     _register(client)
     _create_org_and_repo(client, "acme", "public")

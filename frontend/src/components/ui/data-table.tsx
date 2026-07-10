@@ -35,7 +35,7 @@ export function DataTable<T>({
         )}
       >
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4 px-3 py-2.5">
+          <div key={i} className="flex items-center gap-4 px-3 py-2">
             {columns.map((col) => (
               <div
                 key={col.key}
@@ -54,14 +54,14 @@ export function DataTable<T>({
 
   return (
     <div className={clsx("overflow-x-auto", className)}>
-      <table className="w-full border-collapse">
+      <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-border">
+          <tr className="border-b border-border bg-surface-subtle">
             {columns.map((col) => (
               <th
                 key={col.key}
                 className={clsx(
-                  "px-3 py-2 text-left text-xs font-medium text-text-muted",
+                  "px-3 py-2 text-left font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-text-muted",
                   col.className,
                 )}
               >
@@ -74,13 +74,13 @@ export function DataTable<T>({
           {data.map((item) => (
             <tr
               key={keyFn(item)}
-              className="transition-colors hover:bg-surface-subtle/50"
+              className="border-b border-border-muted transition-colors hover:bg-surface-hover/70"
             >
               {columns.map((col) => (
                 <td
                   key={col.key}
                   className={clsx(
-                    "px-3 py-2 text-sm text-text-primary",
+                    "align-top px-3 py-2 text-sm text-text-primary",
                     col.className,
                   )}
                 >

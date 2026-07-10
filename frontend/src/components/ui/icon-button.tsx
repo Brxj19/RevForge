@@ -7,8 +7,8 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const sizeStyles = {
-  sm: "h-7 w-7",
-  md: "h-8 w-8",
+  sm: "h-8 w-8",
+  md: "h-9 w-9",
 };
 
 export function IconButton({
@@ -21,7 +21,7 @@ export function IconButton({
     <button
       type="button"
       className={clsx(
-        "inline-flex items-center justify-center rounded-sm text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors",
+        "inline-flex items-center justify-center bg-surface text-text-secondary shadow-panel transition-colors hover:bg-accent-subtle hover:text-accent-hover",
         sizeStyles[size],
         className,
       )}

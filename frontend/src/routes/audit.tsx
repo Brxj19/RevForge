@@ -133,7 +133,7 @@ export function AuditPage() {
       />
 
       <Surface className="grid gap-4">
-        <div className="rounded-md border border-warning/30 bg-warning-subtle px-4 py-3 text-sm text-text-secondary">
+        <div className="rounded-md border border-border-strong bg-surface-muted px-4 py-3 text-sm text-text-secondary">
           The current audit page uses isolated placeholder records until backend
           audit APIs are connected. The layout, filters, and details drawer are
           production-intended.

@@ -29,8 +29,8 @@ export function Tabs({ tabs, activeTab, onTabChange, className }: TabsProps) {
           className={clsx(
             "relative px-3 py-2 text-sm font-medium transition-colors",
             tab.id === activeTab
-              ? "text-text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent"
-              : "text-text-secondary hover:text-text-primary",
+              ? "bg-accent-subtle text-accent"
+              : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
           )}
         >
           {tab.label}

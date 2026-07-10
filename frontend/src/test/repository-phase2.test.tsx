@@ -1,8 +1,123 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppProviders } from "../app/providers";
 import { RepositoryDetailPage } from "../routes/pages";
+
+const readmeMarkdown = `# Repository Handbook
+
+Repository docs stay readable.
+
+| Name | Value |
+| --- | --- |
+| Accent | \`blue\` |
+| Status | Ready |
+
+- First item
+- Second item
+
+\`\`\`ts
+const total = 42;
+\`\`\`
+`;
+
+const rootNode = "1111111111111111111111111111111111111111";
+const featureNode = "2222222222222222222222222222222222222222";
+const mergeNode = "3333333333333333333333333333333333333333";
+
+const graphChangesets = [
+  {
+    node: mergeNode,
+    short_node: mergeNode.slice(0, 12),
+    parents: [featureNode, rootNode],
+    author_name: "Tatwa",
+    author_email_when_available: "tatwa@example.com",
+    timestamp: "2026-07-11T10:00:00Z",
+    message: "Merge feature branch",
+    branch: "default",
+    files_changed_count_when_available: 4,
+  },
+  {
+    node: featureNode,
+    short_node: featureNode.slice(0, 12),
+    parents: [rootNode],
+    author_name: "Tatwa",
+    author_email_when_available: "tatwa@example.com",
+    timestamp: "2026-07-11T08:00:00Z",
+    message: "Add repository graph page",
+    branch: "feature/graph",
+    files_changed_count_when_available: 3,
+  },
+  {
+    node: rootNode,
+    short_node: rootNode.slice(0, 12),
+    parents: [],
+    author_name: "Deepak",
+    author_email_when_available: "deepak@example.com",
+    timestamp: "2026-07-10T18:00:00Z",
+    message: "Initial import",
+    branch: "default",
+    files_changed_count_when_available: 1,
+  },
+] as const;
+
+const graphDetails = new Map([
+  [
+    featureNode,
+    {
+      node: featureNode,
+      short_node: featureNode.slice(0, 12),
+      parents: [rootNode],
+      author_name: "Tatwa",
+      author_email_when_available: "tatwa@example.com",
+      timestamp: "2026-07-11T08:00:00Z",
+      message: "Add repository graph page",
+      branch: "feature/graph",
+      tags: ["v0.9"],
+      bookmarks: ["ui-redesign"],
+      files_changed: [
+        "frontend/src/routes/repository-graph.tsx",
+        "frontend/src/components/repo/graph-view.tsx",
+        "frontend/src/components/repo/repo-tabs.tsx",
+      ],
+    },
+  ],
+  [
+    rootNode,
+    {
+      node: rootNode,
+      short_node: rootNode.slice(0, 12),
+      parents: [],
+      author_name: "Deepak",
+      author_email_when_available: "deepak@example.com",
+      timestamp: "2026-07-10T18:00:00Z",
+      message: "Initial import",
+      branch: "default",
+      tags: [],
+      bookmarks: [],
+      files_changed: ["README.md"],
+    },
+  ],
+]);
+
+const graphDiffs = new Map([
+  [
+    featureNode,
+    {
+      content: `diff -r ${rootNode} ${featureNode}\n--- a/frontend/src/routes/repository-graph.tsx\n+++ b/frontend/src/routes/repository-graph.tsx\n@@ -1,1 +1,2 @@\n-old line\n+new line\n+another line\ndiff -r ${rootNode} ${featureNode}\n--- /dev/null\n+++ b/frontend/src/components/repo/graph-view.tsx\n@@ -0,0 +1,2 @@\n+graph row\n+graph lane\n`,
+      is_truncated: false,
+      truncation_reason_when_applicable: null,
+    },
+  ],
+  [
+    rootNode,
+    {
+      content: `diff -r 0000000000000000000000000000000000000000 ${rootNode}\n--- /dev/null\n+++ b/README.md\n@@ -0,0 +1,1 @@\n+hello world\n`,
+      is_truncated: false,
+      truncation_reason_when_applicable: null,
+    },
+  ],
+]);
 
 function renderRepositoryRoute(route: string) {
   return render(
@@ -10,11 +125,7 @@ function renderRepositoryRoute(route: string) {
       <MemoryRouter initialEntries={[route]}>
         <Routes>
           <Route
-            path="/organizations/:organizationSlug/repositories/:repositorySlug"
-            element={<RepositoryDetailPage />}
-          />
-          <Route
-            path="/organizations/:organizationSlug/repositories/:repositorySlug/code"
+            path="/organizations/:organizationSlug/repositories/:repositorySlug/*"
             element={<RepositoryDetailPage />}
           />
         </Routes>
@@ -37,6 +148,7 @@ beforeEach(() => {
     "fetch",
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      const requestUrl = new URL(url);
 
       if (url.includes("/api/v1/auth/me")) {
         return jsonResponse(
@@ -134,6 +246,24 @@ beforeEach(() => {
       if (
         url.includes(
           "/api/v1/organizations/acme/repositories/ready-repo/browse",
+        ) &&
+        requestUrl.searchParams.get("path") === "README.md"
+      ) {
+        return jsonResponse({
+          kind: "file",
+          revision: "abcdef0123456789",
+          path: "README.md",
+          content: readmeMarkdown,
+          language_hint_when_available: "markdown",
+          is_binary: false,
+          is_too_large: false,
+          size_when_known: readmeMarkdown.length,
+        });
+      }
+
+      if (
+        url.includes(
+          "/api/v1/organizations/acme/repositories/ready-repo/browse",
         )
       ) {
         return jsonResponse({
@@ -144,6 +274,60 @@ beforeEach(() => {
             { name: "src", path: "src", kind: "directory" },
             { name: "README.md", path: "README.md", kind: "file" },
           ],
+        });
+      }
+
+      if (
+        url.includes(
+          "/api/v1/organizations/acme/repositories/ready-repo/changesets/",
+        ) &&
+        url.includes("/diff")
+      ) {
+        const node = requestUrl.pathname
+          .split("/changesets/")[1]
+          ?.split("/")[0];
+        return jsonResponse(
+          graphDiffs.get(node ?? "") ?? {
+            content: "",
+            is_truncated: false,
+            truncation_reason_when_applicable: null,
+          },
+        );
+      }
+
+      if (
+        url.includes(
+          "/api/v1/organizations/acme/repositories/ready-repo/changesets/",
+        )
+      ) {
+        const node = requestUrl.pathname
+          .split("/changesets/")[1]
+          ?.split("/")[0];
+        return jsonResponse(
+          graphDetails.get(node ?? "") ?? {
+            node: node ?? rootNode,
+            short_node: (node ?? rootNode).slice(0, 12),
+            parents: [],
+            author_name: "Unknown",
+            author_email_when_available: null,
+            timestamp: "2026-07-10T00:00:00Z",
+            message: "Unknown changeset",
+            branch: "default",
+            tags: [],
+            bookmarks: [],
+            files_changed: [],
+          },
+        );
+      }
+
+      if (
+        url.includes(
+          "/api/v1/organizations/acme/repositories/ready-repo/changesets",
+        )
+      ) {
+        return jsonResponse({
+          changesets: graphChangesets,
+          next_cursor: null,
         });
       }
 
@@ -228,6 +412,65 @@ describe("repository phase 2 pages", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /select a file or folder/i }),
+    ).toBeInTheDocument();
+  });
+
+  test("renders markdown preview in the repository overview", async () => {
+    renderRepositoryRoute("/organizations/acme/repositories/ready-repo");
+
+    expect(
+      await screen.findByRole("heading", { name: /repository handbook/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByText(/first item/i)).toBeInTheDocument();
+    expect(screen.getByText(/const total = 42;/i)).toBeInTheDocument();
+  });
+
+  test("renders markdown preview in the code browser", async () => {
+    renderRepositoryRoute(
+      "/organizations/acme/repositories/ready-repo/code?path=README.md",
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /repository handbook/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByText(/second item/i)).toBeInTheDocument();
+    expect(screen.getByText(/const total = 42;/i)).toBeInTheDocument();
+  });
+
+  test("renders the repository graph page and updates selection", async () => {
+    renderRepositoryRoute(
+      `/organizations/acme/repositories/ready-repo/graph?node=${featureNode}`,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /changeset graph/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /hash/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: featureNode.slice(0, 12) }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /add repository graph page/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("+4")).toBeInTheDocument();
+    expect(screen.getByText("Removed")).toBeInTheDocument();
+    expect(
+      screen.getByText(/frontend\/src\/routes\/repository-graph\.tsx/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /initial import/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: rootNode.slice(0, 12) }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /initial import/i }),
     ).toBeInTheDocument();
   });
 });

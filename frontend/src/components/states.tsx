@@ -11,7 +11,7 @@ export function LoadingState({ label, className }: LoadingStateProps) {
   return (
     <div
       className={clsx(
-        "rounded-lg border border-border bg-surface p-5",
+        "rounded-lg border border-border bg-surface p-5 shadow-panel",
         className,
       )}
     >
@@ -37,7 +37,7 @@ export function LoadingState({ label, className }: LoadingStateProps) {
             strokeLinecap="round"
           />
         </svg>
-        <p className="text-sm text-text-muted">{label}</p>
+        <p className="font-mono text-sm text-text-muted">{label}</p>
       </div>
     </div>
   );
@@ -59,7 +59,7 @@ export function EmptyState({
   return (
     <div
       className={clsx(
-        "rounded-lg border border-dashed border-border bg-surface p-6 text-center",
+        "rounded-lg border border-dashed border-border-strong bg-surface-subtle p-6 text-center",
         className,
       )}
     >
@@ -88,7 +88,7 @@ export function ErrorState({
   return (
     <div
       className={clsx(
-        "rounded-lg border border-danger/30 bg-danger-subtle p-5",
+        "rounded-lg border border-danger-border bg-danger-subtle p-5 shadow-panel",
         className,
       )}
     >

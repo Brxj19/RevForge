@@ -188,6 +188,25 @@ def _seed_repository(repository_path: Path) -> None:
     )
 
 
+def _seed_large_repository(repository_path: Path, *, file_count: int = 5000) -> None:
+    for index in range(file_count):
+        bucket = repository_path / "packages" / f"group-{index // 250:02d}"
+        bucket.mkdir(parents=True, exist_ok=True)
+        (bucket / f"file-{index:04d}.txt").write_text(
+            f"payload {index}\n",
+            encoding="utf-8",
+        )
+    _hg(repository_path, "add")
+    _hg(
+        repository_path,
+        "commit",
+        "-u",
+        "Alice Example <alice@example.com>",
+        "-m",
+        "Import large fixture tree",
+    )
+
+
 class _ExplodingRunner:
     async def run(self, *args, **kwargs):  # pragma: no cover - assertion path only
         raise AssertionError("Mercurial runner should not be invoked.")
@@ -329,11 +348,58 @@ def test_public_repository_provisioning_and_read_only_browser(
     assert any(ref["name"] == "main" for ref in refs_payload["bookmarks"])
     assert str(repository_path) not in refs.text
 
+    blame = client.get(
+        "/api/v1/organizations/acme/repositories/public-repo/blame",
+        params={"path": "src/hello.py", "revision": latest_node},
+    )
+    assert blame.status_code == 200
+    blame_payload = blame.json()
+    assert blame_payload["path"] == "src/hello.py"
+    assert len(blame_payload["lines"]) >= 2
+    assert blame_payload["lines"][0]["author_name"] == "Alice Example"
+
+    file_search = client.get(
+        "/api/v1/organizations/acme/repositories/public-repo/search/files",
+        params={"q": "hello", "revision": latest_node},
+    )
+    assert file_search.status_code == 200
+    assert any(result["path"] == "src/hello.py" for result in file_search.json()["results"])
+
     events = _run_scalars(session_factory, select(AuditEvent).order_by(AuditEvent.created_at.asc()))
     event_types = [event.event_type for event in events]
     assert "repository.provision_requested" in event_types
     assert "repository.provisioned" in event_types
     assert all(str(repository_path) not in str(event.metadata_json) for event in events)
+
+
+def test_large_repository_browse_and_history_summary_do_not_hit_output_limits(
+    client,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    _register(client)
+    _create_organization(client, "scale")
+    _create_repository(client, "scale", "large-repo", "public")
+
+    provision = client.post(
+        "/api/v1/organizations/scale/repositories/large-repo/provision",
+        headers=_csrf_headers(client),
+    )
+    assert provision.status_code == 200
+
+    repository_path = _repository_path(session_factory, slug="large-repo")
+    _seed_large_repository(repository_path)
+
+    history = client.get("/api/v1/organizations/scale/repositories/large-repo/changesets")
+    assert history.status_code == 200
+    history_payload = history.json()
+    assert len(history_payload["changesets"]) == 1
+    assert history_payload["changesets"][0]["files_changed_count_when_available"] == 5000
+
+    browse = client.get("/api/v1/organizations/scale/repositories/large-repo/browse")
+    assert browse.status_code == 200
+    browse_payload = browse.json()
+    assert browse_payload["kind"] == "directory"
+    assert any(entry["path"] == "packages" for entry in browse_payload["entries"])
 
 
 def test_provisioning_denials_do_not_invoke_mercurial_dependencies(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -109,6 +110,7 @@ async def create_ssh_key(
     payload: SshPublicKeyCreateRequest,
     identity: SessionIdentity = Depends(require_csrf),
     session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
     request_id: str | None = Depends(get_request_id),
 ) -> SshPublicKeyResponse:
     try:
@@ -118,6 +120,7 @@ async def create_ssh_key(
             public_key=payload.public_key,
             label=payload.label,
             request_id=request_id,
+            authorized_keys_output_path=Path(settings.ssh_authorized_keys_path),
         )
     except ValidationFailure as exc:
         await session.rollback()
@@ -136,6 +139,7 @@ async def revoke_ssh_key(
     key_id: UUID,
     identity: SessionIdentity = Depends(require_csrf),
     session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
     request_id: str | None = Depends(get_request_id),
 ) -> Response:
     try:
@@ -144,6 +148,7 @@ async def revoke_ssh_key(
             user=identity.user,
             key_id=key_id,
             request_id=request_id,
+            authorized_keys_output_path=Path(settings.ssh_authorized_keys_path),
         )
     except NotFoundError as exc:
         await session.rollback()

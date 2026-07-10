@@ -11,13 +11,13 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: "bg-surface-subtle text-text-secondary border border-border",
-  primary: "bg-accent-subtle text-accent border border-accent/20",
-  success: "bg-success-subtle text-success border border-success/20",
-  warning: "bg-warning-subtle text-warning border border-warning/20",
-  danger: "bg-danger-subtle text-danger border border-danger/20",
-  info: "bg-info-subtle text-info border border-info/20",
-  neutral: "bg-ink-800 text-slate-100 border border-slate-700",
+  default: "bg-surface-subtle text-text-secondary",
+  primary: "bg-accent-subtle text-accent",
+  success: "bg-success-subtle text-success",
+  warning: "bg-warning-subtle text-warning",
+  danger: "bg-danger-subtle text-danger",
+  info: "bg-info-subtle text-info",
+  neutral: "bg-surface-muted text-text-primary",
 };
 
 export function Badge({
@@ -28,7 +28,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium leading-tight",
+        "inline-flex items-center gap-1 rounded-sm px-2 py-1 font-mono text-[11px] font-medium uppercase leading-tight tracking-[0.14em]",
         variantStyles[variant],
         className,
       )}

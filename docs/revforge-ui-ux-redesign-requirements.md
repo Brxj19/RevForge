@@ -2,302 +2,368 @@
 
 **Project:** RevForge  
 **Repository:** `git@github.com:Brxj19/RevForge.git`  
-**Document purpose:** Detailed UI/UX requirements for a full RevForge frontend redesign.  
-**Primary implementation target:** React + TypeScript + Vite + Tailwind + TanStack Query + React Router.  
-**Design direction:** Calm, dense, self-hosted developer forge for Mercurial repositories.  
+**Document role:** Implementation-ready requirements for the full frontend redesign.  
+**Status:** v2 — dark-only OpenCode-inspired redesign, no orange UI.  
+**Primary frontend target:** React + TypeScript + Vite + Tailwind + TanStack Query + React Router.  
+**Companion document:** `DESIGN.md` defines visual system, tokens, layout, component behavior, and UX principles.  
+**Reference document:** `DESIGN-opencode.ai.md` remains as a visual reference for OpenCode's dark terminal/manpage styling approach.
 
 ---
 
-## 1. Product Vision
+## 0. Executive summary
 
-RevForge should feel like a serious self-hosted source-control workshop, not a generic SaaS dashboard. The UI must communicate:
+The current RevForge UI must be redesigned into a dark-only developer forge. The redesign must use the OpenCode-inspired terminal aesthetic, proper CSS tokens, dense repository layouts, and a GitHub-dark-style code viewer. The orange-heavy direction must be removed completely from the product UI.
 
-- **Precision:** revision IDs, paths, permissions, timestamps, and actions are always explicit.
-- **Durability:** stable layouts, readable tables, low-motion defaults, reliable state handling.
-- **Traceability:** every repository action should connect to revision history, user identity, permissions, and audit events.
-- **Mercurial-native thinking:** changesets, revisions, branches, bookmarks, tags, clone, pull, push, and repository manifests should be first-class concepts.
-- **Operational trust:** clone URLs, SSH keys, tokens, permissions, transport status, and danger actions must be understandable and safe.
+The implementation should prioritize repository browsing, revision selection, worktree navigation, file reading, clone/access flows, and history/diff inspection. Dashboard and settings pages matter, but the Code tab is the main product experience.
 
-The redesign should borrow the best patterns from:
+### 0.1 Required outcomes
 
-- **Kallithea:** compact Mercurial-oriented repository worktree browsing, revision-first navigation, simple repository identity, dense history views.
-- **GitHub:** strong code reading experience, file actions near code context, permalink/raw/blame patterns, repository-level navigation, copyable clone flows.
-- **GitLab:** project sidebar clarity, merge/review flow structure, repository revision selector, fuzzy file finder, admin/operations surfaces.
-- **RhodeCode / enterprise forges:** self-hosted permission clarity, auditability, enterprise settings, token/key management.
+- Dark-only product experience.
+- No orange UI accents, no orange CTAs, no orange sidebar, no orange focus states.
+- OpenCode-inspired look: monospaced, flat, dark, hairline-bordered, terminal-aware.
+- GitHub dark editor view for code and diffs.
+- Kallithea-like dense repository worktree browsing.
+- Fewer center modals; use command palettes, drawers, popovers, and inline panels.
+- Proper reusable CSS, Tailwind tokens, and component primitives.
+- Strong visibility/readability for every component and state.
+- Repository context always visible: organization, repository, revision, path, status, role.
 
-RevForge must not visually copy any single product. It should combine the best interaction patterns into a distinct, restrained RevForge experience.
+### 0.2 Out of scope for this redesign
 
----
-
-## 2. Current Frontend State Observations
-
-The current frontend already has the correct technical foundation, but the UI is still MVP-level and too card-heavy for a repository product.
-
-### 2.1 Current strengths
-
-- React Router app shell is already present.
-- Routes exist for dashboard, login/register, organizations, organization settings, repository overview, code, commits, changesets, branches, tags, bookmarks, and repository settings.
-- Tailwind token-style classes already exist.
-- TanStack Query is already used for server state.
-- Protected routes and auth restoration already exist.
-- Repository browser, history, refs, provisioning, permissions, and pull-request API calls are already being integrated.
-
-### 2.2 Current UX gaps to fix
-
-- The app shell uses a large left branding block, which takes too much attention away from repository work.
-- Repository navigation is not yet strong enough; a developer should always know the org, repo, revision, path, and permission context.
-- Code browser is too linear; it should become a Kallithea-style dense tree + file/content experience.
-- Directory entries need more metadata: type icon, last changeset, author, last modified age, file size/mode when available.
-- File viewer needs stronger actions: raw, copy path, copy permalink, blame/annotate, file history, download, open at revision.
-- Changeset/history pages need graph/context density, filters, file stats, and better line-level diff affordances.
-- Clone/token/SSH setup should be a first-class high-trust flow, not a secondary action hidden in settings.
-- Settings and admin flows need separation between normal configuration and danger-zone actions.
-- Audit/activity should be designed as an incident-response table, not as a social feed.
-- Components are currently defined in page files; the redesign should extract a reusable design system.
+- Light theme.
+- Marketing landing page redesign.
+- New backend source-control semantics not already supported by RevForge.
+- Replacing Mercurial vocabulary with Git vocabulary.
+- Building a full code editing IDE. This is a read/browse/review forge UI, not an online editor.
+- Adding decorative dashboards or analytics that do not directly support repository work.
 
 ---
 
-## 3. Design Principles
+## 1. Non-negotiable design requirements
 
-### 3.1 Dense but not cramped
+### 1.1 Theme requirements
 
-Repository tools are information-dense by nature. Use compact rows, tables, tabs, and monospace metadata, but preserve readable spacing.
-
-Recommended baseline:
-
-| Element | Requirement |
+| Requirement | Acceptance criteria |
 |---|---|
-| Top bar height | 52–56 px |
-| Left rail width | 232–264 px expanded, 64 px collapsed |
-| Repository header height | 96–132 px depending on description/actions |
-| Dense table row | 36–44 px |
-| Code line height | 20–22 px |
-| Form control height | 32–36 px |
-| Card/surface padding | 12–16 px for repo screens, 20–24 px for forms/settings |
+| Dark only | App root always renders dark theme. No light toggle appears. No light-only page remains. |
+| No orange | There are no orange-led brand, CTA, active, focus, sidebar, warning, or status styles. |
+| High visibility | All text, icons, inputs, tabs, rows, badges, code, and disabled states are readable. |
+| Tokenized styling | Colors and dimensions come from CSS variables/Tailwind tokens, not scattered page classes. |
+| Monospace-first | UI uses a mono-first font stack inspired by OpenCode. Code, hashes, paths, commands always mono. |
+| Flat surfaces | Use borders/hairlines before shadows. No gradients, blobs, glass, neon, or decorative cards. |
+| Developer density | Repository pages use compact tables, panels, rows, and tabs. No huge dashboard cards. |
 
-### 3.2 Source-control vocabulary must be correct
+### 1.2 Overlay requirements
 
-Use Mercurial-friendly language:
+Routine workflows must not open as centered popup modals.
 
-- Prefer **Changeset** over **Commit** in visible labels.
-- Use **Revision** for selected node/branch/bookmark/tag input.
-- Use **Bookmark** as a first-class ref, not as an afterthought.
-- Use **Branch**, **Tag**, **Clone**, **Pull**, **Push**, **Diff**, **Compare**, **Review**, **Audit Event**.
-- Avoid saying “merge” unless the backend actually supports the exact merge/integration semantics.
-
-Recommended route-label mapping:
-
-| Existing route | Visible label |
+| Workflow | Required UI pattern |
 |---|---|
-| `/commits` | History or Changesets |
-| `/changesets/:node` | Changeset detail |
-| `/code` | Code |
-| `/branches` | Branches |
-| `/bookmarks` | Bookmarks |
-| `/tags` | Tags |
-| `/pull-requests` | Reviews or Change Requests, depending backend naming |
+| Global search | Top-aligned command palette below top bar. |
+| Repository file finder | Top-aligned or in-context command palette. |
+| Clone | Right drawer or inline panel. |
+| Revision selector | Anchored popover. |
+| Branch/bookmark/tag selector | Anchored popover. |
+| Create menu | Dropdown or page flow. |
+| Help/docs | Dropdown or side drawer. |
+| Token/SSH setup guidance | Page section or side drawer. |
+| Destructive action | Inline confirmation; center modal only for high-risk final confirmation. |
 
-### 3.3 Every action must explain risk
+### 1.3 Code viewer requirements
 
-Examples:
-
-- Clone panel explains auth method.
-- Token creation explains that token is shown once.
-- SSH key page shows fingerprint and last-used state.
-- Archive/delete explains impact on clone/push, tokens, hooks, and recovery.
-- Permission changes show who gains/loses read/write/admin access.
-
-### 3.4 No decorative dashboard noise
-
-Avoid:
-
-- Hero banners after onboarding.
-- Generic graphs without a developer decision purpose.
-- Glassmorphism, neon gradients, animated backgrounds.
-- Social-feed style repository activity.
-- Excessive orange backgrounds.
-
-Use orange only as a RevForge accent and action highlight.
+| Requirement | Acceptance criteria |
+|---|---|
+| GitHub-dark-style surface | Code background uses GitHub-dark-like `#0d1117`, muted gutter, visible border. |
+| Syntax highlighting | Common languages are highlighted; unknown languages fall back safely. |
+| Line anchors | Clicking line numbers updates URL hash. |
+| Line range selection | Shift-click or equivalent selects range and enables copy permalink. |
+| File actions | Code/Preview/Blame/History/Raw/Download/Copy path/Copy permalink exist. |
+| Safe states | Binary, large, empty, missing, and permission-limited files have clear states. |
+| Performance | Large files do not freeze UI; preview limit is respected. |
 
 ---
 
-## 4. Information Architecture
+## 2. Recommended file and component structure
 
-### 4.1 Global app shell
+The frontend should be organized so the design system is reusable and page files remain focused on data and layout composition.
 
 ```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│ Top bar                                                                    │
-│ RevForge mark | org/repo switcher | global search | create | help | user   │
-├───────────────┬────────────────────────────────────────────────────────────┤
-│ Left rail     │ Context header                                             │
-│ Dashboard     │ Organization / Repository / Current revision/path          │
-│ Organizations ├────────────────────────────────────────────────────────────┤
-│ Repositories  │ Repository tabs / page content                             │
-│ Reviews       │                                                            │
-│ Activity      │                                                            │
-│ Admin         │                                                            │
-│ Settings      │                                                            │
-└───────────────┴────────────────────────────────────────────────────────────┘
+src/
+  app/
+    app-shell.tsx
+    routes.tsx
+  styles/
+    tokens.css
+    base.css
+    utilities.css
+    code-viewer.css
+    diff-viewer.css
+  components/
+    ui/
+      button.tsx
+      input.tsx
+      textarea.tsx
+      select.tsx
+      badge.tsx
+      tabs.tsx
+      table.tsx
+      drawer.tsx
+      popover.tsx
+      tooltip.tsx
+      command-palette.tsx
+      empty-state.tsx
+      inline-alert.tsx
+      skeleton.tsx
+      copy-button.tsx
+      keyboard-hint.tsx
+    layout/
+      top-bar.tsx
+      left-rail.tsx
+      context-header.tsx
+      page-shell.tsx
+    repository/
+      repository-header.tsx
+      repository-tabs.tsx
+      revision-bar.tsx
+      revision-selector.tsx
+      path-breadcrumb.tsx
+      repository-tree.tsx
+      file-viewer.tsx
+      code-editor-view.tsx
+      markdown-preview.tsx
+      binary-file-state.tsx
+      large-file-state.tsx
+      clone-drawer.tsx
+      ref-badge.tsx
+      provisioning-badge.tsx
+      role-badge.tsx
+    changesets/
+      history-table.tsx
+      changeset-graph.tsx
+      changeset-summary.tsx
+      diff-viewer.tsx
+      changed-file-list.tsx
+    settings/
+      settings-layout.tsx
+      danger-zone.tsx
+      permission-matrix.tsx
+      audit-table.tsx
+  hooks/
+    use-command-palette.ts
+    use-copy-to-clipboard.ts
+    use-revision-state.ts
+    use-repository-path.ts
+    use-resizable-panel.ts
+  lib/
+    format-revision.ts
+    format-time.ts
+    format-file-size.ts
+    mercurial-labels.ts
+    route-state.ts
 ```
 
-### 4.2 Global navigation requirements
+### 2.1 Implementation rule
 
-The top bar must contain:
+Page files should not define new button/card/table/input styles. They should compose shared primitives.
+
+Bad:
+
+```tsx
+<button className="rounded-xl bg-something px-8 py-4 shadow-lg">
+```
+
+Good:
+
+```tsx
+<Button variant="primary" size="sm">Clone</Button>
+```
+
+---
+
+## 3. CSS and theme implementation requirements
+
+### 3.1 Required CSS files
+
+#### `src/styles/tokens.css`
+
+Must define:
+
+- Dark-only color variables.
+- Font family variables.
+- Radius variables.
+- Shadow variables.
+- Diff variables.
+- Editor variables.
+- Semantic aliases.
+
+#### `src/styles/base.css`
+
+Must define:
+
+- Root dark background.
+- Body font/rendering.
+- Default text color.
+- Link behavior.
+- Focus-visible behavior.
+- Selection styling.
+- Scrollbar styling.
+- Reduced motion behavior.
+
+#### `src/styles/code-viewer.css`
+
+Must define:
+
+- Code viewer shell.
+- Gutter.
+- Line rows.
+- Line hover.
+- Selected lines.
+- Line anchors.
+- Syntax token fallback classes.
+
+#### `src/styles/diff-viewer.css`
+
+Must define:
+
+- Diff file panel.
+- Diff hunk header.
+- Add/delete/context lines.
+- Split diff layout.
+- Sticky diff outline.
+
+### 3.2 Banned CSS patterns
+
+- Hardcoded orange hex values.
+- Hardcoded random surface colors inside page components.
+- Page-specific button styles.
+- Page-specific table row styles.
+- Background gradients for app shell or cards.
+- Center modal as default for search/clone/revision/file finder.
+- `text-gray-500` on dark background without checking contrast.
+- `opacity-50` for important disabled labels if it makes text unreadable.
+
+### 3.3 Visual grep checklist
+
+Before completion, run checks similar to:
+
+```bash
+grep -R "#ea580c\|#c2410c\|#f97316\|#fb923c\|orange" src || true
+grep -R "bg-gradient\|backdrop-blur\|shadow-2xl" src || true
+grep -R "fixed inset-0.*items-center.*justify-center" src || true
+```
+
+The first command may still find documentation text, but app source should not use old orange-led styling.
+
+---
+
+## 4. App shell requirements
+
+### 4.1 Top bar
+
+Top bar must contain:
 
 1. Compact RevForge wordmark.
-2. Current organization switcher.
-3. Global search / command palette trigger.
-4. Create menu:
-   - New organization
-   - New repository
-   - Import repository, future
-   - New review, future
-5. Help/docs menu:
-   - Clone help
-   - Mercurial basics
-   - Keyboard shortcuts
-6. User menu:
-   - Profile
-   - SSH keys
-   - Access tokens
-   - Sessions
-   - Sign out
+2. Organization/repository switcher when context exists.
+3. Global command/search trigger.
+4. Create menu.
+5. Help menu.
+6. User menu.
 
-The left rail must contain:
-
-- Dashboard
-- Organizations
-- Repositories
-- Reviews / Change Requests
-- Activity / Audit
-- Admin, only when applicable
-- Settings
-
-### 4.3 Repository local navigation
-
-Every repository page must have a persistent repository header.
+Layout:
 
 ```text
-org / repo-name                                      [Private] [Ready] [Role: admin]
-Description text, truncated to one line if long      [Clone] [New review] [Settings]
-
-Code | History | Changesets | Branches | Bookmarks | Tags | Compare | Reviews | Activity | Settings
+[RevForge] [acme / payments-api ▾] [Search repos, files, revisions… Ctrl K] [Create ▾] [Help ▾] [User]
 ```
 
-Requirements:
+Acceptance criteria:
 
-- Organization and repository names are clickable breadcrumbs.
-- Visibility, provisioning status, archive status, and current user role are always visible.
-- Clone is the primary action for normal repository users.
-- Settings appears only for users with repository admin permission.
-- Tabs are URL-aware and preserve revision/path/filter state where applicable.
-- On small screens, tabs become horizontally scrollable, not wrapped into multiple rows.
+- Height 52–56px.
+- Sticky top.
+- No large logo area.
+- Search trigger remains visible on desktop.
+- Wordmark does not dominate repository work.
+- Top bar works on dark backgrounds with clear separators.
 
----
+### 4.2 Left rail
 
-## 5. Core User Journeys
-
-### 5.1 First-time developer signs in and finds a repository
-
-1. User opens RevForge.
-2. User signs in.
-3. Dashboard shows “Continue working” and “Your repositories”.
-4. User can search by org/repo/path/revision.
-5. Opening a repository lands on Overview with clear clone and browse actions.
-6. User can jump to Code, History, or Clone without reading documentation.
-
-Success criteria:
-
-- User reaches repository code in under 3 clicks after login.
-- User understands whether they have read/write/admin access.
-- Empty org/repo states explain the next step.
-
-### 5.2 Developer browses repository worktree
-
-1. User opens repository Code tab.
-2. User selects branch/bookmark/tag/revision.
-3. User sees a tree panel and content panel.
-4. User navigates folders without losing revision context.
-5. User opens file, copies path/permalink, opens raw/blame/history.
-
-Success criteria:
-
-- Path and revision remain in URL.
-- Refreshing the page opens the same path and revision.
-- Binary and large files fail safely with metadata.
-- Keyboard navigation works for file finder, tree rows, and file actions.
-
-### 5.3 Maintainer reviews history and changeset detail
-
-1. User opens History.
-2. User filters by branch/bookmark/author/path/date/text.
-3. User opens a changeset.
-4. User sees message, author, exact timestamp, parents, children, refs, changed files, and diff.
-5. User can copy node hash or permalink.
-
-Success criteria:
-
-- User can inspect a revision without guessing context.
-- Diff anchors are stable and shareable.
-- Long diffs remain navigable.
-
-### 5.4 Admin manages access
-
-1. Admin opens repository Settings > Access.
-2. Admin sees inherited org/team permissions and direct repository overrides.
-3. Admin changes read/write/admin role.
-4. UI previews effective permission before saving.
-5. Audit event appears after save.
-
-Success criteria:
-
-- Admin knows exactly who can clone, pull, push, and administer.
-- Dangerous permission escalation is visually confirmed.
-- Permission changes are auditable.
-
----
-
-## 6. Screen-Level Requirements
-
-## 6.1 Dashboard
-
-### Purpose
-
-Give the user a calm entry point focused on work continuation, not analytics.
-
-### Layout
+Items:
 
 ```text
 Dashboard
-Signed in as Tatwa / user name
+Organizations
+Repositories
+Reviews
+Activity
+Admin          if allowed
+Settings
+```
 
-[Continue working]
-repo row | org | last visited | latest changeset | role | action
+Acceptance criteria:
 
-[Needs attention]
+- Expanded width 232–264px.
+- Collapsed width 56–64px.
+- No large orange branding block.
+- Active item has subtle blue marker/border or background.
+- Collapses on smaller screens.
+- Mobile uses drawer.
+
+### 4.3 Context header
+
+Repository pages must show:
+
+```text
+org / repo-name                              [Private] [Ready] [Role: write]
+Description text                             [Clone] [New review] [Settings]
+Code | History | Changesets | Branches | Bookmarks | Tags | Compare | Reviews | Activity | Settings
+```
+
+Acceptance criteria:
+
+- Organization and repository are clickable.
+- Visibility, provisioning state, archive state, and user role are visible.
+- Clone is primary for normal repository users.
+- Settings only appears for users with admin permission.
+- Tabs preserve URL state where appropriate.
+- Tabs scroll horizontally on small screens instead of wrapping.
+
+---
+
+## 5. Dashboard requirements
+
+### 5.1 Purpose
+
+The dashboard should help a developer continue work quickly. It should not be a decorative analytics page.
+
+### 5.2 Layout
+
+```text
+Dashboard
+Signed in as current-user
+
+Continue working
+repo | org | latest changeset | last visited | role | action
+
+Needs attention
 review requests | failed hooks | expiring tokens | repository errors
 
-[Your repositories]
-filter/search table
+Your repositories
+search | filters | table
 
-[Quick actions]
+Quick actions
 New repository | Add SSH key | Create token | View audit
 ```
 
-### Requirements
+### 5.3 Acceptance criteria
 
-- Show recently visited repositories first.
-- Show pinned repositories if supported.
-- Show requested reviews once review workflow exists.
-- Show operational warnings:
-  - No SSH key configured.
-  - Token expiring soon.
-  - Repository provisioning failed.
-  - Webhook delivery failing.
-- Provide one primary CTA only: “New repository” or “Browse repositories”, depending state.
+- Recently visited repositories appear first.
+- Pinned repositories appear if supported.
+- Repository rows are dense and scannable.
+- Operational warnings are visible but not huge.
+- One primary CTA only.
+- No meaningless charts.
+- Empty state explains the next action.
 
-### Empty state
+### 5.4 Empty state
 
 ```text
 No repositories yet
@@ -307,37 +373,34 @@ Create your first organization and repository, then provision Mercurial storage.
 
 ---
 
-## 6.2 Authentication Pages
+## 6. Authentication requirements
 
-### Login
+### 6.1 Login
 
-Requirements:
+Acceptance criteria:
 
-- Use centered two-column layout on desktop:
-  - Left: form.
-  - Right: short trust/security explanation.
+- Dark-only centered form.
+- Desktop may use two-column layout: form + concise trust/security note.
 - Preserve redirect target after login.
-- Show inline field errors.
-- Show session restore loading state.
-- Avoid marketing copy.
+- Inline field validation.
+- Session restore loading state.
+- No marketing hero.
+- Login error explains what failed without leaking sensitive details.
 
-### Register
+### 6.2 Register
 
-Requirements:
+Acceptance criteria:
 
 - Explain whether registration is open or admin-controlled.
 - Password rules visible before submit.
-- After registration, guide user to create or join organization.
+- Inline errors.
+- After success, guide user to create/join organization.
 
 ---
 
-## 6.3 Organization Overview
+## 7. Organization overview requirements
 
-### Purpose
-
-Let org members find repositories, understand membership, and manage org-level basics.
-
-### Layout
+### 7.1 Layout
 
 ```text
 Organization: acme-platform                         [Role: owner] [Settings]
@@ -345,235 +408,269 @@ Description
 
 Repositories | Members | Teams | Activity | Settings
 
-[Search repositories...] [All/Pinned/Writable/Archived] [New repository]
+[Search repositories...] [All/Pinned/Writable/Admin/Archived/Unprovisioned] [New repository]
 
-Repository table:
-Name | Visibility | Default ref | Last changeset | Updated | Your role | Actions
+Name | Visibility | State | Default ref | Last changeset | Updated | Your role | Actions
 ```
 
-### Requirements
+### 7.2 Repository table requirements
 
-- Repositories should use a dense table, not large cards.
-- Each repository row includes:
-  - repo name and slug;
-  - description;
-  - visibility badge;
-  - provisioning status;
-  - latest changeset short hash;
-  - last activity timestamp;
-  - current user role;
-  - quick actions: Code, Clone, Settings if admin.
-- Filters:
-  - All
-  - Pinned
-  - Writable
-  - Admin
-  - Archived
-  - Unprovisioned
-- Sort:
-  - Recently updated
-  - Name A-Z
-  - Visibility
-  - Your role
+Each row must show:
 
-### Member preview
+- Repository name and slug.
+- Description.
+- Visibility badge.
+- Provisioning status.
+- Default ref.
+- Latest changeset short hash.
+- Last activity timestamp.
+- Current user's role.
+- Actions: Code, Clone, Settings if admin.
 
-Members should not dominate the repository discovery page. Show a compact side panel:
+### 7.3 Filters and sorting
 
-```text
-Members
-24 total
-Owners: 2 · Admins: 5 · Members: 17
-[Manage members]
-```
+Filters:
+
+- All.
+- Pinned.
+- Writable.
+- Admin.
+- Archived.
+- Unprovisioned.
+
+Sort:
+
+- Recently updated.
+- Name A-Z.
+- Visibility.
+- Your role.
+
+Acceptance criteria:
+
+- Uses dense table, not large cards.
+- Search and filters preserve URL state.
+- Empty filtered state is specific.
+- Member preview does not dominate repository discovery.
 
 ---
 
-## 6.4 Repository Overview
+## 8. Repository overview requirements
 
-### Purpose
-
-Show repository identity, state, and fastest useful actions.
-
-### Layout
+### 8.1 Layout
 
 ```text
 acme / payments-api                              [Private] [Ready] [Role: write]
 Mercurial service for payment orchestration.     [Clone] [Browse code] [Settings]
 
-┌ Latest changeset ───────────────┐ ┌ Clone / Access ─────────────┐
-│ short hash · message             │ │ HTTPS / SSH available        │
-│ author · exact time              │ │ token/key setup health        │
-└──────────────────────────────────┘ └──────────────────────────────┘
+Latest changeset                 Clone / Access
+short hash · message             HTTPS / SSH availability
+author · exact time              token/key setup health
 
-┌ Repository health ──────────────┐ ┌ Quick links ─────────────────┐
-│ provisioned · hooks · refs       │ │ Code History Branches Tags    │
-└──────────────────────────────────┘ └──────────────────────────────┘
+Repository health                Quick links
+provisioned · hooks · refs        Code History Branches Tags
 
-README preview, if root README exists
+README preview, if available
 ```
 
-### Requirements
+### 8.2 Acceptance criteria
 
-- Make Code and Clone the strongest actions.
-- Show provisioning state with explanation:
-  - `unprovisioned`: “Repository metadata exists, storage is not provisioned.”
-  - `provisioning`: “Storage setup is running.”
-  - `ready`: “Clone, pull, push, and browsing are available according to permissions.”
-  - `failed`: show retry/admin path and request ID.
-- Show latest changeset only if repository is browsable.
-- Render README preview after operational summary.
-- Do not show meaningless metrics.
+- Code and Clone are strongest actions.
+- Provisioning state is visible and explained.
+- Latest changeset appears only when repository is browsable.
+- README preview appears after operational summary.
+- No meaningless metrics.
+- Clone drawer can open from overview.
+
+### 8.3 Provisioning state copy
+
+| State | Copy |
+|---|---|
+| Unprovisioned | Repository metadata exists, but storage is not provisioned yet. |
+| Provisioning | Repository storage setup is running. |
+| Ready | Clone, pull, push, and browsing are available according to your permissions. |
+| Failed | Repository storage setup failed. Show retry/admin path and request ID if available. |
+| Archived | Repository is archived. Push access is disabled. |
 
 ---
 
-## 6.5 Repository Code / Worktree Browser
+## 9. Repository Code tab requirements
 
-This is the most important redesign area.
+This is the highest-priority screen.
 
-### Design goal
-
-Create a Kallithea-inspired dense repository worktree UI with modern GitHub/GitLab code-reading polish.
-
-### Desktop layout
+### 9.1 Required URL model
 
 ```text
-┌ Repository header ────────────────────────────────────────────────────────┐
-│ acme / payments-api       [Private] [Ready] [Clone]                       │
-│ Code | History | Branches | Bookmarks | Tags | Compare | Reviews          │
-├───────────────────────────────────────────────────────────────────────────┤
-│ Revision bar                                                               │
-│ [branch/bookmark/tag/revision selector] [Find file] [Copy permalink]       │
-├───────────────────────┬───────────────────────────────────────────────────┤
-│ Tree panel             │ Content panel                                     │
-│ / root                 │ README.md                                         │
-│ ▸ backend              │ latest changeset · size · language · mode         │
-│ ▸ frontend             │ [Code] [Preview] [Blame] [History] [Raw] [...]    │
-│   README.md            │                                                   │
-│   Makefile             │ line numbers + syntax-highlighted content         │
-└───────────────────────┴───────────────────────────────────────────────────┘
-```
-
-### URL requirements
-
-Use stable URL state:
-
-```text
-/organizations/:org/repositories/:repo/code?revision=:rev&path=:path
+/organizations/:org/repositories/:repo/code?revision=:rev&path=:path&view=:view
 ```
 
 Examples:
 
 ```text
-/code?revision=default&path=frontend/src/main.tsx
-/code?revision=release-1.2&path=backend/app/models.py
-/code?revision=58b07b719a4b&path=README.md
+/code?revision=default&path=frontend/src/main.tsx&view=code
+/code?revision=release-1.2&path=backend/app/models.py&view=code
+/code?revision=58b07b719a4b&path=README.md&view=preview
 ```
 
-### Revision selector
+Acceptance criteria:
 
-The revision selector must support:
+- Refreshing the page preserves revision, path, and view.
+- Browser back/forward works.
+- Copy permalink includes revision and path.
+- Line permalink includes line/range hash.
 
-- latest tip
-- branches
-- bookmarks
-- tags
-- direct node hash entry
-- recent revisions
-
-UI behavior:
-
-- Group refs by type.
-- Show `name`, `short node`, and optional latest changeset age.
-- Allow typing a node hash manually.
-- Invalid revision shows inline error, not a toast-only error.
-
-### Tree panel requirements
-
-The tree panel must show:
-
-- folder/file icon;
-- name;
-- active file/folder highlight;
-- optional compact metadata on hover or wide screens:
-  - last changeset short hash;
-  - age;
-  - author;
-  - file size;
-  - file mode;
-- sticky root/path area;
-- keyboard navigation:
-  - Up/Down selects row;
-  - Enter opens;
-  - Left closes folder/goes parent;
-  - Right opens folder;
-  - `/` opens repository search;
-  - `t` opens file finder.
-
-Directory rows:
+### 9.2 Desktop layout
 
 ```text
-[folder icon] backend/                      latest: a18f3cd · 2d ago
-[file icon]   README.md                     4.2 KB · docs · b71aa21
-[file icon]   Makefile                      executable? no · 910 B
+RepositoryHeader
+RepositoryTabs
+RevisionBar
+┌──────────────────────────────┬────────────────────────────────────────────┐
+│ TreePanel                    │ FileContentPanel                           │
+│ root/path                    │ FileHeader                                 │
+│ folder/file rows             │ Code / Preview / Binary / Large state      │
+└──────────────────────────────┴────────────────────────────────────────────┘
 ```
 
-### Breadcrumb requirements
+Acceptance criteria:
 
-Breadcrumb must always show:
+- Tree and file content fit above the fold on desktop.
+- Tree panel is resizable.
+- Revision bar remains visible while browsing.
+- File content is primary.
+- Active path is visibly highlighted.
 
-```text
-root / frontend / src / routes / pages.tsx
-```
+### 9.3 Revision bar
 
-Behavior:
+Required controls:
 
+- Revision selector.
+- Current short changeset hash.
+- Find file button with `t` shortcut.
+- Search in repo button with `/` shortcut.
+- Copy permalink button.
+- Optional compare button.
+
+Acceptance criteria:
+
+- Revision selector supports branches, bookmarks, tags, and direct hash entry.
+- Invalid revision error appears inline.
+- Selecting a revision preserves path when possible.
+- If path does not exist at selected revision, show recovery actions.
+
+### 9.4 Tree panel
+
+Required row metadata:
+
+- Icon.
+- Name.
+- Directory/file type.
+- Last changeset short hash when available.
+- Age.
+- Author where available.
+- File size where applicable.
+- Mode where applicable.
+
+Keyboard behavior:
+
+- Up/Down selects row.
+- Enter opens selected row.
+- Left closes folder or moves to parent.
+- Right opens folder.
+- `/` opens repository search.
+- `t` opens file finder.
+
+Acceptance criteria:
+
+- Directory browsing does not lose revision.
+- Path is always visible.
+- Tree rows are dense but readable.
+- Hover actions do not cause layout shift.
+- Loading state keeps panel width stable.
+
+### 9.5 Breadcrumb
+
+Required behavior:
+
+- `root` always visible.
 - Each segment clickable.
-- Root always visible.
-- Long paths collapse middle segments:
+- Long paths collapse middle segments.
+- Copy path button exists.
+- Copy permalink button exists.
+
+Example:
 
 ```text
 root / frontend / … / routes / pages.tsx
 ```
 
-- Copy path button next to breadcrumb.
-- Copy permalink button next to revision label.
+### 9.6 File header
 
-### File viewer requirements
+Required data:
 
-Header:
+- File name.
+- Full path.
+- Size.
+- Language/type.
+- Line count.
+- Mode.
+- Last changed changeset.
+- Author.
+- Exact timestamp.
+
+Required actions:
+
+- Code.
+- Preview, when supported.
+- Blame/Annotate.
+- History.
+- Raw.
+- Download.
+- Copy path.
+- Copy permalink.
+- More menu for secondary actions.
+
+Acceptance criteria:
+
+- Actions are visible, not hidden behind only icons.
+- Overflow actions move into More on smaller width.
+- Copy feedback is visible inline.
+
+### 9.7 Code viewer
+
+Requirements:
+
+- GitHub-dark-like background.
+- Line numbers in gutter.
+- Syntax highlighting.
+- Horizontal scroll for long lines.
+- Selectable line anchors.
+- Range selection.
+- Mini-toolbar for selected lines.
+- Copy permalink includes line/range.
+- Raw view opens safely.
+
+Line selection behavior:
 
 ```text
-pages.tsx
-frontend/src/routes/pages.tsx · 34.8 KB · TypeScript · 1,920 lines · mode 100644
-Last changed in a18f3cd by Tatwa, 2026-07-10 12:10 IST
-[Code] [Preview] [Blame] [History] [Raw] [Download] [Copy path] [Copy permalink]
+Click line 24          -> URL hash #L24
+Shift-click line 38    -> URL hash #L24-L38
+Toolbar                -> Lines 24–38 selected [Copy permalink] [Copy lines]
 ```
 
-Content behavior:
+### 9.8 Markdown preview
 
-- Syntax highlighting for common languages.
-- Line numbers are selectable anchors.
-- Clicking a line updates URL hash.
-- Shift-click selects line range.
-- Copy permalink uses selected line/range when present.
-- Sticky mini-toolbar appears when selecting lines:
+Requirements:
 
-```text
-Lines 24–38 selected  [Copy permalink] [Copy lines]
-```
+- Preview README by default on repository overview/root where applicable.
+- In code browser, preserve selected view.
+- Sanitize rendered HTML.
+- Support tables, code blocks, task lists, links, images.
+- Relative links resolve within repository context where possible.
+- Preview keeps file metadata/actions visible.
 
-### Markdown / preview behavior
+### 9.9 Safe file states
 
-For `README`, `index`, and markdown-like files:
-
-- Default to rendered Preview in overview/root context.
-- Inside file browser, preserve user-selected mode: Code or Preview.
-- Preview still shows file metadata/actions.
-
-### Binary and large files
-
-Binary file state:
+Binary:
 
 ```text
 Binary file not shown
@@ -581,37 +678,58 @@ RevForge detected binary content and skipped inline rendering for safety.
 [Download] [View history] [Copy path]
 ```
 
-Large file state:
+Large:
 
 ```text
 File too large to render
-This file exceeds the configured inline preview limit of 1 MB.
+This file exceeds the configured inline preview limit.
 [Raw] [Download] [View history]
 ```
 
-### Empty repository state
+Missing path:
+
+```text
+Path not found at this revision
+`path` does not exist at `revision`.
+[Go to repository root] [Change revision]
+```
+
+Permission denied:
+
+```text
+You cannot view this repository
+Your current role does not include read access.
+[Request access] [Back to repositories]
+```
+
+Empty repository:
 
 ```text
 Empty Mercurial repository
 This repository is provisioned but has no committed files yet.
 
-Clone it locally:
 hg clone ssh://revforge/acme/payments-api
-
 [Copy clone command] [Open clone help]
 ```
 
 ---
 
-## 6.6 Find File / Command Palette
+## 10. Command palette and search requirements
 
-### Trigger
+### 10.1 Global command palette
 
-- `Cmd/Ctrl + K`: global command palette.
-- `t`: repository file finder.
-- `/`: search within current repository.
+Trigger: `Ctrl/Cmd + K`.
 
-### Global command palette modes
+Visual pattern:
+
+- Top-aligned under the top bar.
+- Max width around 760px.
+- Not centered vertically.
+- Dark surface with border.
+- Search input focused.
+- Results grouped by type.
+
+Modes:
 
 ```text
 > action mode       Create repository, Add SSH key, Open tokens
@@ -621,21 +739,87 @@ hg clone ssh://revforge/acme/payments-api
 # revision mode     Jump to changeset/revision
 ```
 
-### Repository file finder
+Acceptance criteria:
 
-Requirements:
+- Up/down navigation.
+- Enter opens result.
+- Esc closes and restores focus.
+- Recent results show before typing where useful.
+- Loading and empty states are compact.
 
-- Fuzzy search file paths.
-- Highlight matching characters.
-- Show path, file icon, optional language.
-- Preserve selected revision when opening result.
+### 10.2 Repository file finder
+
+Trigger: `t` in repository context.
+
+Acceptance criteria:
+
+- Fuzzy file path search.
+- Matching characters highlighted.
+- Shows path, icon, optional language.
+- Preserves revision when opening result.
 - Recent files appear before typing.
+- Does not open center modal.
+
+### 10.3 Repository search
+
+Trigger: `/` in repository context.
+
+Acceptance criteria:
+
+- Search supports files, paths, and text when backend supports it.
+- Results show match context.
+- Opening result preserves revision/path.
+- Empty state distinguishes no results from unsupported search.
 
 ---
 
-## 6.7 History / Changesets List
+## 11. Clone drawer requirements
 
-### Layout
+### 11.1 Trigger locations
+
+- Repository header Clone button.
+- Repository overview clone/access card.
+- Empty repository state.
+- Code tab toolbar.
+- Command palette action.
+
+### 11.2 Drawer layout
+
+```text
+Clone payments-api
+
+SSH | HTTPS
+
+hg clone ssh://revforge/acme/payments-api
+[Copy]
+
+Authentication
+SSH key required for SSH clone.
+Your account has 1 SSH key. Last used: never.
+[Manage SSH keys]
+
+Repository access
+State: ready
+Your role: write
+Allowed: clone, pull, push
+```
+
+### 11.3 Acceptance criteria
+
+- Opens as right drawer or inline panel, not center modal.
+- Default method is SSH if user has an SSH key.
+- HTTPS explains personal access token usage.
+- Copy command includes `hg clone`.
+- Shows transport status.
+- Shows permission status.
+- Disabled clone explains why.
+- Drawer remains open after copy with copied feedback.
+
+---
+
+## 12. History and changesets requirements
+
+### 12.1 History list layout
 
 ```text
 History
@@ -648,31 +832,32 @@ Graph | Changeset message                       | Author | Time | Files | Refs
 ╰─●   | Initial organization settings           | ...    | 3d   | 5     | v0.1
 ```
 
-### Requirements
+Acceptance criteria:
 
-- Use one compact row per changeset.
-- Show graph lane where possible.
-- Show short message first line.
-- Show author name/avatar initials.
-- Show relative time plus exact timestamp tooltip.
-- Show short node hash with copy action.
-- Show refs as branch/bookmark/tag badges.
-- Show files changed count.
-- Filters are preserved in URL.
-- Use cursor pagination with explicit “Load more”, not infinite scroll.
+- Dense table.
+- Graph lane where possible.
+- Filters preserve URL state.
+- Short node hash copy action.
+- Relative and exact time available.
+- Ref badges for branch/bookmark/tag.
+- Explicit Load more pagination.
 
-### Row interactions
+### 12.2 Changeset detail
 
-- Click message opens changeset detail.
-- Click hash copies or opens depending target area.
-- Hover reveals copy permalink.
-- Keyboard Enter opens selected changeset.
+Required sections:
 
----
+1. Revision identity.
+2. Full message.
+3. Author and committer if distinct.
+4. Exact timestamp with timezone.
+5. Parents and children.
+6. Branch/bookmark/tag badges.
+7. Changed files summary.
+8. Diff controls.
+9. Diff viewer.
+10. Related review/activity links.
 
-## 6.8 Changeset Detail
-
-### Layout
+Layout:
 
 ```text
 Changeset a18f3cd91b4e
@@ -690,90 +875,75 @@ A frontend/src/components/file-tree.tsx +210 -0
 D frontend/src/legacy/tree.tsx       +0 -180
 
 Diff controls: [Unified] [Split] [Hide whitespace] [Collapse generated files]
-
-Diff viewer...
 ```
 
-### Required sections
+### 12.3 Diff viewer
 
-1. Revision identity.
-2. Message.
-3. Author and committer if distinct.
-4. Timestamp with exact timezone.
-5. Parent/child revisions.
-6. Branch/bookmark/tag badges.
-7. Changed files summary.
-8. Diff viewer.
-9. Related review/activity/audit links.
+Acceptance criteria:
 
-### Diff requirements
-
-- Default to unified diff.
-- Split diff available on wide screens.
-- File list is sticky or accessible through a left diff outline.
-- Each file diff has:
-  - file path;
-  - status: added/modified/deleted/renamed/binary;
-  - additions/deletions;
-  - copy path;
-  - view file at revision;
-  - collapse/expand.
-- Line anchors preserve:
-  - revision;
-  - file path;
-  - side;
-  - line/range.
-- Additions/deletions must use icon/text pattern, not only color.
+- Unified diff default.
+- Split diff on wide screens.
+- Hide whitespace option.
+- Changed file outline.
+- File-level collapse.
+- Copy path per file.
+- View file at revision.
+- Line anchors are stable and shareable.
+- Add/delete uses color + text/icon.
+- Binary and large diffs show safe states.
 
 ---
 
-## 6.9 Branches, Bookmarks, and Tags
+## 13. Branches, bookmarks, and tags requirements
 
-### Shared table requirements
+### 13.1 Shared table
 
 ```text
 Name | Type | Target changeset | Last updated | Author | Protected? | Actions
 ```
 
-### Branches page
+Actions:
+
+- Browse code.
+- View history.
+- Compare.
+- Copy revision.
+
+### 13.2 Branches
+
+Acceptance criteria:
 
 - Show branch name.
-- Show open/closed state if available.
+- Show open/closed state if backend provides it.
 - Show latest node.
-- Show latest changeset message.
-- Actions:
-  - Browse code
-  - View history
-  - Compare
-  - Copy revision
+- Show latest message.
+- Browse opens Code tab with revision set.
 
-### Bookmarks page
+### 13.3 Bookmarks
 
-Bookmarks are important in Mercurial. Treat them as first-class.
+Bookmarks must be first-class in the UI.
 
-- Show active bookmark target.
-- Show whether bookmark is movable/protected once policy exists.
-- Actions:
-  - Browse code
-  - Compare
-  - View changesets
+Acceptance criteria:
 
-### Tags page
+- Show bookmark name.
+- Show target changeset.
+- Show movable/protected state if available.
+- Browse/compare/history actions exist.
 
+### 13.4 Tags
+
+Acceptance criteria:
+
+- Show tag name.
+- Show target changeset.
 - Separate local/global tags if backend exposes it.
-- Show tag target.
-- Show tag changeset.
 - Show signed/trusted status if future support exists.
 
 ---
 
-## 6.10 Compare View
+## 14. Compare view requirements
 
-### Purpose
-
-Help users compare two revisions safely and explicitly.
-
-### Layout
+### 14.1 Layout
 
 ```text
 Compare revisions
@@ -785,13 +955,13 @@ Summary: 12 changesets · 34 files changed · +900 -230
 Tabs: Files changed | Changesets | Diff
 ```
 
-### Requirements
+### 14.2 Acceptance criteria
 
-- Direction must always be visible: `base → head`.
-- Inputs accept branch, bookmark, tag, or hash.
-- Warn if revisions have ambiguous relationship.
-- Show changed file summary before diff.
-- Preserve compare state in URL:
+- Direction `base → head` always visible.
+- Inputs accept branch, bookmark, tag, hash.
+- Ambiguous relationship warning if needed.
+- Summary appears before diff.
+- URL preserves compare state:
 
 ```text
 /compare?base=default&head=feature-x
@@ -799,726 +969,1044 @@ Tabs: Files changed | Changesets | Diff
 
 ---
 
-## 6.11 Clone Panel
+## 15. Reviews / change requests requirements
 
-Clone is a core RevForge trust flow.
+Use Mercurial-safe naming. If backend naming is pull-request-like but actual Mercurial workflow is not exactly Git PR, visible labels should be `Reviews` or `Change Requests`.
 
-### Trigger locations
-
-- Repository header primary button.
-- Repository overview clone card.
-- Empty repository state.
-- User onboarding checklist.
-
-### Layout
-
-```text
-Clone repository
-[HTTPS] [SSH]
-
-HTTPS
-hg clone https://revforge.example.com/hg/acme/payments-api
-[Copy]
-
-Authentication
-Use your RevForge username and a personal access token as the password.
-[Create token] [Manage tokens]
-
-SSH
-hg clone ssh://hg@revforge.example.com/acme/payments-api
-[Copy]
-
-SSH status
-✓ You have 1 active SSH key
-Last used: 2026-07-09 18:20 IST
-[Manage SSH keys]
-```
-
-### Requirements
-
-- Never put PATs into clone URLs.
-- Detect if user has no SSH key.
-- Detect if user has no active token.
-- Show exact Mercurial command.
-- One-click copy with visible copied state for 1.5 seconds.
-- Include “Test access” once backend supports it.
-
-### Error states
-
-- No read permission:
-
-```text
-You do not have clone access
-Ask an organization owner or repository admin for read access.
-```
-
-- Repository not provisioned:
-
-```text
-Clone is unavailable until repository storage is provisioned.
-```
-
----
-
-## 6.12 Reviews / Change Requests
-
-### Naming decision
-
-Until backend semantics are fully defined, use **Reviews** as the top-level navigation label. Avoid promising Git-style pull-request merging if RevForge cannot yet safely integrate changes.
-
-### Review list
+### 15.1 List page
 
 ```text
 Reviews
-[Open] [Requested from me] [Created by me] [Closed]
+[Open] [Created by me] [Assigned to me] [Merged/Closed] [Search]
 
-Title | State | Author | Base → Head | Reviewers | Updated | Actions
+Title | Source | Target | Author | Status | Updated | Actions
 ```
 
-### Review detail
+### 15.2 Detail page requirements
 
-```text
-Review: Improve repository browser
-State: Open
-Base: default@b71aa21 → Head: ui-browser@a18f3cd
-
-Tabs: Overview | Changes | Discussion | Activity
-Right sidebar: Reviewers, approvals, checks, linked changesets
-```
-
-### Review interaction requirements
-
-- Support comments and inline diff comments.
-- Support pending review comments before submit.
-- Support outcomes:
-  - Comment
-  - Approve
-  - Request changes
-- Show unresolved thread count.
-- Allow resolving/reopening threads.
-- Show event timeline.
-- Do not show “Merge” button unless backend operation is real and safe.
-- Early-stage alternative CTA:
-  - “Mark integrated”
-  - “Close review”
-  - “Request changes”
+- Summary.
+- Source and target revisions/refs.
+- Status.
+- Participants/reviewers.
+- Changed files.
+- Diff.
+- Conversation/activity when supported.
+- Clear disabled states for unsupported backend actions.
 
 ---
 
-## 6.13 Activity and Audit
+## 16. Activity and audit requirements
 
-### Purpose
+Activity must feel like an operational audit table, not a social feed.
 
-Operational traceability and incident response.
-
-### Layout
+### 16.1 Layout
 
 ```text
-Activity / Audit
-[Actor] [Action] [Resource] [Outcome] [Date range] [Source/IP] [Export]
+Activity
+[actor] [action] [repository] [date range] [severity]
 
-Time | Actor | Action | Resource | Source | Outcome | Details
+Time | Actor | Action | Target | Repository | IP/Session | Result
 ```
 
-### Requirements
+### 16.2 Acceptance criteria
 
-- Use table, not social timeline.
-- Every event row includes:
-  - exact timestamp;
-  - actor;
-  - action;
-  - resource;
-  - source/IP/user agent if available;
-  - outcome;
-  - request/event ID;
-  - details drawer.
-- Filters preserved in URL.
-- Export CSV/JSON for admins once backend supports it.
-
-### Important audit event types
-
-- auth login/logout/session revoked;
-- organization created/updated;
-- member added/removed/role changed;
-- repository created/updated/provisioned/archived/deleted;
-- permission granted/revoked;
-- token created/revoked/used;
-- SSH key added/removed/used;
-- clone/pull/push accepted/denied;
-- webhook created/updated/delivery failed;
-- review opened/closed/commented/approved/requested changes.
+- Dense table.
+- Filters preserve URL state.
+- Exact timestamps available.
+- Actions are explicit: permission changed, token created, SSH key removed, repository archived.
+- Severity/status labels include text.
+- Export action can be future-disabled with explanation.
 
 ---
 
-## 6.14 Repository Settings
+## 17. Settings requirements
 
-### Settings structure
+### 17.1 Repository settings
+
+Sections:
 
 ```text
-Repository Settings
 General
 Access
-Branches & Bookmarks policy
-Clone & Transport
-Webhooks
+Branches / protection
+Hooks
+Integrations
+Storage / provisioning
 Audit
 Danger zone
 ```
 
-### General
+Acceptance criteria:
 
-- Display name.
-- Description.
-- Visibility.
-- Default branch/bookmark/revision target.
-- Archive state.
+- Settings layout has left subnav.
+- Forms use inline errors.
+- Save button state is clear.
+- Dangerous settings are separated.
+- Permission changes preview effective access.
 
-### Access
+### 17.2 Access settings
 
-- Effective permissions matrix:
+Required views:
 
-```text
-Subject | Source | Read | Write | Admin | Last changed | Actions
-```
+- Direct users.
+- Teams.
+- Inherited organization permissions.
+- Effective permission summary.
 
-- Separate inherited org/team access from direct repo access.
-- Show preview before saving.
+Acceptance criteria:
 
-### Clone & Transport
+- Admin can see who can clone/pull/push/admin.
+- Role changes explain impact.
+- Audit event appears after save.
+- Permission escalation is visually confirmed.
 
-- HTTPS enabled/disabled.
-- SSH enabled/disabled.
-- Transport rate-limit status.
-- Last clone/pull/push metadata if allowed.
+### 17.3 User settings
 
-### Webhooks
-
-- URL.
-- Secret status, never show secret after creation.
-- Events selected.
-- Last delivery status.
-- Retry delivery.
-
-### Danger zone
-
-Separate bordered section at bottom:
-
-- Archive repository.
-- Rename slug.
-- Delete repository.
-- Transfer repository, future.
-
-Danger actions require typing the repository slug.
-
----
-
-## 6.15 User Settings
-
-### Required sections
+Sections:
 
 ```text
 Profile
 SSH keys
-Personal access tokens
+Access tokens
 Sessions
-Preferences
 ```
 
-### SSH keys
-
-- Key title.
-- Fingerprint.
-- Created date.
-- Last used date.
-- Status.
-- Revoke action.
-- Add key flow validates format.
-
-### Personal access tokens
-
-- Token name.
-- Scopes.
-- Created date.
-- Expiry date.
-- Last used date.
-- Revoke action.
-- New token shown once with copy action.
-
-Recommended token scopes:
-
-- `repo:read`
-- `repo:write`
-- `repo:admin`
-- `org:read`
-- `org:admin`
-- `webhook:admin`
-
----
-
-## 7. Design System Requirements
-
-## 7.1 Tokens
-
-All visual primitives must be tokenized.
-
-### Color tokens
-
-Use existing RevForge direction but organize into semantic aliases:
-
-```css
---color-canvas
---color-surface
---color-surface-subtle
---color-border
---color-border-strong
---color-text-primary
---color-text-secondary
---color-text-muted
---color-accent
---color-accent-subtle
---color-success
---color-warning
---color-danger
---color-info
---color-diff-add-bg
---color-diff-add-text
---color-diff-del-bg
---color-diff-del-text
---color-focus-ring
-```
-
-### Typography
-
-- UI font: Inter, Geist Sans, or system sans.
-- Code/hash/path font: JetBrains Mono, IBM Plex Mono, or `ui-monospace`.
-- Never show hashes or paths in proportional font.
-
-### Type scale
-
-| Token | Size | Use |
-|---|---:|---|
-| `text-xs` | 12px | metadata, compact labels |
-| `text-sm` | 13–14px | default dense UI |
-| `text-base` | 16px | section titles |
-| `text-lg` | 18px | repository title compact |
-| `text-xl` | 20px | page title |
-| `text-2xl` | 24px | only major workspace headings |
-
-### Radius/elevation
-
-- Default radius: 8 px.
-- Dense controls: 6 px.
-- Dialogs: 12 px.
-- Use borders before shadows.
-- Shadows only for menus, dialogs, command palette, drawers, clone panel.
-
----
-
-## 7.2 Component Inventory
-
-### Foundational components
-
-- `Button`
-  - primary, secondary, ghost, danger, icon.
-- `IconButton`
-  - must always have accessible label.
-- `Input`
-- `Textarea`
-- `Select`
-- `Combobox`
-- `Checkbox`
-- `Switch`
-- `Badge`
-  - visibility, role, branch, bookmark, tag, status.
-- `Tabs`
-  - URL-aware.
-- `DataTable`
-  - dense, sortable, keyboard navigable.
-- `EmptyState`
-- `ErrorState`
-- `Skeleton`
-- `Dialog`
-- `Drawer`
-- `DropdownMenu`
-- `Toast`
-- `CopyButton`
-- `CommandPalette`
-- `Tooltip`
-
-### Repository components
-
-- `RepositoryHeader`
-- `RepositoryTabs`
-- `RevisionSelector`
-- `RefBadge`
-- `CloneDialog`
-- `FileTree`
-- `FileTreeRow`
-- `PathBreadcrumbs`
-- `FileViewer`
-- `LineNumberAnchor`
-- `PermalinkButton`
-- `ChangesetRow`
-- `ChangesetGraph`
-- `DiffViewer`
-- `DiffFileHeader`
-- `DiffOutline`
-- `PermissionMatrix`
-- `AuditEventTable`
-- `ReviewTimeline`
-- `ReviewThread`
-- `SshKeyFingerprint`
-- `WebhookDeliveryStatus`
-
-### Component state acceptance
-
-Every component must handle:
-
-- default;
-- hover;
-- active;
-- focus-visible;
-- disabled;
-- loading;
-- empty where relevant;
-- error where relevant;
-- permission-denied where relevant;
-- mobile/narrow width;
-- dark mode;
-- keyboard-only interaction.
-
----
-
-## 8. Microinteraction Requirements
-
-### Copy action
-
-- Button label changes to “Copied” for 1.5 seconds.
-- Use tooltip only as helper, not as only feedback.
-- Copy errors show inline/error toast with explanation.
-
-### Loading states
-
-- Use skeletons that match final layout.
-- Do not show spinner-only full screens for repository pages unless route is initially loading.
-- Keep repository header visible while tab content loads.
-
-### Empty states
-
-Every empty state must include:
-
-1. What is empty.
-2. Why it might be empty.
-3. One primary next action.
-
-Bad:
+SSH key row:
 
 ```text
-No data found.
+Name | Fingerprint | Added | Last used | Actions
 ```
 
-Good:
+Token row:
 
 ```text
-No changesets yet
-This repository is provisioned, but no revisions have been pushed.
-[Open clone instructions]
+Name | Scopes | Created | Expires | Last used | Actions
 ```
 
-### Error states
+Acceptance criteria:
 
-Every error must include:
+- Token creation explains token is shown once.
+- SSH key fingerprint is visible.
+- Revocation is confirmed inline.
 
-- plain-language message;
-- technical detail if useful;
-- retry action when safe;
-- request ID if backend provides it;
-- permission explanation when relevant.
+### 17.4 Danger zone
 
-### Destructive confirmation
+Acceptance criteria:
 
-- Confirm archive/delete/remove access with typed slug/name.
-- Show affected clone/push/access behavior.
-- Use dialog, not `window.confirm`.
+- Separate red-bordered subtle section.
+- Consequences explained.
+- Typed confirmation for archive/delete/transfer.
+- No accidental one-click destructive action.
+- Audit event created after action.
 
 ---
 
-## 9. Accessibility Requirements
+## 18. Responsive requirements
 
-Minimum target: WCAG 2.2 AA.
+### 18.1 Desktop
+
+- Full shell with top bar and left rail.
+- Repository tree/content split.
+- Split diff available.
+- Sticky headers.
+
+### 18.2 Tablet
+
+- Left rail collapses.
+- Repository tabs horizontally scroll.
+- Tree panel can collapse to drawer.
+- Tables remain scrollable.
+
+### 18.3 Mobile
+
+- Product remains usable, even if desktop-first.
+- Left rail becomes menu drawer.
+- Clone drawer becomes full-width sheet.
+- Code viewer scrolls horizontally.
+- Tables either scroll or convert to labeled rows.
+- Critical actions remain accessible.
+
+---
+
+## 19. Accessibility requirements
+
+### 19.1 Keyboard
+
+- Top bar menus keyboard accessible.
+- Command palette supports up/down/enter/escape.
+- Repository tree supports arrow keys.
+- Tabs keyboard accessible.
+- Drawers and popovers restore focus on close.
+- Copy buttons reachable.
+- Diff outline reachable.
+
+### 19.2 Screen reader
+
+- Icon-only buttons have labels.
+- Badges include text.
+- Tables use headers.
+- Tree has correct semantics or accessible equivalent.
+- Form errors are associated with fields.
+- Copy actions announce success.
+
+### 19.3 Contrast and motion
+
+- Body text meets WCAG AA.
+- Metadata is readable.
+- Focus visible on all surfaces.
+- Reduced motion respected.
+- No unnecessary animated backgrounds.
+
+---
+
+## 20. State handling requirements
+
+Every major screen must handle:
+
+- Loading.
+- Empty.
+- Error.
+- Permission denied.
+- Not found.
+- Stale data/refetching.
+- Offline or failed request where relevant.
+
+### 20.1 Loading
+
+Use skeletons that preserve layout.
+
+### 20.2 Empty
+
+Use action-oriented copy.
+
+### 20.3 Error
+
+Show specific error and recovery action.
+
+### 20.4 Permission denied
+
+Explain required permission and current role when available.
+
+---
+
+## 21. Testing requirements
+
+### 21.1 Unit/component tests
+
+Test:
+
+- Button variants.
+- Badge variants.
+- Tabs active state.
+- Copy button feedback.
+- Revision selector invalid input.
+- Path breadcrumb collapse.
+- Repository tree keyboard navigation.
+- File viewer safe states.
+- Clone drawer method switching.
+- Command palette keyboard navigation.
+
+### 21.2 Route tests
+
+Test:
+
+- Code route preserves revision/path/view.
+- History filters preserve URL state.
+- Compare route preserves base/head.
+- Repository settings hides admin-only tabs for non-admin.
+- Permission denied state renders properly.
+
+### 21.3 Accessibility tests
+
+Use Testing Library and/or axe where available.
+
+- No critical violations on shell.
+- No critical violations on code route.
+- No critical violations on clone drawer.
+- No critical violations on settings forms.
+- Command palette focus behavior works.
+
+### 21.4 Visual regression/manual QA
+
+Manual screenshots/checks:
+
+- Dashboard.
+- Organization overview.
+- Repository overview.
+- Code tree + file view.
+- Markdown preview.
+- Binary file state.
+- Large file state.
+- Empty repository.
+- History list.
+- Changeset detail/diff.
+- Clone drawer.
+- Command palette.
+- Settings access page.
+- Danger zone.
+
+---
+
+## 22. Implementation phases
+
+### Phase 1 — Theme and CSS foundation
+
+Deliverables:
+
+- Dark-only tokens.
+- Remove orange-led UI styles.
+- Base CSS.
+- Tailwind token mapping.
+- Typography setup.
+- Focus/selection/scrollbar styles.
+
+Acceptance:
+
+- App renders dark-only.
+- No major visibility issues.
+- Existing pages still work.
+
+### Phase 2 — UI primitives
+
+Deliverables:
+
+- Button.
+- Input/Textarea/Select.
+- Badge.
+- Tabs.
+- Table.
+- Drawer.
+- Popover.
+- Tooltip.
+- EmptyState.
+- InlineAlert.
+- Skeleton.
+- CopyButton.
+
+Acceptance:
+
+- Pages start using shared primitives.
+- No page-specific button/input/table styles remain for redesigned screens.
+
+### Phase 3 — App shell redesign
+
+Deliverables:
+
+- TopBar.
+- LeftRail.
+- ContextHeader.
+- RepositoryHeader.
+- RepositoryTabs.
+- Responsive shell behavior.
+
+Acceptance:
+
+- Large branding block removed.
+- Repository context visible.
+- Tabs and top search are visible.
+
+### Phase 4 — Code tab redesign
+
+Deliverables:
+
+- RevisionBar.
+- RevisionSelector.
+- PathBreadcrumb.
+- RepositoryTree.
+- FileViewer.
+- CodeEditorView.
+- MarkdownPreview.
+- Safe file states.
+- Line anchors/range selection if backend data supports it.
+
+Acceptance:
+
+- Code screen is dense, readable, GitHub-dark-like.
+- Revision/path preserved in URL.
+- Tree/file browsing works.
+
+### Phase 5 — Clone drawer and command palette
+
+Deliverables:
+
+- CloneDrawer.
+- Global CommandPalette.
+- Repository file finder.
+- Search trigger styling.
+
+Acceptance:
+
+- Search and clone no longer use center modals.
+- Keyboard shortcuts work.
+
+### Phase 6 — History, changesets, diff
+
+Deliverables:
+
+- HistoryTable.
+- Changeset detail layout.
+- DiffViewer styling.
+- Changed file outline.
+- Filters URL-backed.
+
+Acceptance:
+
+- History is dense and Mercurial-native.
+- Diffs are readable and shareable.
+
+### Phase 7 — Settings, access, audit polish
+
+Deliverables:
+
+- Settings layout.
+- Permission matrix.
+- SSH keys/tokens screens.
+- Audit table.
+- Danger zone.
+
+Acceptance:
+
+- Permission and destructive actions are safe, explicit, and auditable.
+
+### Phase 8 — QA and cleanup
+
+Deliverables:
+
+- Remove unused old styles.
+- Run grep checks.
+- Accessibility QA.
+- Responsive QA.
+- Manual screenshot QA.
+- Update docs if implementation differs.
+
+Acceptance:
+
+- No orange-led UI remains.
+- Dark theme is consistent.
+- Routine center modals removed.
+- Code viewer and clone/search flows pass acceptance criteria.
+
+---
+
+## 23. Codex implementation instruction template
+
+Use this as the first prompt when asking Codex to implement the redesign:
+
+```text
+You are redesigning the RevForge frontend in git@github.com:Brxj19/RevForge.git.
+
+Read DESIGN.md and revforge-ui-ux-redesign-requirements.md before making changes.
+The required direction is dark-only, OpenCode-inspired, monospace-first, repository-first, and no orange UI.
+
+Hard constraints:
+- Do not add a light theme toggle.
+- Do not use orange as brand/accent/focus/CTA/warning/sidebar color.
+- Do not use center modals for search, clone, revision selector, or file finder.
+- Use CSS variables/Tailwind tokens instead of random page-level colors.
+- Build reusable UI primitives before page-specific polish.
+- Code viewer must use GitHub-dark-style source reading.
+- Preserve Mercurial vocabulary: Changeset, Revision, Bookmark, Branch, Tag, Clone, Pull, Push.
+- Keep repository context visible: org, repo, revision, path, role, provisioning state.
+
+Work in small commits by phase.
+Before committing, run lint/typecheck/tests if available and grep for banned old color/style patterns.
+Stop and report if unexpected unrelated files change.
+```
+
+---
+
+## 24. Final acceptance checklist
+
+### Visual
+
+- [ ] App is dark-only.
+- [ ] Orange-led UI is removed.
+- [ ] Text is readable everywhere.
+- [ ] Top bar is compact.
+- [ ] Left rail is compact.
+- [ ] Repository header is persistent.
+- [ ] Code viewer looks like a polished GitHub-dark reader.
+- [ ] Diff colors are readable.
+- [ ] No decorative gradients/glass/neon.
+
+### UX
+
+- [ ] Developer can reach repository code in under three clicks after login.
+- [ ] Revision/path/view are URL-backed.
+- [ ] Clone opens in drawer/inline panel.
+- [ ] Search opens in top command palette.
+- [ ] Revision selector opens in popover.
+- [ ] File finder preserves revision.
+- [ ] Binary/large/empty/missing states are safe and clear.
+- [ ] Permission and provisioning states are explicit.
+
+### Engineering
+
+- [ ] Design tokens exist.
+- [ ] Tailwind maps to semantic tokens.
+- [ ] Shared UI primitives exist.
+- [ ] Page-specific styling reduced.
+- [ ] Tests added/updated for major components.
+- [ ] Old orange variables/classes removed from app source.
+- [ ] Accessibility checks pass.
+
+---
+
+## 25. Summary for implementers
+
+RevForge should become a dark, terminal-aware, monospaced developer forge. The redesign must prioritize repository browsing and code reading. Use OpenCode as the mood reference, Kallithea as the worktree-density reference, GitHub dark as the code-viewing reference, and GitLab/enterprise forges as the admin/permission clarity reference. Remove orange. Avoid routine center modals. Build proper CSS tokens and reusable components. Make the Code tab excellent.
+
+---
+
+## 26. Detailed route-by-route implementation checklist
+
+### 26.1 `/login`
+
+Implementation tasks:
+
+- Replace any old light/orange styling with dark tokenized auth layout.
+- Use shared `Input`, `Button`, `InlineAlert` components.
+- Show field-level errors.
+- Preserve redirect query parameter.
+- Add loading state on submit.
+
+Acceptance criteria:
+
+- Login screen remains readable at 320px width.
+- Submit button has visible focus state.
+- Failed login does not clear email field.
+- There is no marketing hero or decorative background.
+
+### 26.2 `/register`
+
+Implementation tasks:
+
+- Use same auth shell as login.
+- Show password rules before submit.
+- Explain registration mode.
+- Use inline success/error states.
+
+Acceptance criteria:
+
+- Password validation is visible before and after submit.
+- User is guided to create/join organization after registration.
+
+### 26.3 `/dashboard`
+
+Implementation tasks:
+
+- Replace large cards with dense sections.
+- Build `ContinueWorkingTable`.
+- Build `NeedsAttentionList`.
+- Build `RepositoryTable` shared with org view if possible.
+- Add quick actions as small toolbar buttons.
+
+Acceptance criteria:
+
+- First visible row after heading helps user open a repository.
+- No meaningless graphs or welcome hero.
+- Empty state has one clear CTA.
+
+### 26.4 `/organizations`
+
+Implementation tasks:
+
+- Use dense organization/repository table.
+- Add filters with URL state.
+- Add compact member/team summary.
+- Use consistent badges.
+
+Acceptance criteria:
+
+- User can find a repository by name quickly.
+- Role and provisioning state are visible per row.
+
+### 26.5 `/organizations/:org/repositories/:repo`
+
+Implementation tasks:
+
+- Add persistent `RepositoryHeader`.
+- Add operational summary cards.
+- Add README preview if available.
+- Add Clone drawer trigger.
+
+Acceptance criteria:
+
+- User can clone or browse code without scrolling.
+- Repository state is explicit.
+
+### 26.6 `/organizations/:org/repositories/:repo/code`
+
+Implementation tasks:
+
+- Implement URL-backed revision/path/view state.
+- Build revision bar.
+- Build resizable tree/content split.
+- Build file header/action toolbar.
+- Build GitHub-dark code view.
+- Build Markdown preview.
+- Build safe file states.
+- Add keyboard shortcuts `/` and `t`.
+
+Acceptance criteria:
+
+- Refresh preserves selected revision and path.
+- File tree and file viewer are both visible on desktop.
+- Code line anchors work.
+- Binary/large/missing/empty states are handled.
+
+### 26.7 `/history` or `/commits`
+
+Implementation tasks:
+
+- Rename visible label to History or Changesets.
+- Build dense history table.
+- Add filter bar.
+- Preserve filters in URL.
+- Add copy hash/permalink actions.
+
+Acceptance criteria:
+
+- One compact row per changeset.
+- User can filter by branch/bookmark/author/path where backend supports it.
+
+### 26.8 `/changesets/:node`
+
+Implementation tasks:
+
+- Build changeset identity header.
+- Build metadata grid.
+- Build changed files summary.
+- Build diff controls.
+- Build diff viewer.
+
+Acceptance criteria:
+
+- Full changeset context is visible before diff.
+- User can copy full node hash.
+- User can browse files at this revision.
+
+### 26.9 `/branches`, `/bookmarks`, `/tags`
+
+Implementation tasks:
+
+- Use shared refs table.
+- Treat bookmarks as first-class.
+- Add browse/history/compare/copy actions.
+
+Acceptance criteria:
+
+- Each ref row exposes target changeset and action to browse code.
+
+### 26.10 `/compare`
+
+Implementation tasks:
+
+- Add base/head selector.
+- Preserve state in URL.
+- Show direction clearly.
+- Show summary before diff.
+
+Acceptance criteria:
+
+- Direction is never ambiguous.
+- User can swap base/head.
+
+### 26.11 Repository settings routes
+
+Implementation tasks:
+
+- Build settings layout with subnav.
+- Implement Access table/matrix.
+- Implement SSH/token guidance where relevant.
+- Implement danger zone with typed confirmation.
+
+Acceptance criteria:
+
+- Admin can understand who can clone/pull/push/admin.
+- Dangerous actions require confirmation.
+
+---
+
+## 27. Detailed component acceptance contracts
+
+### 27.1 `Button`
+
+Variants:
+
+```text
+primary
+secondary
+ghost
+subtle
+danger
+icon
+```
+
+Acceptance:
+
+- All variants readable on dark background.
+- Focus ring visible.
+- Disabled state readable.
+- Loading state does not change button width dramatically.
+- Primary uses blue accent, not orange.
+
+### 27.2 `Badge`
+
+Variants:
+
+```text
+visibility: public/private/internal
+state: ready/provisioning/failed/archived/unprovisioned
+role: read/write/admin/owner
+ref: branch/bookmark/tag
+semantic: info/success/warning/danger
+```
+
+Acceptance:
+
+- Text label always present.
+- Icon optional but not required.
+- Badge color is subtle.
+- Contrast is readable.
+
+### 27.3 `Table`
 
 Requirements:
 
-- Full keyboard navigation for app shell, tables, dialogs, tree, file viewer, diff viewer, and clone panel.
-- Visible focus ring distinct from hover state.
-- Do not rely on color alone for statuses or diffs.
-- Diff additions/deletions must include symbols/text and accessible contrast.
-- Icon-only controls require `aria-label`.
-- Dialogs must trap focus and restore focus on close.
-- Tables must use proper headers and sort state.
-- Error messages must be associated with form fields.
-- Support 200% zoom without losing functionality.
-- Respect `prefers-reduced-motion`.
+- Dense row mode.
+- Sticky header option.
+- Empty state slot.
+- Error state slot.
+- Row action cell.
+- Keyboard row activation where needed.
+
+Acceptance:
+
+- Row hover visible.
+- Selected row visible.
+- Horizontal scroll works for wide content.
+
+### 27.4 `Drawer`
+
+Requirements:
+
+- Right side by default.
+- Width tokens.
+- Header/body/footer slots.
+- Escape closes.
+- Focus handled correctly.
+- Mobile full-width.
+
+Acceptance:
+
+- Clone drawer uses this component.
+- Drawer does not look like a center modal.
+
+### 27.5 `CommandPalette`
+
+Requirements:
+
+- Top-aligned.
+- Search input.
+- Grouped result list.
+- Keyboard navigation.
+- Result action execution.
+- Loading/empty states.
+
+Acceptance:
+
+- `Ctrl/Cmd + K` opens.
+- Esc closes.
+- Enter activates selected result.
+- Focus returns after close.
+
+### 27.6 `RepositoryTree`
+
+Requirements:
+
+- Dense rows.
+- File/folder icons.
+- Active state.
+- Optional metadata.
+- Keyboard navigation.
+- Loading/empty/error states.
+
+Acceptance:
+
+- Current path visible.
+- No layout jump on hover actions.
+
+### 27.7 `CodeEditorView`
+
+Requirements:
+
+- GitHub-dark editor styling.
+- Line numbers.
+- Syntax highlighting.
+- Line hash navigation.
+- Range selection.
+- Copy actions.
+
+Acceptance:
+
+- Large content does not freeze the browser.
+- Unknown language still renders readably.
 
 ---
 
-## 10. Responsive Requirements
+## 28. Data and API assumptions to preserve UI quality
 
-RevForge is desktop-first because code browsing and diff review need space. Mobile is supported honestly, not by cramming desktop review UIs.
+The UI should be designed to use these fields when backend exposes them. If unavailable, render graceful fallbacks.
 
-| Width | Behavior |
-|---|---|
-| `>=1280px` | Full shell, tree + file panels, detailed tables, split diff available. |
-| `900–1279px` | Collapsible left rail, repository tabs visible, file tree can shrink. |
-| `640–899px` | Tree becomes drawer, tables become priority rows, diff remains unified. |
-| `<640px` | Browse/history/clone/settings basics only; complex review/diff shows “best on desktop” guidance. |
+### 28.1 Repository row
 
-Mobile code browser:
-
-```text
-[Revision selector]
-[Path breadcrumb]
-[Open tree]
-[File actions]
-[Code viewer]
+```ts
+type RepositoryListItem = {
+  id: string;
+  organizationSlug: string;
+  slug: string;
+  name: string;
+  description?: string;
+  visibility: 'public' | 'private' | 'internal';
+  provisioningState: 'unprovisioned' | 'provisioning' | 'ready' | 'failed';
+  archived: boolean;
+  defaultRevision?: string;
+  latestChangeset?: {
+    node: string;
+    shortNode: string;
+    message: string;
+    authorName: string;
+    authoredAt: string;
+  };
+  currentUserRole: 'read' | 'write' | 'admin' | 'owner';
+  updatedAt: string;
+};
 ```
 
----
+### 28.2 Tree entry
 
-## 11. Implementation Requirements
-
-### 11.1 Frontend architecture
-
-- Keep server state in TanStack Query.
-- Keep navigation state in URL params.
-- Keep only temporary UI state in React local state.
-- Extract shared components out of `routes/pages.tsx`.
-- Create a dedicated repository feature folder.
-
-Recommended structure:
-
-```text
-frontend/src/
-  app/
-    router.tsx
-    providers.tsx
-  components/
-    ui/
-      button.tsx
-      badge.tsx
-      dialog.tsx
-      data-table.tsx
-      command-palette.tsx
-      copy-button.tsx
-    layout/
-      app-shell.tsx
-      top-bar.tsx
-      left-rail.tsx
-    repository/
-      repository-header.tsx
-      repository-tabs.tsx
-      revision-selector.tsx
-      clone-dialog.tsx
-      file-tree.tsx
-      file-viewer.tsx
-      path-breadcrumbs.tsx
-      changeset-row.tsx
-      diff-viewer.tsx
-      audit-event-table.tsx
-  routes/
-    dashboard.tsx
-    auth/
-    organizations/
-    repositories/
-  lib/
-    api.ts
-    routes.ts
-    formatting.ts
-    keyboard.ts
-  styles/
-    tokens.css
-    index.css
+```ts
+type RepositoryTreeEntry = {
+  path: string;
+  name: string;
+  type: 'file' | 'directory' | 'symlink' | 'subrepo' | 'unknown';
+  sizeBytes?: number;
+  mode?: string;
+  language?: string;
+  latestChangeset?: {
+    node: string;
+    shortNode: string;
+    authorName?: string;
+    authoredAt?: string;
+    message?: string;
+  };
+};
 ```
 
-### 11.2 Routing requirements
+### 28.3 File content
 
-Current routes can remain, but visible labels and new aliases should improve UX.
-
-Recommended routes:
-
-```text
-/
-/login
-/register
-/organizations
-/organizations/:org
-/organizations/:org/settings
-/organizations/:org/repositories/:repo
-/organizations/:org/repositories/:repo/code?revision=&path=
-/organizations/:org/repositories/:repo/history?branch=&author=&path=&q=
-/organizations/:org/repositories/:repo/changesets/:node
-/organizations/:org/repositories/:repo/branches
-/organizations/:org/repositories/:repo/bookmarks
-/organizations/:org/repositories/:repo/tags
-/organizations/:org/repositories/:repo/compare?base=&head=
-/organizations/:org/repositories/:repo/reviews
-/organizations/:org/repositories/:repo/reviews/:id
-/organizations/:org/repositories/:repo/activity
-/organizations/:org/repositories/:repo/settings
-/me/ssh-keys
-/me/tokens
-/me/sessions
+```ts
+type RepositoryFile = {
+  path: string;
+  revision: string;
+  node: string;
+  name: string;
+  sizeBytes: number;
+  lineCount?: number;
+  mode?: string;
+  language?: string;
+  content?: string;
+  encoding?: 'utf-8' | 'base64' | 'binary';
+  renderState: 'code' | 'markdown' | 'binary' | 'large' | 'empty' | 'unsupported';
+  latestChangeset?: {
+    node: string;
+    shortNode: string;
+    authorName?: string;
+    authoredAt?: string;
+  };
+};
 ```
 
-### 11.3 Testing requirements
+### 28.4 Changeset
 
-Add UI tests for:
-
-- app shell navigation;
-- protected route redirect;
-- organization repository table empty/loading/error states;
-- repository header badges/actions by permission;
-- revision selector grouping;
-- code browser path and revision URL persistence;
-- copy path/permalink behavior;
-- clone dialog HTTPS/SSH tabs;
-- history filters preserved in URL;
-- changeset detail displays node, parents, refs, changed files;
-- danger confirmation requires exact slug;
-- keyboard access for command palette and file finder.
-
----
-
-## 12. Redesign Phasing Plan
-
-### Phase UI-0: Design foundation cleanup
-
-Goal: prepare UI system without changing product behavior.
-
-Tasks:
-
-- Extract buttons, inputs, badges, surfaces, states, tabs, dialogs.
-- Add design tokens and semantic Tailwind aliases.
-- Replace `window.confirm` with reusable confirmation dialog.
-- Add Storybook or lightweight `/dev/ui` preview route.
-- Keep existing tests passing.
-
-### Phase UI-1: App shell and navigation
-
-Tasks:
-
-- Replace large left branding panel with professional top bar + left rail.
-- Add global search/command palette shell.
-- Add user menu with SSH keys/tokens placeholders if backend routes exist.
-- Add repository-aware context header.
-
-### Phase UI-2: Organization and repository overview
-
-Tasks:
-
-- Redesign organization repository list as dense searchable table.
-- Redesign repository overview with latest changeset, clone/access, health, quick links, README preview.
-- Add permission-aware actions.
-
-### Phase UI-3: Kallithea-style code/worktree browser
-
-Tasks:
-
-- Build two-pane tree + file viewer layout.
-- Add revision selector.
-- Add path breadcrumbs.
-- Add file actions: raw, history, blame placeholder, copy path, copy permalink.
-- Add binary/large/empty states.
-- Preserve revision/path in URL.
-
-### Phase UI-4: History and changeset detail
-
-Tasks:
-
-- Redesign changeset list with graph lane, filters, refs, file counts.
-- Redesign changeset detail with metadata, changed files, diff controls.
-- Add diff file outline and anchors.
-
-### Phase UI-5: Clone/access/settings polish
-
-Tasks:
-
-- Build high-trust clone dialog.
-- Redesign SSH key and token management.
-- Redesign permissions matrix.
-- Add settings danger zone.
-
-### Phase UI-6: Reviews, audit, and operational UI
-
-Tasks:
-
-- Build review list/detail shell.
-- Build audit table and filters.
-- Add webhook delivery UI when backend supports it.
-
----
-
-## 13. Acceptance Checklist
-
-A redesigned screen is acceptable only when:
-
-- Primary purpose is clear within 5 seconds.
-- Repository/org/revision/path context is visible where relevant.
-- Loading, empty, error, and permission-denied states exist.
-- Keyboard navigation works.
-- Copy actions have visible feedback.
-- Destructive actions use explicit confirmation.
-- URLs preserve useful state.
-- Tables are readable and sortable where relevant.
-- Diff/file/code views are not decorative or cramped.
-- Mobile layout does not break essential workflows.
-- Light and dark themes remain readable.
-- Mercurial vocabulary is correct.
-- Tests cover the main behavior.
-
----
-
-## 14. Codex Prompt for UI Redesign
-
-Use this prompt to start the redesign work:
-
-```text
-You are working in the RevForge repository.
-
-Goal:
-Redesign the entire RevForge frontend UI/UX into a serious, dense, Mercurial-native developer forge UI. Follow docs/revforge-ui-ux-redesign-requirements.md and preserve existing backend behavior. Focus especially on a Kallithea-inspired repository code/worktree browser while borrowing the best navigation, clone, history, diff, review, and settings patterns from GitHub and GitLab.
-
-Hard requirements:
-- Create a new branch for each phase.
-- Do not bypass checks, reviews, or branch protection.
-- Keep the working tree clean after each phase.
-- Commit, push, open PR, wait for checks, squash-merge, delete remote branch, switch to main, pull --ff-only, and delete local branch after every phase.
-- Preserve Mercurial vocabulary: changeset, revision, branch, bookmark, tag, clone, pull, push, compare, review.
-- Keep server state in TanStack Query.
-- Keep repository path/revision/filter state in URL params.
-- Extract shared UI components out of route files.
-- No generic SaaS dashboard visuals, neon gradients, glassmorphism, decorative charts, or excessive animation.
-- Every screen must include loading, empty, error, permission-denied, and narrow-width behavior where relevant.
-- Every destructive action must use a proper confirmation dialog, not window.confirm.
-
-Recommended first phase:
-Phase UI-0 Design Foundation Cleanup
-1. Create reusable UI components: Button, IconButton, Badge, Tabs, Dialog, Drawer, DataTable, EmptyState, ErrorState, Skeleton, CopyButton.
-2. Add semantic design tokens for color, spacing, typography, radius, elevation, focus ring, and diff colors.
-3. Refactor existing page-local primitives to shared components without changing behavior.
-4. Add tests for shared component states and protected route behavior.
-5. Run format, lint, typecheck, tests, and build.
-
-Deliverables:
-- Updated frontend components and styles.
-- Passing frontend tests.
-- Short PR summary with screenshots or before/after notes when possible.
+```ts
+type Changeset = {
+  node: string;
+  shortNode: string;
+  message: string;
+  authorName: string;
+  authorEmail?: string;
+  authoredAt: string;
+  branch?: string;
+  bookmarks?: string[];
+  tags?: string[];
+  parents: string[];
+  children?: string[];
+  changedFiles: Array<{
+    path: string;
+    status: 'added' | 'modified' | 'deleted' | 'renamed' | 'binary';
+    additions?: number;
+    deletions?: number;
+  }>;
+};
 ```
 
+UI fallback rule: if any optional metadata is missing, hide that small metadata item but keep row layout stable. Do not show `undefined`, `null`, or placeholder noise.
+
 ---
 
-## 15. Final Design Direction Summary
+## 29. Performance requirements
 
-RevForge should become a focused Mercurial forge where the repository browser is the center of the product. The UI should feel closer to a calm engineering console than a dashboard app. The most important redesign win is the Code tab: a fast, dense, revision-aware tree and file viewer with excellent breadcrumbs, file metadata, raw/blame/history/permalink actions, and safe states for binary, large, empty, and permission-limited repositories.
+### 29.1 Code viewer performance
 
-If the repository browser feels excellent, the rest of RevForge will feel credible.
+- Do not syntax-highlight very large files synchronously on the main thread.
+- Respect inline preview size limit.
+- Consider virtualization for files above a safe line threshold.
+- Keep line selection state lightweight.
+- Avoid re-rendering the entire tree when only selected file changes.
+
+### 29.2 Tree performance
+
+- Lazy-load nested directories if backend supports it.
+- Cache tree data by repository + revision + path.
+- Preserve scroll position when returning to a directory.
+- Avoid loading all repository files for huge repos unless file finder requires an index.
+
+### 29.3 Search performance
+
+- Debounce remote search.
+- Show local recent results instantly.
+- Cancel stale requests.
+- Display loading state in result list, not as full-page spinner.
+
+### 29.4 Diff performance
+
+- Collapse huge/generated files by default.
+- Allow user to expand deliberately.
+- Keep changed-file outline usable even when diff body is large.
+- Do not render all split diff rows if it causes poor performance.
+
+---
+
+## 30. Security and trust UX requirements
+
+### 30.1 Clone/access
+
+- Never hide auth requirements.
+- Token copy/show-once behavior must be explicit.
+- SSH key fingerprint must be visible.
+- Last-used timestamps should be shown where available.
+- Disabled clone must explain if the reason is permission, repository state, or transport configuration.
+
+### 30.2 Permissions
+
+- Effective access must distinguish inherited team/org permissions from direct repository overrides.
+- Permission escalation should show confirmation copy.
+- Removing access should explain clone/push impact.
+- Audit event link should appear after permission changes if backend supports it.
+
+### 30.3 Dangerous actions
+
+Danger actions include:
+
+- Archive repository.
+- Delete repository.
+- Transfer repository.
+- Remove user/team access.
+- Revoke token.
+- Delete SSH key.
+- Disable hooks/integrations.
+
+Requirements:
+
+- Consequence copy.
+- Typed confirmation when destructive.
+- Clear cancel path.
+- Audit event after completion.
+
+---
+
+## 31. Manual QA script
+
+Use this script manually before considering the redesign complete.
+
+### 31.1 Navigation
+
+1. Sign in.
+2. Open dashboard.
+3. Open an organization.
+4. Open a repository.
+5. Open Code tab.
+6. Switch revision.
+7. Open nested folder.
+8. Open a file.
+9. Refresh page.
+10. Confirm same revision/path/view appears.
+
+### 31.2 Code viewer
+
+1. Open a TypeScript or Python file.
+2. Confirm syntax highlight.
+3. Click line 10.
+4. Shift-click line 20.
+5. Copy permalink.
+6. Open permalink in new tab.
+7. Confirm selected line/range is preserved.
+
+### 31.3 Clone
+
+1. Click Clone in repository header.
+2. Confirm drawer opens from side.
+3. Switch SSH/HTTPS.
+4. Copy command.
+5. Confirm inline copied state.
+6. Confirm auth guidance is visible.
+
+### 31.4 Search
+
+1. Press `Ctrl/Cmd + K`.
+2. Confirm top command palette opens.
+3. Search repository name.
+4. Use keyboard to select result.
+5. Press Enter.
+6. Confirm navigation.
+7. Press `t` in repo context.
+8. Confirm file finder preserves revision.
+
+### 31.5 Settings
+
+1. Open repository settings.
+2. Open access page.
+3. Confirm effective permissions visible.
+4. Trigger a dangerous action flow without completing it.
+5. Confirm typed confirmation is required.
+
+---
+
+## 32. Completion definition for Codex phases
+
+A phase is complete only when:
+
+- It compiles.
+- It passes available lint/typecheck/tests.
+- It does not introduce unrelated file changes.
+- It follows the dark-only/no-orange direction.
+- It does not add routine center modals.
+- It uses shared primitives where applicable.
+- It updates tests for new behavior.
+- It documents any backend limitation or fallback.
+
+Suggested final report format:
+
+```text
+Phase completed: <name>
+Changed files:
+- ...
+Verification:
+- npm run typecheck
+- npm run lint
+- npm test
+Notes:
+- Backend limitation/fallback if any
+```
