@@ -34,6 +34,7 @@ import { DataTable } from "../components/ui/data-table";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Surface } from "../components/ui/surface";
+import { AuthPageLayout, LandingPage } from "./public-pages";
 import {
   addOrganizationMember,
   browseRepository,
@@ -138,6 +139,153 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function EyeIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M1.5 7s2-3.5 5.5-3.5S12.5 7 12.5 7s-2 3.5-5.5 3.5S1.5 7 1.5 7Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <circle cx="7" cy="7" r="1.5" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M2 2l10 10"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M2.5 7s2-3.5 4.5-3.5c.8 0 1.5.2 2.1.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M11.5 7s-2 3.5-4.5 3.5c-.8 0-1.5-.2-2.1-.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function PasswordChecks({ password }: { password: string }) {
+  const checks = [
+    {
+      label: "At least 12 characters",
+      passed: password.length >= 12,
+    },
+    {
+      label: "Contains a lowercase letter",
+      passed: /[a-z]/.test(password),
+    },
+    {
+      label: "Contains an uppercase letter",
+      passed: /[A-Z]/.test(password),
+    },
+    {
+      label: "Contains a number",
+      passed: /[0-9]/.test(password),
+    },
+    {
+      label: "Contains a symbol",
+      passed: /[^A-Za-z0-9\s]/.test(password),
+    },
+  ];
+
+  return (
+    <div className="grid gap-2 rounded-md border border-border bg-surface-subtle p-3">
+      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
+        Password criteria
+      </p>
+      <ul className="grid gap-1.5">
+        {checks.map((check) => (
+          <li key={check.label} className="flex items-start gap-2 text-sm">
+            <span
+              className={clsx(
+                "mt-0.5 flex h-4 w-4 items-center justify-center border text-[10px] font-bold",
+                check.passed
+                  ? "border-success-border bg-success-subtle text-success"
+                  : "border-border bg-canvas text-text-muted",
+              )}
+              aria-hidden="true"
+            >
+              {check.passed ? "+" : "-"}
+            </span>
+            <span
+              className={
+                check.passed ? "text-text-primary" : "text-text-secondary"
+              }
+            >
+              {check.label}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PasswordField({
+  autoComplete,
+  label,
+  onChange,
+  onToggleVisibility,
+  showPassword,
+  value,
+}: {
+  autoComplete: string;
+  label: string;
+  onChange: (value: string) => void;
+  onToggleVisibility: () => void;
+  showPassword: boolean;
+  value: string;
+}) {
+  return (
+    <div className="grid gap-1">
+      <label className="text-xs font-medium text-text-secondary">{label}</label>
+      <div className="relative">
+        <Input
+          aria-label={label}
+          autoComplete={autoComplete}
+          className="pr-11"
+          type={showPassword ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button
+          type="button"
+          aria-label={showPassword ? "Hide password" : "Show password"}
+          className="absolute right-2 top-1/2 -translate-y-1/2 border border-border bg-surface-subtle px-2 py-1 text-text-secondary transition-colors hover:border-border-strong hover:bg-surface-hover hover:text-text-primary"
+          onClick={onToggleVisibility}
+        >
+          {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AuthForm({ mode }: { mode: "login" | "register" }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -146,6 +294,9 @@ function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -169,6 +320,38 @@ function AuthForm({ mode }: { mode: "login" | "register" }) {
     if (mode === "register" && !displayName.trim()) {
       setLocalError("Display name is required.");
       return;
+    }
+
+    if (mode === "register") {
+      if (password !== confirmPassword) {
+        setLocalError("Passwords do not match.");
+        return;
+      }
+
+      if (password.length < 12) {
+        setLocalError("Password must be at least 12 characters long.");
+        return;
+      }
+
+      if (!/[a-z]/.test(password)) {
+        setLocalError("Password must include a lowercase letter.");
+        return;
+      }
+
+      if (!/[A-Z]/.test(password)) {
+        setLocalError("Password must include an uppercase letter.");
+        return;
+      }
+
+      if (!/[0-9]/.test(password)) {
+        setLocalError("Password must include a number.");
+        return;
+      }
+
+      if (!/[^A-Za-z0-9\s]/.test(password)) {
+        setLocalError("Password must include a symbol.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -196,105 +379,81 @@ function AuthForm({ mode }: { mode: "login" | "register" }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <Surface className="order-2 lg:order-1">
-          <PageHeader
-            eyebrow={mode === "login" ? "Sign in" : "Register"}
-            title={
-              mode === "login"
-                ? "Continue into RevForge"
-                : "Create your RevForge account"
-            }
-            description={
-              mode === "login"
-                ? "Use your RevForge identity to reach organizations, repositories, and Mercurial transport workflows."
-                : "Local credentials support self-hosted deployments without relying on third-party identity providers."
-            }
+    <AuthPageLayout
+      description={
+        mode === "login"
+          ? "Continue to your repositories, changesets, and team workflows."
+          : "Join your team's Mercurial repository forge."
+      }
+      mode={mode}
+      panelTitle={mode === "login" ? "Sign in" : "Create account"}
+      title={
+        mode === "login"
+          ? "Sign in to your repository forge"
+          : "Create your RevForge account"
+      }
+    >
+      <form className="grid gap-4" onSubmit={onSubmit}>
+        <FormField label="Email">
+          <Input
+            aria-label="Email"
+            autoComplete="email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
           />
-          <form className="mt-5 grid gap-4" onSubmit={onSubmit}>
-            <FormField label="Email">
-              <Input
-                aria-label="Email"
-                autoComplete="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </FormField>
-            {mode === "register" ? (
-              <FormField
-                label="Display name"
-                hint="Shown in repository history, activity, and reviews."
-              >
-                <Input
-                  aria-label="Display name"
-                  autoComplete="name"
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                />
-              </FormField>
-            ) : null}
-            <FormField
-              label="Password"
-              hint={
-                mode === "register"
-                  ? "Use a strong password. Registration remains admin-controlled when deployments disable open signup."
-                  : undefined
-              }
-            >
-              <Input
-                aria-label="Password"
-                autoComplete={
-                  mode === "login" ? "current-password" : "new-password"
-                }
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </FormField>
-            {localError ? <MessageBanner message={localError} /> : null}
-            {errorMessage ? <MessageBanner message={errorMessage} /> : null}
-            <div className="flex flex-wrap items-center gap-3">
-              <Button loading={submitting} type="submit">
-                {mode === "login" ? "Sign in" : "Create account"}
-              </Button>
-              <Link
-                className="text-sm text-text-secondary hover:text-text-primary"
-                to={mode === "login" ? "/register" : "/login"}
-              >
-                {mode === "login"
-                  ? "Need an account? Register"
-                  : "Already registered? Sign in"}
-              </Link>
-            </div>
-          </form>
-        </Surface>
-
-        <Surface className="order-1 lg:order-2">
-          <PageHeader
-            eyebrow="Trust model"
-            title="Calm operational control for Mercurial-native teams"
-            description="RevForge keeps repository identity, permissions, clone access, and revision history explicit on every screen."
+        </FormField>
+        {mode === "register" ? (
+          <FormField
+            label="Display name"
+            hint="Shown in repository history, activity, and reviews."
+          >
+            <Input
+              aria-label="Display name"
+              autoComplete="name"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+            />
+          </FormField>
+        ) : null}
+        <PasswordField
+          autoComplete={mode === "login" ? "current-password" : "new-password"}
+          label="Password"
+          onChange={setPassword}
+          onToggleVisibility={() => setShowPassword((current) => !current)}
+          showPassword={showPassword}
+          value={password}
+        />
+        {mode === "register" ? <PasswordChecks password={password} /> : null}
+        {mode === "register" ? (
+          <PasswordField
+            autoComplete="new-password"
+            label="Confirm password"
+            onChange={setConfirmPassword}
+            onToggleVisibility={() =>
+              setShowConfirmPassword((current) => !current)
+            }
+            showPassword={showConfirmPassword}
+            value={confirmPassword}
           />
-          <div className="mt-5 grid gap-3">
-            {[
-              "Repository paths, revisions, and filters remain URL-addressable.",
-              "Control-plane changes stay behind authenticated sessions with CSRF protection.",
-              "Clone guidance never exposes personal access tokens in URLs or browser history.",
-              "Dangerous settings require explicit confirmation instead of accidental clicks.",
-            ].map((item) => (
-              <div
-                key={item}
-                className="rounded-md border border-border bg-canvas px-4 py-3 text-sm text-text-secondary"
-              >
-                {item}
-              </div>
-            ))}
-          </div>
-        </Surface>
-      </div>
-    </div>
+        ) : null}
+        {localError ? <MessageBanner message={localError} /> : null}
+        {errorMessage ? <MessageBanner message={errorMessage} /> : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button loading={submitting} type="submit">
+            {mode === "login" ? "Sign in" : "Create account"}
+          </Button>
+          <Link
+            className="text-sm text-text-secondary hover:text-text-primary"
+            to={mode === "login" ? "/register" : "/login"}
+          >
+            {mode === "login"
+              ? "Need an account? Register"
+              : "Already registered? Sign in"}
+          </Link>
+        </div>
+      </form>
+    </AuthPageLayout>
   );
 }
 
@@ -713,6 +872,16 @@ export function DashboardPage() {
       </Fieldset>
     </div>
   );
+}
+
+export function HomePage() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingState label="Restoring your RevForge session." />;
+  }
+
+  return isAuthenticated ? <DashboardPage /> : <LandingPage />;
 }
 
 export function LoginPage() {

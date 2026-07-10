@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppProviders } from "../app/providers";
 import {
-  DashboardPage,
+  HomePage,
   LoginPage,
   OrganizationDetailPage,
   OrganizationsPage,
@@ -16,7 +16,7 @@ function renderWithProviders(route: string) {
     <AppProviders>
       <MemoryRouter initialEntries={[route]}>
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/organizations" element={<OrganizationsPage />} />
@@ -97,12 +97,12 @@ afterEach(() => {
 });
 
 describe("app routes", () => {
-  test("renders the dashboard route", async () => {
+  test("renders the landing route", async () => {
     renderWithProviders("/");
 
     expect(
       await screen.findByRole("heading", {
-        name: /Mercurial hosting with calm operational control/i,
+        name: /focused repository forge/i,
       }),
     ).toBeInTheDocument();
   });
@@ -111,8 +111,11 @@ describe("app routes", () => {
     renderWithProviders("/login");
 
     expect(
-      await screen.findByRole("heading", { name: /continue into revforge/i }),
+      await screen.findByRole("heading", {
+        name: /sign in to your repository forge/i,
+      }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back/i })).toBeInTheDocument();
   });
 
   test("renders the register route", async () => {
@@ -123,6 +126,8 @@ describe("app routes", () => {
         name: /create your revforge account/i,
       }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/password criteria/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
   });
 
   test("redirects anonymous users away from protected organization routes", async () => {
@@ -130,7 +135,9 @@ describe("app routes", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: /continue into revforge/i }),
+        screen.getByRole("heading", {
+          name: /sign in to your repository forge/i,
+        }),
       ).toBeInTheDocument();
     });
   });

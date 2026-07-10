@@ -602,8 +602,17 @@ export function AppShell() {
   const repositoryRevision = new URLSearchParams(location.search).get(
     "revision",
   );
+  const isPublicRoute =
+    !isAuthenticated &&
+    (location.pathname === "/" ||
+      location.pathname === "/login" ||
+      location.pathname === "/register");
 
   useEffect(() => {
+    if (isPublicRoute) {
+      return;
+    }
+
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const interactive =
@@ -637,14 +646,14 @@ export function AppShell() {
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isRepositoryRoute]);
+  }, [isPublicRoute, isRepositoryRoute]);
 
   useEffect(() => {
     setMobileNavOpen(false);
   }, [location.pathname]);
 
   const paletteItems = useMemo<CommandPaletteItem[]>(() => {
-    const baseItems = primaryNav.map((item) => ({
+    const baseItems: CommandPaletteItem[] = primaryNav.map((item) => ({
       id: item.label,
       label: item.label,
       detail: item.description,
@@ -731,6 +740,14 @@ export function AppShell() {
     ];
   }, [location.search, organizationSlug, repositorySlug]);
 
+  if (isPublicRoute) {
+    return (
+      <div className="min-h-screen bg-canvas text-text-primary">
+        <Outlet />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-canvas text-text-primary">
       <header className="sticky top-0 z-40 border-b border-border bg-canvas/96 backdrop-blur-xl">
@@ -746,9 +763,12 @@ export function AppShell() {
           </IconButton>
 
           <NavLink to="/" className="flex shrink-0 items-center gap-3">
-            <div className="grid h-8 w-8 place-items-center rounded-sm border border-border bg-surface-muted font-mono text-[11px] font-bold tracking-[0.2em] text-text-primary">
-              RF
-            </div>
+            <img
+              alt=""
+              aria-hidden="true"
+              className="block h-8 w-8 shrink-0 object-contain"
+              src="/revforge-logo.png"
+            />
             <div className="hidden sm:block">
               <div className="font-mono text-[13px] font-semibold uppercase tracking-[0.14em] text-text-primary">
                 RevForge
