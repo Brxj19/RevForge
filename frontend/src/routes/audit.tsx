@@ -1,13 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { SectionHeader } from "../components/ui/section-header";
-import { Surface } from "../components/ui/surface";
 import { Badge } from "../components/ui/badge";
-import { EmptyState } from "../components/ui/empty-state";
-import { LoadingState } from "../components/ui/loading-state";
-import { ErrorState } from "../components/ui/error-state";
-import { TextInput } from "../components/ui/text-input";
+import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import { EmptyState } from "../components/states";
+import { LoadingState } from "../components/states";
+import { ErrorState } from "../components/states";
 
 interface AuditEvent {
   id: string;
@@ -151,7 +149,9 @@ export function AuditPage() {
     queryFn: async () => FAKE_EVENTS,
   });
 
-  if (query.isLoading) return <LoadingState label="Loading audit events." />;
+  if (query.isLoading) {
+    return <LoadingState label="Loading audit events." />;
+  }
   if (query.isError) {
     return (
       <ErrorState
@@ -169,20 +169,29 @@ export function AuditPage() {
   const filtered = events.filter((e) => {
     if (actionFilter !== "All" && e.action !== actionFilter) return false;
     if (outcomeFilter !== "all" && e.outcome !== outcomeFilter) return false;
-    if (actorFilter && !e.actor.toLowerCase().includes(actorFilter.toLowerCase()))
+    if (
+      actorFilter &&
+      !e.actor.toLowerCase().includes(actorFilter.toLowerCase())
+    )
       return false;
     return true;
   });
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        eyebrow="Activity"
-        title="Audit log"
-        description="Operational traceability: authentication, authorization, repository lifecycle, and administrative actions."
-      />
+      <div className="mb-6">
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+          Activity
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold text-ink-950">
+          Audit log
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm text-slate-500">
+          Operational traceability: authentication, authorization, repository
+          lifecycle, and administrative actions.
+        </p>
+      </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="min-w-[180px]">
           <p className="mb-1 text-xs font-medium text-text-muted">Action</p>
@@ -214,7 +223,7 @@ export function AuditPage() {
         </div>
         <div className="min-w-[200px]">
           <p className="mb-1 text-xs font-medium text-text-muted">Actor</p>
-          <TextInput
+          <Input
             value={actorFilter}
             onChange={(e) => setActorFilter(e.target.value)}
             placeholder="Filter by email..."
@@ -223,8 +232,7 @@ export function AuditPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <Surface className="overflow-hidden !p-0">
+      <section className="overflow-hidden rounded-xl border border-border bg-surface shadow-panel !p-0">
         {filtered.length > 0 ? (
           <table className="w-full text-left text-sm">
             <thead>
@@ -240,17 +248,24 @@ export function AuditPage() {
             </thead>
             <tbody>
               {filtered.map((event) => (
-                <tr key={event.id} className="group border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs text-text-secondary whitespace-nowrap">
+                <tr
+                  key={event.id}
+                  className="group border-b border-border last:border-0"
+                >
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-text-secondary">
                     {formatTimestamp(event.timestamp)}
                   </td>
-                  <td className="px-4 py-3 text-text-primary">{event.actor}</td>
+                  <td className="px-4 py-3 text-text-primary">
+                    {event.actor}
+                  </td>
                   <td className="px-4 py-3">
                     <code className="rounded bg-canvas px-1.5 py-0.5 font-mono text-xs text-text-secondary">
                       {event.action}
                     </code>
                   </td>
-                  <td className="px-4 py-3 text-text-secondary">{event.resource}</td>
+                  <td className="px-4 py-3 text-text-secondary">
+                    {event.resource}
+                  </td>
                   <td className="px-4 py-3 font-mono text-xs text-text-muted">
                     {event.source}
                   </td>
@@ -270,7 +285,9 @@ export function AuditPage() {
                   <td className="px-4 py-3">
                     <button
                       onClick={() =>
-                        setExpanded(expanded === event.id ? null : event.id)
+                        setExpanded(
+                          expanded === event.id ? null : event.id,
+                        )
                       }
                       className="text-xs text-accent hover:underline"
                     >
@@ -289,11 +306,10 @@ export function AuditPage() {
             />
           </div>
         )}
-      </Surface>
+      </section>
 
-      {/* Details drawer */}
       {expanded ? (
-        <Surface>
+        <section className="rounded-xl border border-border bg-surface p-5 shadow-panel">
           {(() => {
             const event = events.find((e) => e.id === expanded);
             if (!event) return null;
@@ -317,7 +333,7 @@ export function AuditPage() {
               </div>
             );
           })()}
-        </Surface>
+        </section>
       ) : null}
     </div>
   );

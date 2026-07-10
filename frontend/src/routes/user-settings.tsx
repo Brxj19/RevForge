@@ -1,21 +1,12 @@
-import { useState } from "react";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../components/ui/button";
-import { SectionHeader } from "../components/ui/section-header";
-import { Surface } from "../components/ui/surface";
 import { Badge } from "../components/ui/badge";
-import { EmptyState } from "../components/ui/empty-state";
-import { LoadingState } from "../components/ui/loading-state";
-import { ErrorState } from "../components/ui/error-state";
-import { MessageBanner } from "../components/ui/message-banner";
-import { TextInput } from "../components/ui/text-input";
-import { FormField } from "../components/ui/form-field";
-import { TextArea } from "../components/ui/text-area";
 import { Dialog } from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { EmptyState } from "../components/states";
+import { LoadingState } from "../components/states";
+import { ErrorState } from "../components/states";
 
 interface SshKey {
   id: string;
@@ -73,12 +64,71 @@ function formatDate(raw: string | null): string {
   });
 }
 
+function FormField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-ink-950">{label}</span>
+      <div className="mt-2">{children}</div>
+    </label>
+  );
+}
+
+function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <Input
+      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-ink-950 placeholder:text-slate-400 focus:border-accent focus:ring-1 focus:ring-accent outline-none"
+      {...props}
+    />
+  );
+}
+
+function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-ink-950 placeholder:text-slate-400 focus:border-accent focus:ring-1 focus:ring-accent outline-none resize-vertical"
+      {...props}
+    />
+  );
+}
+
+function MessageBanner({
+  message,
+  tone,
+}: {
+  message: string;
+  tone: "error" | "info";
+}) {
+  const colors =
+    tone === "error"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : "border-blue-200 bg-blue-50 text-blue-700";
+  return (
+    <div
+      className={`rounded-md border px-3 py-2 text-sm ${colors}`}
+      role={tone === "error" ? "alert" : "status"}
+    >
+      {message}
+    </div>
+  );
+}
+
 export function UserSettingsPage() {
   const [tab, setTab] = useState<"ssh-keys" | "tokens">("ssh-keys");
   const [showAddKey, setShowAddKey] = useState(false);
   const [showCreateToken, setShowCreateToken] = useState(false);
-  const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(null);
-  const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
+  const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(
+    null,
+  );
+  const [revokeTarget, setRevokeTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -138,17 +188,24 @@ export function UserSettingsPage() {
   const [newKeyPublicKey, setNewKeyPublicKey] = useState("");
 
   const [newTokenName, setNewTokenName] = useState("");
-  const [newTokenScopes, setNewTokenScopes] = useState<string[]>(["repo:read"]);
+  const [newTokenScopes, setNewTokenScopes] = useState<string[]>([
+    "repo:read",
+  ]);
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        eyebrow="Settings"
-        title="User settings"
-        description="Manage SSH keys and personal access tokens for repository access."
-      />
+      <div className="mb-6">
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+          Settings
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold text-ink-950">
+          User settings
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm text-slate-500">
+          Manage SSH keys and personal access tokens for repository access.
+        </p>
+      </div>
 
-      {/* Tab bar */}
       <div className="flex border-b border-border">
         <button
           className={`px-4 py-2.5 text-sm font-medium transition-colors ${
@@ -173,7 +230,7 @@ export function UserSettingsPage() {
       </div>
 
       {tab === "ssh-keys" ? (
-        <Surface>
+        <section className="rounded-xl border border-border bg-surface p-5 shadow-panel">
           <div className="flex items-center justify-between">
             <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
               SSH Keys
@@ -231,14 +288,16 @@ export function UserSettingsPage() {
               description="Add an SSH public key to authenticate clone and push operations over SSH."
             />
           )}
-        </Surface>
+        </section>
       ) : (
-        <Surface>
+        <section className="rounded-xl border border-border bg-surface p-5 shadow-panel">
           <div className="flex items-center justify-between">
             <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
               Personal Access Tokens
             </p>
-            <Button onClick={() => setShowCreateToken(true)}>Create Token</Button>
+            <Button onClick={() => setShowCreateToken(true)}>
+              Create Token
+            </Button>
           </div>
 
           {tokensQuery.isLoading ? (
@@ -298,12 +357,11 @@ export function UserSettingsPage() {
               description="Create a personal access token to authenticate HTTPS operations."
             />
           )}
-        </Surface>
+        </section>
       )}
 
-      {/* New token created — show once */}
       {newTokenPlaintext ? (
-        <Surface>
+        <section className="rounded-xl border border-border bg-surface p-5 shadow-panel">
           <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
             Token created
           </p>
@@ -330,10 +388,9 @@ export function UserSettingsPage() {
           >
             Dismiss
           </Button>
-        </Surface>
+        </section>
       ) : null}
 
-      {/* Add SSH Key dialog */}
       <Dialog
         open={showAddKey}
         onClose={() => setShowAddKey(false)}
@@ -382,7 +439,11 @@ export function UserSettingsPage() {
               Cancel
             </Button>
             <Button
-              disabled={addKeyMutation.isPending || !newKeyTitle.trim() || !newKeyPublicKey.trim()}
+              disabled={
+                addKeyMutation.isPending ||
+                !newKeyTitle.trim() ||
+                !newKeyPublicKey.trim()
+              }
               type="submit"
             >
               {addKeyMutation.isPending ? "Adding..." : "Add Key"}
@@ -391,7 +452,6 @@ export function UserSettingsPage() {
         </form>
       </Dialog>
 
-      {/* Create Token dialog */}
       <Dialog
         open={showCreateToken}
         onClose={() => setShowCreateToken(false)}
@@ -455,7 +515,11 @@ export function UserSettingsPage() {
               Cancel
             </Button>
             <Button
-              disabled={createTokenMutation.isPending || !newTokenName.trim() || newTokenScopes.length === 0}
+              disabled={
+                createTokenMutation.isPending ||
+                !newTokenName.trim() ||
+                newTokenScopes.length === 0
+              }
               type="submit"
             >
               {createTokenMutation.isPending ? "Creating..." : "Create Token"}
@@ -464,7 +528,6 @@ export function UserSettingsPage() {
         </form>
       </Dialog>
 
-      {/* Revoke confirmation */}
       <Dialog
         open={revokeTarget !== null}
         onClose={() => setRevokeTarget(null)}
@@ -472,19 +535,22 @@ export function UserSettingsPage() {
       >
         <p className="text-sm text-text-secondary">
           Are you sure you want to revoke{" "}
-          <strong className="text-text-primary">{revokeTarget?.name}</strong>?
-          This action cannot be undone.
+          <strong className="text-text-primary">
+            {revokeTarget?.name}
+          </strong>
+          ? This action cannot be undone.
         </p>
         <div className="mt-4 flex justify-end gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setRevokeTarget(null)}
-          >
+          <Button variant="secondary" onClick={() => setRevokeTarget(null)}>
             Cancel
           </Button>
           <Button
             variant="danger"
-            disabled={tab === "ssh-keys" ? revokeKeyMutation.isPending : revokeTokenMutation.isPending}
+            disabled={
+              tab === "ssh-keys"
+                ? revokeKeyMutation.isPending
+                : revokeTokenMutation.isPending
+            }
             onClick={() => {
               if (tab === "ssh-keys") {
                 void revokeKeyMutation.mutateAsync();
