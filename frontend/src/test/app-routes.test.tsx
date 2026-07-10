@@ -97,29 +97,31 @@ afterEach(() => {
 });
 
 describe("app routes", () => {
-  test("renders the dashboard route", () => {
+  test("renders the dashboard route", async () => {
     renderWithProviders("/");
 
     expect(
-      screen.getByRole("heading", {
-        name: /identity, rbac, and repository catalog are live/i,
+      await screen.findByRole("heading", {
+        name: /Mercurial hosting with calm operational control/i,
       }),
     ).toBeInTheDocument();
   });
 
-  test("renders the login route", () => {
+  test("renders the login route", async () => {
     renderWithProviders("/login");
 
     expect(
-      screen.getByRole("heading", { name: /sign in to the control plane/i }),
+      await screen.findByRole("heading", { name: /continue into revforge/i }),
     ).toBeInTheDocument();
   });
 
-  test("renders the register route", () => {
+  test("renders the register route", async () => {
     renderWithProviders("/register");
 
     expect(
-      screen.getByRole("heading", { name: /create your revforge account/i }),
+      await screen.findByRole("heading", {
+        name: /create your revforge account/i,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -128,7 +130,7 @@ describe("app routes", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: /sign in to the control plane/i }),
+        screen.getByRole("heading", { name: /continue into revforge/i }),
       ).toBeInTheDocument();
     });
   });

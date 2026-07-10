@@ -194,13 +194,9 @@ describe("repository phase 2 pages", () => {
       "/organizations/acme/repositories/unprovisioned-repo",
     );
 
-    expect(await screen.findByText("public")).toBeInTheDocument();
     expect(
-      screen.getByText("unprovisioned"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", {
-        name: /Mercurial repository not provisioned yet/i,
+      await screen.findByRole("heading", {
+        name: /repository storage is not provisioned/i,
       }),
     ).toBeInTheDocument();
     expect(
@@ -225,10 +221,13 @@ describe("repository phase 2 pages", () => {
       await screen.findByRole("combobox", { name: /Browse revision/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("treeitem", { name: /^src$/i }),
+      screen.getByRole("treeitem", { name: /^src dir$/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("treeitem", { name: /^README.md$/i }),
+      screen.getByRole("treeitem", { name: /^README\.md file$/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /select a file or folder/i }),
     ).toBeInTheDocument();
   });
 });

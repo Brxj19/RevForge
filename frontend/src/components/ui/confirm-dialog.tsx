@@ -43,7 +43,11 @@ export function ConfirmDialog({
       {requireTyping && (
         <div className="mt-3">
           <label className="block text-xs font-medium text-text-secondary mb-1">
-            Type <code className="rounded bg-surface-subtle px-1 py-0.5 font-mono text-xs text-text-primary">{requireTyping}</code> to confirm:
+            Type{" "}
+            <code className="rounded bg-surface-subtle px-1 py-0.5 font-mono text-xs text-text-primary">
+              {requireTyping}
+            </code>{" "}
+            to confirm:
           </label>
           <input
             type="text"
@@ -55,7 +59,9 @@ export function ConfirmDialog({
         </div>
       )}
       <DialogActions>
-        <Button variant="ghost" onClick={handleClose}>Cancel</Button>
+        <Button variant="ghost" onClick={handleClose}>
+          Cancel
+        </Button>
         <Button
           variant={confirmVariant}
           onClick={handleConfirm}

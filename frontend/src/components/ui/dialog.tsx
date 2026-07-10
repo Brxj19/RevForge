@@ -9,7 +9,13 @@ interface DialogProps {
   className?: string;
 }
 
-export function Dialog({ open, onClose, title, children, className }: DialogProps) {
+export function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+  className,
+}: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
 
@@ -34,9 +40,15 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
         if (e.shiftKey) {
-          if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+          if (document.activeElement === first) {
+            last.focus();
+            e.preventDefault();
+          }
         } else {
-          if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+          if (document.activeElement === last) {
+            first.focus();
+            e.preventDefault();
+          }
         }
       }
     };
@@ -49,7 +61,9 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       role="presentation"
     >
       <div
@@ -71,8 +85,19 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
             className="flex h-7 w-7 items-center justify-center rounded-sm text-text-muted hover:text-text-primary hover:bg-surface-subtle transition-colors"
             aria-label="Close dialog"
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 4l8 8M12 4l-8 8"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
             </svg>
           </button>
         </div>
@@ -82,9 +107,17 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
   );
 }
 
-export function DialogActions({ children, className }: { children: ReactNode; className?: string }) {
+export function DialogActions({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={clsx("mt-6 flex items-center justify-end gap-2", className)}>
+    <div
+      className={clsx("mt-6 flex items-center justify-end gap-2", className)}
+    >
       {children}
     </div>
   );

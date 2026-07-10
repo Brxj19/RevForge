@@ -28,11 +28,19 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   if (loading) {
     return (
-      <div className={clsx("divide-y divide-border rounded-sm border border-border", className)}>
+      <div
+        className={clsx(
+          "divide-y divide-border rounded-sm border border-border",
+          className,
+        )}
+      >
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex items-center gap-4 px-3 py-2.5">
             {columns.map((col) => (
-              <div key={col.key} className="h-4 flex-1 animate-pulse rounded bg-surface-subtle" />
+              <div
+                key={col.key}
+                className="h-4 flex-1 animate-pulse rounded bg-surface-subtle"
+              />
             ))}
           </div>
         ))}
@@ -71,7 +79,10 @@ export function DataTable<T>({
               {columns.map((col) => (
                 <td
                   key={col.key}
-                  className={clsx("px-3 py-2 text-sm text-text-primary", col.className)}
+                  className={clsx(
+                    "px-3 py-2 text-sm text-text-primary",
+                    col.className,
+                  )}
                 >
                   {col.render(item)}
                 </td>

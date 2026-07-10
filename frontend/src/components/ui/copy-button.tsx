@@ -7,7 +7,11 @@ interface CopyButtonProps {
   className?: string;
 }
 
-export function CopyButton({ text, label = "Copy", className }: CopyButtonProps) {
+export function CopyButton({
+  text,
+  label = "Copy",
+  className,
+}: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -34,16 +38,46 @@ export function CopyButton({ text, label = "Copy", className }: CopyButtonProps)
     >
       {copied ? (
         <>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <path d="M2.5 6L5 8.5L9.5 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M2.5 6L5 8.5L9.5 3"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
           Copied
         </>
       ) : (
         <>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <rect x="2.5" y="3.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.25" />
-            <path d="M8 3V2.5A1.5 1.5 0 0 0 6.5 1h-4A1.5 1.5 0 0 0 1 2.5v4A1.5 1.5 0 0 0 2.5 8H3" stroke="currentColor" strokeWidth="1.25" />
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            aria-hidden="true"
+          >
+            <rect
+              x="2.5"
+              y="3.5"
+              width="7"
+              height="7"
+              rx="1"
+              stroke="currentColor"
+              strokeWidth="1.25"
+            />
+            <path
+              d="M8 3V2.5A1.5 1.5 0 0 0 6.5 1h-4A1.5 1.5 0 0 0 1 2.5v4A1.5 1.5 0 0 0 2.5 8H3"
+              stroke="currentColor"
+              strokeWidth="1.25"
+            />
           </svg>
           {label}
         </>

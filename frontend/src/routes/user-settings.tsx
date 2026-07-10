@@ -1,12 +1,12 @@
-import { useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "../components/ui/button";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "react-router-dom";
+import { PageHeader } from "../components/layout/page-header";
+import { EmptyState, ErrorState, LoadingState } from "../components/states";
 import { Badge } from "../components/ui/badge";
-import { Dialog } from "../components/ui/dialog";
-import { Input } from "../components/ui/input";
-import { EmptyState } from "../components/states";
-import { LoadingState } from "../components/states";
-import { ErrorState } from "../components/states";
+import { Button } from "../components/ui/button";
+import { CopyButton } from "../components/ui/copy-button";
+import { Surface } from "../components/ui/surface";
 
 interface SshKey {
   id: string;
@@ -25,9 +25,9 @@ interface Token {
   last_used_at: string | null;
 }
 
-const FAKE_SSH_KEYS: SshKey[] = [
+const PLACEHOLDER_SSH_KEYS: SshKey[] = [
   {
-    id: "1",
+    id: "key_1",
     title: "Work laptop",
     fingerprint: "SHA256:abc123def456ghi789jkl012mno345pqr678stu901vwx",
     created_at: "2026-06-15T10:00:00Z",
@@ -35,9 +35,9 @@ const FAKE_SSH_KEYS: SshKey[] = [
   },
 ];
 
-const FAKE_TOKENS: Token[] = [
+const PLACEHOLDER_TOKENS: Token[] = [
   {
-    id: "1",
+    id: "tok_1",
     name: "CI pipeline",
     scopes: ["repo:read", "repo:write"],
     created_at: "2026-06-20T08:00:00Z",
@@ -46,529 +46,264 @@ const FAKE_TOKENS: Token[] = [
   },
 ];
 
-const AVAILABLE_SCOPES = [
-  "repo:read",
-  "repo:write",
-  "repo:admin",
-  "org:read",
-  "org:admin",
-  "webhook:admin",
-];
-
-function formatDate(raw: string | null): string {
-  if (!raw) return "—";
-  return new Date(raw).toLocaleDateString("en-US", {
+function formatDate(value: string | null) {
+  if (!value) return "Not recorded";
+  return new Date(value).toLocaleString(undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
-function FormField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-ink-950">{label}</span>
-      <div className="mt-2">{children}</div>
-    </label>
-  );
-}
+type UserSettingsTab =
+  "profile" | "ssh-keys" | "tokens" | "sessions" | "preferences";
 
-function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <Input
-      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-ink-950 placeholder:text-slate-400 focus:border-accent focus:ring-1 focus:ring-accent outline-none"
-      {...props}
-    />
-  );
-}
-
-function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-ink-950 placeholder:text-slate-400 focus:border-accent focus:ring-1 focus:ring-accent outline-none resize-vertical"
-      {...props}
-    />
-  );
-}
-
-function MessageBanner({
-  message,
-  tone,
-}: {
-  message: string;
-  tone: "error" | "info";
-}) {
-  const colors =
-    tone === "error"
-      ? "border-red-200 bg-red-50 text-red-700"
-      : "border-blue-200 bg-blue-50 text-blue-700";
-  return (
-    <div
-      className={`rounded-md border px-3 py-2 text-sm ${colors}`}
-      role={tone === "error" ? "alert" : "status"}
-    >
-      {message}
-    </div>
-  );
+function getCurrentTab(search: string): UserSettingsTab {
+  const tab = new URLSearchParams(search).get("tab");
+  const tabs: UserSettingsTab[] = [
+    "profile",
+    "ssh-keys",
+    "tokens",
+    "sessions",
+    "preferences",
+  ];
+  return tabs.includes(tab as UserSettingsTab)
+    ? (tab as UserSettingsTab)
+    : "profile";
 }
 
 export function UserSettingsPage() {
-  const [tab, setTab] = useState<"ssh-keys" | "tokens">("ssh-keys");
-  const [showAddKey, setShowAddKey] = useState(false);
-  const [showCreateToken, setShowCreateToken] = useState(false);
-  const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(
-    null,
-  );
-  const [revokeTarget, setRevokeTarget] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-
-  const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentTab = getCurrentTab(location.search);
+  const [newTokenPlaintext] = useState<string | null>(null);
 
   const sshKeysQuery = useQuery({
     queryKey: ["user-ssh-keys"],
-    queryFn: async () => FAKE_SSH_KEYS,
+    queryFn: async () => PLACEHOLDER_SSH_KEYS,
   });
 
   const tokensQuery = useQuery({
     queryKey: ["user-tokens"],
-    queryFn: async () => FAKE_TOKENS,
+    queryFn: async () => PLACEHOLDER_TOKENS,
   });
 
-  const addKeyMutation = useMutation({
-    mutationFn: async () => {
-      await new Promise((r) => setTimeout(r, 300));
-    },
-    onSuccess: () => {
-      setShowAddKey(false);
-      void queryClient.invalidateQueries({ queryKey: ["user-ssh-keys"] });
-    },
-  });
+  if (sshKeysQuery.isLoading || tokensQuery.isLoading) {
+    return <LoadingState label="Loading user settings." />;
+  }
 
-  const createTokenMutation = useMutation({
-    mutationFn: async () => {
-      await new Promise((r) => setTimeout(r, 300));
-      return "rf_pat_sample_token_string_xxxxx";
-    },
-    onSuccess: (plaintext) => {
-      setShowCreateToken(false);
-      setNewTokenPlaintext(plaintext);
-      void queryClient.invalidateQueries({ queryKey: ["user-tokens"] });
-    },
-  });
+  if (sshKeysQuery.isError || tokensQuery.isError) {
+    return (
+      <ErrorState
+        title="User settings unavailable"
+        description="Unable to load SSH keys or access tokens."
+      />
+    );
+  }
 
-  const revokeKeyMutation = useMutation({
-    mutationFn: async () => {
-      await new Promise((r) => setTimeout(r, 300));
-    },
-    onSuccess: () => {
-      setRevokeTarget(null);
-      void queryClient.invalidateQueries({ queryKey: ["user-ssh-keys"] });
-    },
-  });
-
-  const revokeTokenMutation = useMutation({
-    mutationFn: async () => {
-      await new Promise((r) => setTimeout(r, 300));
-    },
-    onSuccess: () => {
-      setRevokeTarget(null);
-      void queryClient.invalidateQueries({ queryKey: ["user-tokens"] });
-    },
-  });
-
-  const [newKeyTitle, setNewKeyTitle] = useState("");
-  const [newKeyPublicKey, setNewKeyPublicKey] = useState("");
-
-  const [newTokenName, setNewTokenName] = useState("");
-  const [newTokenScopes, setNewTokenScopes] = useState<string[]>([
-    "repo:read",
-  ]);
+  const tabs: Array<{ id: UserSettingsTab; label: string }> = [
+    { id: "profile", label: "Profile" },
+    { id: "ssh-keys", label: "SSH keys" },
+    { id: "tokens", label: "Personal access tokens" },
+    { id: "sessions", label: "Sessions" },
+    { id: "preferences", label: "Preferences" },
+  ];
 
   return (
     <div className="space-y-6">
-      <div className="mb-6">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-          Settings
-        </p>
-        <h2 className="mt-2 text-2xl font-semibold text-ink-950">
-          User settings
-        </h2>
-        <p className="mt-2 max-w-3xl text-sm text-slate-500">
-          Manage SSH keys and personal access tokens for repository access.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="User settings"
+        title="Personal access and transport setup"
+        description="SSH keys, access tokens, sessions, and preferences stay in one place so repository clone setup remains trustworthy."
+      />
 
-      <div className="flex border-b border-border">
-        <button
-          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
-            tab === "ssh-keys"
-              ? "border-b-2 border-accent text-accent"
-              : "text-text-muted hover:text-text-primary"
-          }`}
-          onClick={() => setTab("ssh-keys")}
-        >
-          SSH Keys
-        </button>
-        <button
-          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
-            tab === "tokens"
-              ? "border-b-2 border-accent text-accent"
-              : "text-text-muted hover:text-text-primary"
-          }`}
-          onClick={() => setTab("tokens")}
-        >
-          Access Tokens
-        </button>
-      </div>
+      <Surface className="rounded-md border border-warning/30 bg-warning-subtle px-4 py-3 text-sm text-text-secondary">
+        User settings currently use isolated placeholder records until live SSH
+        key and token APIs are connected. The table layout and safety copy are
+        production-intended.
+      </Surface>
 
-      {tab === "ssh-keys" ? (
-        <section className="rounded-xl border border-border bg-surface p-5 shadow-panel">
-          <div className="flex items-center justify-between">
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-              SSH Keys
-            </p>
-            <Button onClick={() => setShowAddKey(true)}>Add SSH Key</Button>
-          </div>
+      <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
+        <Surface className="h-fit p-2">
+          <nav className="grid gap-1" aria-label="User settings sections">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`rounded-md px-3 py-2 text-left text-sm ${
+                  currentTab === tab.id
+                    ? "bg-accent-subtle font-medium text-text-primary"
+                    : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
+                }`}
+                onClick={() => navigate(`?tab=${tab.id}`)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </Surface>
 
-          {sshKeysQuery.isLoading ? (
-            <LoadingState label="Loading SSH keys." />
-          ) : sshKeysQuery.isError ? (
-            <ErrorState
-              title="Unable to load SSH keys"
-              description={
-                sshKeysQuery.error instanceof Error
-                  ? sshKeysQuery.error.message
-                  : "Failed to load SSH keys."
-              }
-            />
-          ) : sshKeysQuery.data && sshKeysQuery.data.length > 0 ? (
-            <div className="mt-4 space-y-3">
-              {sshKeysQuery.data.map((key) => (
-                <div
-                  key={key.id}
-                  className="flex items-center justify-between rounded-lg border border-border bg-canvas p-4"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-text-primary">
-                      {key.title}
-                    </p>
-                    <p className="mt-0.5 font-mono text-xs text-text-muted">
-                      {key.fingerprint.slice(0, 40)}...
-                    </p>
-                    <p className="mt-0.5 text-xs text-text-muted">
-                      Added {formatDate(key.created_at)} &middot;{" "}
-                      {key.last_used_at
-                        ? `Last used ${formatDate(key.last_used_at)}`
-                        : "Never used"}
-                    </p>
-                  </div>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() =>
-                      setRevokeTarget({ id: key.id, name: key.title })
-                    }
-                  >
-                    Revoke
-                  </Button>
+        <div className="grid gap-4">
+          {currentTab === "profile" ? (
+            <Surface className="grid gap-3">
+              <h2 className="text-base font-semibold text-text-primary">
+                Profile
+              </h2>
+              <p className="text-sm text-text-secondary">
+                Profile editing will connect here once the backend exposes user
+                profile mutation endpoints.
+              </p>
+            </Surface>
+          ) : null}
+
+          {currentTab === "ssh-keys" ? (
+            <Surface className="grid gap-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-text-primary">
+                    SSH keys
+                  </h2>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Manage key fingerprints, creation time, and last-used
+                    visibility for SSH clone and push flows.
+                  </p>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No SSH keys"
-              description="Add an SSH public key to authenticate clone and push operations over SSH."
-            />
-          )}
-        </section>
-      ) : (
-        <section className="rounded-xl border border-border bg-surface p-5 shadow-panel">
-          <div className="flex items-center justify-between">
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-              Personal Access Tokens
-            </p>
-            <Button onClick={() => setShowCreateToken(true)}>
-              Create Token
-            </Button>
-          </div>
-
-          {tokensQuery.isLoading ? (
-            <LoadingState label="Loading tokens." />
-          ) : tokensQuery.isError ? (
-            <ErrorState
-              title="Unable to load tokens"
-              description={
-                tokensQuery.error instanceof Error
-                  ? tokensQuery.error.message
-                  : "Failed to load tokens."
-              }
-            />
-          ) : tokensQuery.data && tokensQuery.data.length > 0 ? (
-            <div className="mt-4 space-y-3">
-              {tokensQuery.data.map((token) => (
-                <div
-                  key={token.id}
-                  className="flex items-center justify-between rounded-lg border border-border bg-canvas p-4"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-text-primary">
-                      {token.name}
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {token.scopes.map((scope) => (
-                        <Badge key={scope} variant="info">
-                          {scope}
-                        </Badge>
-                      ))}
+                <Button>Add SSH key</Button>
+              </div>
+              {sshKeysQuery.data && sshKeysQuery.data.length > 0 ? (
+                <div className="grid gap-3">
+                  {sshKeysQuery.data.map((key) => (
+                    <div
+                      key={key.id}
+                      className="rounded-md border border-border bg-canvas p-4"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-text-primary">
+                            {key.title}
+                          </div>
+                          <div className="mt-2 font-mono text-xs text-text-muted">
+                            {key.fingerprint}
+                          </div>
+                          <div className="mt-2 text-xs text-text-secondary">
+                            Created {formatDate(key.created_at)} · Last used{" "}
+                            {formatDate(key.last_used_at)}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="success">Active</Badge>
+                          <Button size="sm" variant="danger">
+                            Revoke
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                    <p className="mt-1 text-xs text-text-muted">
-                      Created {formatDate(token.created_at)} &middot;
-                      {token.expires_at
-                        ? ` Expires ${formatDate(token.expires_at)}`
-                        : " No expiry"}
-                      {token.last_used_at
-                        ? ` &middot; Last used ${formatDate(token.last_used_at)}`
-                        : ""}
-                    </p>
-                  </div>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() =>
-                      setRevokeTarget({ id: token.id, name: token.name })
-                    }
-                  >
-                    Revoke
-                  </Button>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No access tokens"
-              description="Create a personal access token to authenticate HTTPS operations."
-            />
-          )}
-        </section>
-      )}
-
-      {newTokenPlaintext ? (
-        <section className="rounded-xl border border-border bg-surface p-5 shadow-panel">
-          <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-            Token created
-          </p>
-          <p className="mt-1 text-sm text-text-muted">
-            Copy this token now. You will not be able to see it again.
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <code className="flex-1 truncate rounded-md border border-border bg-canvas px-3 py-2 font-mono text-sm text-text-primary">
-              {newTokenPlaintext}
-            </code>
-            <button
-              onClick={() => {
-                void navigator.clipboard.writeText(newTokenPlaintext);
-              }}
-              className="rounded-md border border-border px-3 py-2 text-sm text-text-secondary hover:bg-accent-subtle transition-colors"
-            >
-              Copy
-            </button>
-          </div>
-          <Button
-            className="mt-3"
-            variant="secondary"
-            onClick={() => setNewTokenPlaintext(null)}
-          >
-            Dismiss
-          </Button>
-        </section>
-      ) : null}
-
-      <Dialog
-        open={showAddKey}
-        onClose={() => setShowAddKey(false)}
-        title="Add SSH Key"
-      >
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void addKeyMutation.mutateAsync();
-          }}
-        >
-          <FormField label="Key title">
-            <TextInput
-              value={newKeyTitle}
-              onChange={(e) => setNewKeyTitle(e.target.value)}
-              placeholder="e.g. Work laptop"
-              required
-            />
-          </FormField>
-          <FormField label="Public key">
-            <TextArea
-              value={newKeyPublicKey}
-              onChange={(e) => setNewKeyPublicKey(e.target.value)}
-              placeholder="ssh-ed25519 AAAA..."
-              rows={4}
-              required
-            />
-          </FormField>
-          {addKeyMutation.isError ? (
-            <MessageBanner
-              message={
-                addKeyMutation.error instanceof Error
-                  ? addKeyMutation.error.message
-                  : "Failed to add SSH key."
-              }
-              tone="error"
-            />
+              ) : (
+                <EmptyState
+                  title="No SSH keys yet"
+                  description="Add a key to enable SSH clone and push workflows."
+                />
+              )}
+            </Surface>
           ) : null}
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={() => setShowAddKey(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={
-                addKeyMutation.isPending ||
-                !newKeyTitle.trim() ||
-                !newKeyPublicKey.trim()
-              }
-              type="submit"
-            >
-              {addKeyMutation.isPending ? "Adding..." : "Add Key"}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
 
-      <Dialog
-        open={showCreateToken}
-        onClose={() => setShowCreateToken(false)}
-        title="Create Access Token"
-      >
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void createTokenMutation.mutateAsync();
-          }}
-        >
-          <FormField label="Token name">
-            <TextInput
-              value={newTokenName}
-              onChange={(e) => setNewTokenName(e.target.value)}
-              placeholder="e.g. CI pipeline"
-              required
-            />
-          </FormField>
-          <FormField label="Scopes">
-            <div className="space-y-2">
-              {AVAILABLE_SCOPES.map((scope) => (
-                <label
-                  key={scope}
-                  className="flex items-center gap-2 text-sm text-text-primary"
-                >
-                  <input
-                    type="checkbox"
-                    checked={newTokenScopes.includes(scope)}
-                    onChange={() => {
-                      setNewTokenScopes((prev) =>
-                        prev.includes(scope)
-                          ? prev.filter((s) => s !== scope)
-                          : [...prev, scope],
-                      );
-                    }}
-                    className="rounded border-border accent-accent"
-                  />
-                  <code className="font-mono text-xs">{scope}</code>
-                </label>
-              ))}
-            </div>
-          </FormField>
-          {createTokenMutation.isError ? (
-            <MessageBanner
-              message={
-                createTokenMutation.error instanceof Error
-                  ? createTokenMutation.error.message
-                  : "Failed to create token."
-              }
-              tone="error"
-            />
+          {currentTab === "tokens" ? (
+            <Surface className="grid gap-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-text-primary">
+                    Personal access tokens
+                  </h2>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Use tokens as HTTPS passwords. Tokens should never appear in
+                    clone URLs.
+                  </p>
+                </div>
+                <Button>Create token</Button>
+              </div>
+              {newTokenPlaintext ? (
+                <div className="rounded-md border border-info/30 bg-info-subtle p-4">
+                  <div className="text-sm font-medium text-text-primary">
+                    New token
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <code className="rounded-sm bg-surface px-3 py-2 font-mono text-xs text-text-primary">
+                      {newTokenPlaintext}
+                    </code>
+                    <CopyButton label="Copy token" text={newTokenPlaintext} />
+                  </div>
+                </div>
+              ) : null}
+              {tokensQuery.data && tokensQuery.data.length > 0 ? (
+                <div className="grid gap-3">
+                  {tokensQuery.data.map((token) => (
+                    <div
+                      key={token.id}
+                      className="rounded-md border border-border bg-canvas p-4"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-text-primary">
+                            {token.name}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {token.scopes.map((scope) => (
+                              <Badge key={scope} variant="default">
+                                {scope}
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="mt-2 text-xs text-text-secondary">
+                            Created {formatDate(token.created_at)} · Expires{" "}
+                            {formatDate(token.expires_at)} · Last used{" "}
+                            {formatDate(token.last_used_at)}
+                          </div>
+                        </div>
+                        <Button size="sm" variant="danger">
+                          Revoke
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No personal access tokens"
+                  description="Create a token when you need HTTPS clone, pull, or push access."
+                />
+              )}
+            </Surface>
           ) : null}
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={() => setShowCreateToken(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={
-                createTokenMutation.isPending ||
-                !newTokenName.trim() ||
-                newTokenScopes.length === 0
-              }
-              type="submit"
-            >
-              {createTokenMutation.isPending ? "Creating..." : "Create Token"}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
 
-      <Dialog
-        open={revokeTarget !== null}
-        onClose={() => setRevokeTarget(null)}
-        title="Revoke confirmation"
-      >
-        <p className="text-sm text-text-secondary">
-          Are you sure you want to revoke{" "}
-          <strong className="text-text-primary">
-            {revokeTarget?.name}
-          </strong>
-          ? This action cannot be undone.
-        </p>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setRevokeTarget(null)}>
-            Cancel
-          </Button>
-          <Button
-            variant="danger"
-            disabled={
-              tab === "ssh-keys"
-                ? revokeKeyMutation.isPending
-                : revokeTokenMutation.isPending
-            }
-            onClick={() => {
-              if (tab === "ssh-keys") {
-                void revokeKeyMutation.mutateAsync();
-              } else {
-                void revokeTokenMutation.mutateAsync();
-              }
-            }}
-          >
-            {tab === "ssh-keys"
-              ? revokeKeyMutation.isPending
-                ? "Revoking..."
-                : "Revoke Key"
-              : revokeTokenMutation.isPending
-                ? "Revoking..."
-                : "Revoke Token"}
-          </Button>
+          {currentTab === "sessions" ? (
+            <Surface className="grid gap-3">
+              <h2 className="text-base font-semibold text-text-primary">
+                Sessions
+              </h2>
+              <p className="text-sm text-text-secondary">
+                Active session management will appear here when backend session
+                enumeration is available.
+              </p>
+            </Surface>
+          ) : null}
+
+          {currentTab === "preferences" ? (
+            <Surface className="grid gap-3">
+              <h2 className="text-base font-semibold text-text-primary">
+                Preferences
+              </h2>
+              <p className="text-sm text-text-secondary">
+                Theme, keyboard, and repository browsing preferences will land
+                here as backend-free settings mature.
+              </p>
+            </Surface>
+          ) : null}
         </div>
-      </Dialog>
+      </div>
     </div>
   );
 }

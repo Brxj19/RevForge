@@ -16,7 +16,10 @@ interface TabsProps {
 export function Tabs({ tabs, activeTab, onTabChange, className }: TabsProps) {
   if (tabs.length === 0) return null;
   return (
-    <div className={clsx("flex border-b border-border", className)} role="tablist">
+    <div
+      className={clsx("flex border-b border-border", className)}
+      role="tablist"
+    >
       {tabs.map((tab) => (
         <button
           key={tab.id}
