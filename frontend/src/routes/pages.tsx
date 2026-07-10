@@ -59,7 +59,14 @@ import {
   updateOrganizationMember,
   updateRepository,
 } from "../lib/api";
+import { ChangesetDetail as ChangesetDetailView, HistoryList } from "../components/changeset-browser";
+import { CodeBrowser } from "../components/code-browser";
 import { DevHealthCard } from "../components/dev-health-card";
+import { Badge } from "../components/ui/badge";
+import { ConfirmDialog } from "../components/ui/confirm-dialog";
+import { CopyButton } from "../components/ui/copy-button";
+import { DataTable } from "../components/ui/data-table";
+import { Input as UiInput } from "../components/ui/input";
 import { EmptyState, ErrorState, LoadingState } from "../components/states";
 
 function SectionHeader({
@@ -193,28 +200,6 @@ function MessageBanner({
     <p className={clsx("rounded-md border px-3 py-2 text-sm", classes)}>
       {message}
     </p>
-  );
-}
-
-function VisibilityBadge({
-  visibility,
-}: {
-  visibility: "public" | "internal" | "private";
-}) {
-  const classes = {
-    public: "border-blue-200 bg-blue-50 text-blue-800",
-    internal: "border-amber-200 bg-amber-50 text-amber-800",
-    private: "border-slate-200 bg-slate-100 text-slate-700",
-  } as const;
-  return (
-    <span
-      className={clsx(
-        "rounded-full border px-2 py-1 text-xs font-medium",
-        classes[visibility],
-      )}
-    >
-      {visibility}
-    </span>
   );
 }
 
@@ -707,6 +692,7 @@ function OrganizationDetailContent() {
     description: "",
     visibility: "private" as "public" | "internal" | "private",
   });
+  const [repoSearch, setRepoSearch] = useState("");
 
   const addMemberMutation = useMutation({
     mutationFn: () =>
@@ -797,36 +783,73 @@ function OrganizationDetailContent() {
             <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
               Repositories
             </p>
+            <div className="mt-3">
+              <UiInput
+                placeholder="Filter repositories..."
+                value={repoSearch}
+                onChange={(e) => setRepoSearch(e.target.value)}
+              />
+            </div>
             {repositoriesQuery.isLoading ? (
-              <LoadingState label="Loading repositories." />
+              <div className="mt-3">
+                <LoadingState label="Loading repositories." />
+              </div>
             ) : null}
             {repositoriesQuery.data?.length ? (
-              <div className="mt-4 grid gap-3">
-                {repositoriesQuery.data.map((repository) => (
-                  <Link
-                    key={repository.id}
-                    to={`/organizations/${organization.slug}/repositories/${repository.slug}`}
-                    className="rounded-lg border border-border bg-canvas p-4 hover:border-forge-500/50"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-semibold text-ink-950">
-                          {repository.display_name}
-                        </h3>
-                        <p className="mt-1 font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
-                          {repository.slug}
-                        </p>
-                      </div>
-                      <VisibilityBadge visibility={repository.visibility} />
-                    </div>
-                    <p className="mt-3 text-sm text-slate-500">
-                      {repository.description ?? "No description yet."}
-                    </p>
-                  </Link>
-                ))}
+              <div className="mt-3">
+                <DataTable
+                  columns={[
+                    {
+                      key: "name",
+                      header: "Name",
+                      render: (r) => (
+                        <Link
+                          to={`/organizations/${organization.slug}/repositories/${r.slug}`}
+                          className="font-medium text-accent hover:underline"
+                        >
+                          {r.display_name}
+                        </Link>
+                      ),
+                    },
+                    {
+                      key: "slug",
+                      header: "Slug",
+                      render: (r) => (
+                        <span className="font-mono text-xs text-text-muted">
+                          {r.slug}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "visibility",
+                      header: "Visibility",
+                      render: (r) => (
+                        <Badge variant={r.visibility === "public" ? "success" : r.visibility === "internal" ? "warning" : "default"}>
+                          {r.visibility}
+                        </Badge>
+                      ),
+                    },
+                    {
+                      key: "created_at",
+                      header: "Created",
+                      render: (r) => (
+                        <span className="text-sm text-text-muted">
+                          {formatTimestamp(r.created_at)}
+                        </span>
+                      ),
+                    },
+                  ]}
+                  data={repositoriesQuery.data.filter(
+                    (r) =>
+                      !repoSearch ||
+                      r.display_name.toLowerCase().includes(repoSearch.toLowerCase()) ||
+                      r.slug.toLowerCase().includes(repoSearch.toLowerCase()),
+                  )}
+                  keyFn={(r) => r.id}
+                />
               </div>
             ) : repositoriesQuery.isSuccess ? (
-              <div className="mt-4">
+              <div className="mt-3">
                 <EmptyState
                   title="No repositories yet"
                   description="Create repository metadata now. RevForge will attach physical Mercurial provisioning in Phase 2."
@@ -1049,6 +1072,7 @@ function OrganizationSettingsContent() {
     },
   });
 
+  const [removeMemberTarget, setRemoveMemberTarget] = useState<{ id: string; name: string } | null>(null);
   const memberDeleteMutation = useMutation({
     mutationFn: (memberId: string) =>
       deleteOrganizationMember(organizationSlug, memberId, csrfToken),
@@ -1188,15 +1212,12 @@ function OrganizationSettingsContent() {
                         !organization.can_manage ||
                         memberDeleteMutation.isPending
                       }
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Remove ${member.user_display_name} from ${organization.display_name}?`,
-                          )
-                        ) {
-                          void memberDeleteMutation.mutateAsync(member.id);
-                        }
-                      }}
+                      onClick={() =>
+                        setRemoveMemberTarget({
+                          id: member.id,
+                          name: member.user_display_name,
+                        })
+                      }
                       type="button"
                       variant="danger"
                     >
@@ -1225,6 +1246,20 @@ function OrganizationSettingsContent() {
               }
             />
           ) : null}
+          <ConfirmDialog
+            open={removeMemberTarget !== null}
+            onClose={() => setRemoveMemberTarget(null)}
+            onConfirm={() => {
+              if (removeMemberTarget) {
+                void memberDeleteMutation.mutateAsync(removeMemberTarget.id);
+              }
+              setRemoveMemberTarget(null);
+            }}
+            title="Remove member"
+            message={`Remove ${removeMemberTarget?.name ?? "this member"} from ${organization.display_name}?`}
+            confirmLabel="Remove"
+            confirmVariant="danger"
+          />
         </Surface>
       </div>
     </div>
@@ -1339,7 +1374,7 @@ function repositorySectionNode(pathname: string): string | null {
   return node && node.length > 0 ? decodeURIComponent(node) : null;
 }
 
-function repositorySearch(
+export function repositorySearch(
   search: string,
   updates: { path?: string | null; revision?: string | null },
 ) {
@@ -1366,7 +1401,7 @@ function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
 }
 
-function repositoryRevisionGroups(
+export function repositoryRevisionGroups(
   refs: RepositoryRefs | undefined,
   selectedRevision: string | null,
 ) {
@@ -1529,149 +1564,17 @@ function renderRepositorySection({
       );
     }
 
-    const pathSegments =
-      browseResult.path === "" ? [] : browseResult.path.split("/");
-    const revisionOptions = repositoryRevisionGroups(refs, selectedRevision);
-
     return (
-      <div className="space-y-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-              Code
-            </p>
-            <p className="mt-2 text-sm text-slate-500">
-              Browsing revision{" "}
-              <span className="font-mono text-ink-950">
-                {browseResult.revision || "empty repository"}
-              </span>
-            </p>
-          </div>
-          <label className="block text-sm text-slate-600">
-            <span className="mb-2 block font-medium text-ink-950">
-              Revision
-            </span>
-            {refsIsError ? (
-              <p className="mb-2 text-xs text-red-700">
-                {refsError instanceof Error
-                  ? refsError.message
-                  : "Unable to load repository references."}
-              </p>
-            ) : null}
-            <Select
-              aria-label="Browse revision"
-              value={selectedRevision ?? ""}
-              onChange={(event) => {
-                onSelectCodeRevision(event.target.value || null);
-              }}
-            >
-              <option value="">latest tip</option>
-              {revisionOptions.groups.map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {group.refs.map((ref) => (
-                    <option key={`${group.label}-${ref.name}`} value={ref.name}>
-                      {ref.name} ({ref.short_node})
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-              {revisionOptions.currentRevision &&
-              !revisionOptions.hasCurrentRevision ? (
-                <option value={revisionOptions.currentRevision}>
-                  {revisionOptions.currentRevision.slice(0, 12)}
-                </option>
-              ) : null}
-            </Select>
-          </label>
-        </div>
-
-        <div className="rounded-lg border border-border bg-canvas p-4">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Link
-              className="text-forge-600 underline-offset-2 hover:underline"
-              to={`${basePath}/code${repositorySearch(locationSearch, { path: "", revision: selectedRevision })}`}
-            >
-              root
-            </Link>
-            {pathSegments.map((segment, index) => {
-              const nextPath = pathSegments.slice(0, index + 1).join("/");
-              const isLast = index === pathSegments.length - 1;
-              return (
-                <span key={nextPath} className="flex items-center gap-2">
-                  <span className="text-slate-400">/</span>
-                  {isLast && browseResult.kind === "file" ? (
-                    <span className="font-mono text-ink-950">{segment}</span>
-                  ) : (
-                    <Link
-                      className="font-mono text-forge-600 underline-offset-2 hover:underline"
-                      to={`${basePath}/code${repositorySearch(locationSearch, { path: nextPath, revision: selectedRevision })}`}
-                    >
-                      {segment}
-                    </Link>
-                  )}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-
-        {browseResult.kind === "directory" ? (
-          browseResult.revision === "" && browseResult.entries.length === 0 ? (
-            <EmptyState
-              title="Empty repository"
-              description="This Mercurial repository is provisioned but does not contain any committed files yet."
-            />
-          ) : (
-            <div className="space-y-2">
-              {browseResult.entries.map((entry) => (
-                <Link
-                  key={entry.path}
-                  className="flex items-center justify-between rounded-lg border border-border bg-canvas px-4 py-3 text-sm text-slate-700 transition hover:border-forge-500"
-                  to={`${basePath}/code${repositorySearch(locationSearch, {
-                    path: entry.path,
-                    revision: selectedRevision,
-                  })}`}
-                >
-                  <span className="font-mono text-ink-950">{entry.name}</span>
-                  <span className="uppercase tracking-[0.18em] text-slate-500">
-                    {entry.kind}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )
-        ) : browseResult.is_binary ? (
-          <EmptyState
-            title="Binary file"
-            description="RevForge detected binary content and is intentionally withholding inline rendering."
-          />
-        ) : browseResult.is_too_large ? (
-          <EmptyState
-            title="File too large to render"
-            description="This file exceeded the configured safe inline size limit, so the browser returned metadata without file contents."
-          />
-        ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-canvas px-4 py-3 text-sm text-slate-600">
-              <span>
-                Language hint:{" "}
-                <span className="font-mono text-ink-950">
-                  {browseResult.language_hint_when_available ?? "plain text"}
-                </span>
-              </span>
-              <Link
-                className="text-forge-600 underline-offset-2 hover:underline"
-                to={`${basePath}/changesets/${browseResult.revision}`}
-              >
-                View changeset
-              </Link>
-            </div>
-            <pre className="overflow-x-auto rounded-lg border border-border bg-canvas p-4 text-xs text-ink-950">
-              <code>{browseResult.content ?? ""}</code>
-            </pre>
-          </div>
-        )}
-      </div>
+      <CodeBrowser
+        basePath={basePath}
+        browseResult={browseResult}
+        locationSearch={locationSearch}
+        onSelectCodeRevision={onSelectCodeRevision}
+        refs={refs}
+        refsError={refsError}
+        refsIsError={refsIsError}
+        selectedRevision={selectedRevision}
+      />
     );
   }
 
@@ -1700,53 +1603,13 @@ function renderRepositorySection({
       );
     }
     return (
-      <div className="space-y-3">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-          History
-        </p>
-        {changesets.map((changeset) => (
-          <div
-            key={changeset.node}
-            className="rounded-lg border border-border bg-canvas p-4"
-          >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-2">
-                <Link
-                  className="text-sm font-semibold text-forge-600 underline-offset-2 hover:underline"
-                  to={`${basePath}/changesets/${changeset.node}`}
-                >
-                  {changeset.message.split("\n")[0] || "(no commit message)"}
-                </Link>
-                <div className="flex flex-wrap gap-3 text-sm text-slate-500">
-                  <span className="font-mono text-ink-950">
-                    {changeset.short_node}
-                  </span>
-                  <span>{changeset.author_name}</span>
-                  <span>{formatTimestamp(changeset.timestamp)}</span>
-                  <span>branch: {changeset.branch}</span>
-                </div>
-              </div>
-              <span className="text-sm text-slate-500">
-                {changeset.files_changed_count_when_available ?? 0} file changes
-              </span>
-            </div>
-          </div>
-        ))}
-        {historyQuery.hasNextPage ? (
-          <Button
-            disabled={historyQuery.isFetchingNextPage}
-            onClick={() => {
-              void historyQuery.fetchNextPage();
-            }}
-            type="button"
-            variant="secondary"
-          >
-            {historyQuery.isFetchingNextPage
-              ? "Loading more changesets..."
-              : "Load more"}
-          </Button>
-        ) : null}
-      </div>
+      <HistoryList
+        basePath={basePath}
+        changesets={changesets}
+        hasNextPage={historyQuery.hasNextPage ?? false}
+        isFetchingNextPage={historyQuery.isFetchingNextPage ?? false}
+        onLoadMore={() => void historyQuery.fetchNextPage()}
+      />
     );
   }
 
@@ -1796,125 +1659,12 @@ function renderRepositorySection({
     }
 
     return (
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-              Changeset
-            </p>
-            <h3 className="mt-2 text-lg font-semibold text-ink-950">
-              {changesetQuery.data.message.split("\n")[0] ||
-                "(no commit message)"}
-            </h3>
-          </div>
-          <Link
-            className="text-sm text-forge-600 underline-offset-2 hover:underline"
-            to={`${basePath}/commits`}
-          >
-            Back to history
-          </Link>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <RepositoryMetadataItem
-            label="Node"
-            value={changesetQuery.data.node}
-          />
-          <RepositoryMetadataItem
-            label="Branch"
-            value={changesetQuery.data.branch}
-          />
-          <RepositoryMetadataItem
-            label="Author"
-            value={changesetQuery.data.author_name}
-          />
-          <RepositoryMetadataItem
-            label="Timestamp"
-            value={formatTimestamp(changesetQuery.data.timestamp)}
-          />
-        </div>
-        <div className="rounded-lg border border-border bg-canvas p-4">
-          <p className="whitespace-pre-wrap text-sm text-slate-700">
-            {changesetQuery.data.message}
-          </p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border border-border bg-canvas p-4">
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
-              Parents
-            </p>
-            {changesetQuery.data.parents.length > 0 ? (
-              <div className="mt-3 space-y-2">
-                {changesetQuery.data.parents.map((parent) => (
-                  <Link
-                    key={parent}
-                    className="block font-mono text-sm text-forge-600 underline-offset-2 hover:underline"
-                    to={`${basePath}/changesets/${parent}`}
-                  >
-                    {parent}
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-slate-500">
-                This is a root changeset.
-              </p>
-            )}
-          </div>
-          <div className="rounded-lg border border-border bg-canvas p-4">
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
-              References
-            </p>
-            <div className="mt-3 space-y-2 text-sm text-slate-700">
-              <p>
-                Tags:{" "}
-                {changesetQuery.data.tags.length > 0
-                  ? changesetQuery.data.tags.join(", ")
-                  : "none"}
-              </p>
-              <p>
-                Bookmarks:{" "}
-                {changesetQuery.data.bookmarks.length > 0
-                  ? changesetQuery.data.bookmarks.join(", ")
-                  : "none"}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-canvas p-4">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
-            Changed files
-          </p>
-          {changesetQuery.data.files_changed.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              {changesetQuery.data.files_changed.map((filePath) => (
-                <Link
-                  key={filePath}
-                  className="block font-mono text-sm text-forge-600 underline-offset-2 hover:underline"
-                  to={`${basePath}/code${repositorySearch("", {
-                    path: filePath,
-                    revision: changesetQuery.data?.node ?? null,
-                  })}`}
-                >
-                  {filePath}
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-500">
-              No file list was returned for this changeset.
-            </p>
-          )}
-        </div>
-        {diffQuery.data.is_truncated ? (
-          <MessageBanner
-            message={`Diff output was truncated${diffQuery.data.truncation_reason_when_applicable ? ` (${diffQuery.data.truncation_reason_when_applicable})` : ""}.`}
-            tone="info"
-          />
-        ) : null}
-        <pre className="overflow-x-auto rounded-lg border border-border bg-canvas p-4 text-xs text-ink-950">
-          <code>{diffQuery.data.content}</code>
-        </pre>
-      </div>
+      <ChangesetDetailView
+        basePath={basePath}
+        changeset={changesetQuery.data}
+        diff={diffQuery.data}
+        backLink={`${basePath}/commits`}
+      />
     );
   }
 
@@ -2094,6 +1844,7 @@ export function RepositoryDetailPage() {
       currentSection === "changeset" &&
       changesetNode !== null,
   });
+  const [provisionConfirmOpen, setProvisionConfirmOpen] = useState(false);
   const provisionMutation = useMutation({
     mutationFn: () =>
       provisionRepository(organizationSlug, repositorySlug, csrfToken),
@@ -2134,128 +1885,57 @@ export function RepositoryDetailPage() {
   const refs = refsQuery.data;
   const historyPages = historyQuery.data?.pages ?? [];
   const changesets = historyPages.flatMap((page) => page.changesets);
-  const sectionTabs = [
-    { key: "overview", label: "Overview", to: basePath },
-    { key: "code", label: "Code", to: `${basePath}/code` },
-    { key: "commits", label: "History", to: `${basePath}/commits` },
-    { key: "branches", label: "Branches", to: `${basePath}/branches` },
-    { key: "tags", label: "Tags", to: `${basePath}/tags` },
-    { key: "bookmarks", label: "Bookmarks", to: `${basePath}/bookmarks` },
-    {
-      key: "pull-requests",
-      label: "Pull Requests",
-      to: `${basePath}/pull-requests`,
-    },
-  ] as const;
   const revisionLabel =
     selectedRevision ?? browseQuery.data?.revision ?? "latest tip";
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        eyebrow="Repository"
-        title={`${repository.organization_slug} / ${repository.display_name}`}
-        description={
-          repository.description ??
-          "Mercurial-backed repository browsing is available after the repository is provisioned."
-        }
-      />
+      <div className="flex items-center gap-2">
+        <Badge variant={repository.visibility === "public" ? "success" : repository.visibility === "internal" ? "warning" : "default"}>
+          {repository.visibility}
+        </Badge>
+        <RepositoryProvisioningBadge
+          provisioningState={repository.provisioning_state}
+        />
+        {repository.archived_at ? (
+          <span className="rounded border border-slate-300 bg-slate-100 px-2 py-0.5 text-2xs font-medium uppercase tracking-wider text-slate-700">
+            Archived
+          </span>
+        ) : null}
+        {repository.can_manage ? (
+          <Link
+            to={`${basePath}/settings`}
+            className="ml-auto rounded-md border border-accent bg-accent px-3 py-1.5 text-sm font-medium text-white"
+          >
+            Settings
+          </Link>
+        ) : null}
+      </div>
 
-      <Surface className="space-y-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                className="text-sm text-forge-600 underline-offset-2 hover:underline"
-                to={`/organizations/${organizationSlug}`}
-              >
-                {repository.organization_slug}
-              </Link>
-              <span className="text-slate-400">/</span>
-              <span className="font-mono text-sm text-ink-950">
-                {repository.slug}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <VisibilityBadge visibility={repository.visibility} />
-              <RepositoryProvisioningBadge
-                provisioningState={repository.provisioning_state}
-              />
-              {repository.archived_at ? (
-                <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-700">
-                  Archived
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              className="rounded-md border border-border px-3 py-2 text-sm text-slate-700"
-              to={`/organizations/${organizationSlug}`}
-            >
-              Back to organization
-            </Link>
-            {repository.can_manage ? (
-              <Link
-                className="rounded-md border border-forge-500 bg-forge-500 px-3 py-2 text-sm font-medium text-white"
-                to={`${basePath}/settings`}
-              >
-                Repository settings
-              </Link>
-            ) : null}
-          </div>
-        </div>
+      {repository.description ? (
+        <p className="text-sm text-text-secondary">{repository.description}</p>
+      ) : null}
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <RepositoryMetadataItem
-            label="Viewer role"
-            value={repository.viewer_role ?? "public metadata only"}
-          />
-          <RepositoryMetadataItem
-            label="Archive state"
-            value={repository.archived_at ? "Archived" : "Active"}
-          />
-          <RepositoryMetadataItem
-            label="Provisioning"
-            value={repository.phase_status}
-          />
-          <RepositoryMetadataItem
-            label="Revision target"
-            value={
-              repository.is_browsable ? revisionLabel : "not available yet"
-            }
-          />
-        </div>
-
-        <nav
-          aria-label="Repository navigation"
-          className="flex flex-wrap gap-2 border-t border-border pt-4"
-        >
-          {sectionTabs.map((tab) =>
-            repository.is_browsable || tab.key === "overview" ? (
-              <Link
-                key={tab.key}
-                className={clsx(
-                  "rounded-md px-3 py-2 text-sm font-medium",
-                  currentSection === tab.key
-                    ? "bg-forge-500 text-white"
-                    : "border border-border bg-canvas text-slate-700",
-                )}
-                to={tab.to}
-              >
-                {tab.label}
-              </Link>
-            ) : (
-              <span
-                key={tab.key}
-                className="rounded-md border border-dashed border-border px-3 py-2 text-sm text-slate-400"
-              >
-                {tab.label}
-              </span>
-            ),
-          )}
-        </nav>
-      </Surface>
+      <div className="grid gap-4 md:grid-cols-4">
+        <RepositoryMetadataItem
+          label="Viewer role"
+          value={repository.viewer_role ?? "public metadata only"}
+        />
+        <RepositoryMetadataItem
+          label="Archive state"
+          value={repository.archived_at ? "Archived" : "Active"}
+        />
+        <RepositoryMetadataItem
+          label="Provisioning"
+          value={repository.phase_status}
+        />
+        <RepositoryMetadataItem
+          label="Revision target"
+          value={
+            repository.is_browsable ? revisionLabel : "not available yet"
+          }
+        />
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.92fr]">
         <Surface>
@@ -2308,15 +1988,7 @@ export function RepositoryDetailPage() {
                       provisionMutation.isPending ||
                       repository.provisioning_state === "provisioning"
                     }
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Provision the Mercurial repository for ${repository.display_name}?`,
-                        )
-                      ) {
-                        void provisionMutation.mutateAsync();
-                      }
-                    }}
+                    onClick={() => setProvisionConfirmOpen(true)}
                     type="button"
                   >
                     Provision Mercurial repository
@@ -2344,41 +2016,76 @@ export function RepositoryDetailPage() {
           ) : (
             <>
               <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-                Repository guide
+                Clone
               </p>
-              <ul className="mt-4 space-y-3 text-sm text-slate-600">
-                <li>
-                  Use Code to browse directories and safe text file contents at
-                  a concrete revision.
-                </li>
-                <li>
-                  Use History for paginated changesets and Changeset detail for
-                  parents, files, and diff context.
-                </li>
-                <li>
-                  Branches, tags, and bookmarks resolve to concrete Mercurial
-                  nodes before the browser reads content.
-                </li>
-              </ul>
-              <div className="mt-6 grid gap-3">
-                <QuickLinkCard
-                  title="Open code browser"
-                  description="Browse the repository tree and file contents."
-                  to={`${basePath}/code${repositorySearch(location.search, { path: "", revision: selectedRevision })}`}
-                />
-                <QuickLinkCard
-                  title="Inspect history"
-                  description="Review paginated changesets with branch context."
-                  to={`${basePath}/commits`}
-                />
-                <QuickLinkCard
-                  title="Browse references"
-                  description="Jump into branches, tags, and bookmarks."
-                  to={`${basePath}/branches`}
-                />
+              <div className="mt-4 space-y-3">
+                <div>
+                  <p className="text-xs text-text-muted">HTTPS</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 truncate rounded border border-border bg-canvas px-2 py-1.5 text-xs font-mono text-text-primary">
+                      https://{window.location.host}/hg/{organizationSlug}/{repositorySlug}
+                    </code>
+                    <CopyButton
+                      text={`https://${window.location.host}/hg/${organizationSlug}/${repositorySlug}`}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">SSH</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 truncate rounded border border-border bg-canvas px-2 py-1.5 text-xs font-mono text-text-primary">
+                      ssh://hg@{window.location.host}/{organizationSlug}/{repositorySlug}
+                    </code>
+                    <CopyButton
+                      text={`ssh://hg@${window.location.host}/${organizationSlug}/${repositorySlug}`}
+                    />
+                  </div>
+                </div>
               </div>
+
+              {changesets.length > 0 ? (
+                <div className="mt-6">
+                  <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
+                    Latest changeset
+                  </p>
+                  <div className="mt-3 rounded border border-border bg-canvas p-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-text-muted">
+                        {changesets[0].short_node}
+                      </span>
+                      <span className="text-xs text-text-muted">
+                        {formatTimestamp(changesets[0].timestamp)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-text-primary line-clamp-2">
+                      {changesets[0].message.split("\n")[0]}
+                    </p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {changesets[0].author_name}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              <p className="mt-6 text-xs text-text-muted">
+                Role: <span className="font-medium text-text-primary">{repository.viewer_role ?? "none"}</span>
+                {repository.can_manage ? (
+                  <span className="ml-2 rounded border border-accent-subtle bg-accent-subtle px-1.5 py-0.5 text-2xs text-accent">admin</span>
+                ) : null}
+              </p>
             </>
           )}
+          <ConfirmDialog
+            open={provisionConfirmOpen}
+            onClose={() => setProvisionConfirmOpen(false)}
+            onConfirm={() => {
+              setProvisionConfirmOpen(false);
+              void provisionMutation.mutateAsync();
+            }}
+            title="Provision Mercurial repository"
+            message={`Provision the Mercurial repository for ${repository.display_name}? This will create the underlying storage.`}
+            confirmLabel="Provision"
+          />
         </Surface>
       </div>
     </div>
@@ -2448,6 +2155,7 @@ function RepositorySettingsContent() {
     },
   });
 
+  const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
   const deletePermissionMutation = useMutation({
     mutationFn: (userId: string) =>
       deleteRepositoryPermission(
@@ -2642,17 +2350,12 @@ function RepositorySettingsContent() {
                   </div>
                   <Button
                     disabled={deletePermissionMutation.isPending}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Revoke explicit access for ${permission.user_display_name}?`,
-                        )
-                      ) {
-                        void deletePermissionMutation.mutateAsync(
-                          permission.user_id,
-                        );
-                      }
-                    }}
+                    onClick={() =>
+                      setRevokeTarget({
+                        id: permission.user_id,
+                        name: permission.user_display_name,
+                      })
+                    }
                     type="button"
                     variant="danger"
                   >
@@ -2671,7 +2374,81 @@ function RepositorySettingsContent() {
             </div>
           ) : null}
         </Surface>
+          <ConfirmDialog
+            open={revokeTarget !== null}
+            onClose={() => setRevokeTarget(null)}
+            onConfirm={() => {
+              if (revokeTarget) {
+                void deletePermissionMutation.mutateAsync(revokeTarget.id);
+              }
+              setRevokeTarget(null);
+            }}
+            title="Revoke access"
+            message={`Revoke explicit access for ${revokeTarget?.name ?? "this user"}?`}
+            confirmLabel="Revoke"
+            confirmVariant="danger"
+          />
       </div>
+
+      {/* Danger zone */}
+      <Surface className="space-y-3 border-danger/40">
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-danger">
+          Danger zone
+        </p>
+        <p className="text-sm text-text-secondary">
+          These actions are irreversible or have significant impact. Proceed
+          with caution.
+        </p>
+        <div className="divide-y divide-border rounded-lg border border-danger/30">
+          <div className="flex items-center justify-between p-4">
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                Archive repository
+              </p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                Prevents pushes and marks the repository as read-only. Metadata
+                remains visible.
+              </p>
+            </div>
+            <Button
+              variant="danger"
+              disabled={repository.archived_at !== null}
+              onClick={() => {
+                void updateMutation.mutateAsync({ archived: true });
+              }}
+            >
+              {repository.archived_at !== null ? "Archived" : "Archive"}
+            </Button>
+          </div>
+          <div className="flex items-center justify-between p-4">
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                Rename slug
+              </p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                Changes the repository URL path. Old clone URLs will break.
+              </p>
+            </div>
+            <Button variant="danger" disabled>
+              Rename
+            </Button>
+          </div>
+          <div className="flex items-center justify-between p-4">
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                Delete repository
+              </p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                Permanently removes the repository and all data. Requires
+                typing the repository slug to confirm.
+              </p>
+            </div>
+            <Button variant="danger" disabled>
+              Delete
+            </Button>
+          </div>
+        </div>
+      </Surface>
     </div>
   );
 }
