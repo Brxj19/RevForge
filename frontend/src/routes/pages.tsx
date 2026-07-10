@@ -59,6 +59,7 @@ import {
   updateOrganizationMember,
   updateRepository,
 } from "../lib/api";
+import { ChangesetDetail, HistoryList } from "../components/changeset-browser";
 import { CodeBrowser } from "../components/code-browser";
 import { DevHealthCard } from "../components/dev-health-card";
 import { Badge } from "../components/ui/badge";
@@ -1602,53 +1603,13 @@ function renderRepositorySection({
       );
     }
     return (
-      <div className="space-y-3">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-          History
-        </p>
-        {changesets.map((changeset) => (
-          <div
-            key={changeset.node}
-            className="rounded-lg border border-border bg-canvas p-4"
-          >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-2">
-                <Link
-                  className="text-sm font-semibold text-forge-600 underline-offset-2 hover:underline"
-                  to={`${basePath}/changesets/${changeset.node}`}
-                >
-                  {changeset.message.split("\n")[0] || "(no commit message)"}
-                </Link>
-                <div className="flex flex-wrap gap-3 text-sm text-slate-500">
-                  <span className="font-mono text-ink-950">
-                    {changeset.short_node}
-                  </span>
-                  <span>{changeset.author_name}</span>
-                  <span>{formatTimestamp(changeset.timestamp)}</span>
-                  <span>branch: {changeset.branch}</span>
-                </div>
-              </div>
-              <span className="text-sm text-slate-500">
-                {changeset.files_changed_count_when_available ?? 0} file changes
-              </span>
-            </div>
-          </div>
-        ))}
-        {historyQuery.hasNextPage ? (
-          <Button
-            disabled={historyQuery.isFetchingNextPage}
-            onClick={() => {
-              void historyQuery.fetchNextPage();
-            }}
-            type="button"
-            variant="secondary"
-          >
-            {historyQuery.isFetchingNextPage
-              ? "Loading more changesets..."
-              : "Load more"}
-          </Button>
-        ) : null}
-      </div>
+      <HistoryList
+        basePath={basePath}
+        changesets={changesets}
+        hasNextPage={historyQuery.hasNextPage ?? false}
+        isFetchingNextPage={historyQuery.isFetchingNextPage ?? false}
+        onLoadMore={() => void historyQuery.fetchNextPage()}
+      />
     );
   }
 
@@ -1698,125 +1659,12 @@ function renderRepositorySection({
     }
 
     return (
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-forge-600">
-              Changeset
-            </p>
-            <h3 className="mt-2 text-lg font-semibold text-ink-950">
-              {changesetQuery.data.message.split("\n")[0] ||
-                "(no commit message)"}
-            </h3>
-          </div>
-          <Link
-            className="text-sm text-forge-600 underline-offset-2 hover:underline"
-            to={`${basePath}/commits`}
-          >
-            Back to history
-          </Link>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <RepositoryMetadataItem
-            label="Node"
-            value={changesetQuery.data.node}
-          />
-          <RepositoryMetadataItem
-            label="Branch"
-            value={changesetQuery.data.branch}
-          />
-          <RepositoryMetadataItem
-            label="Author"
-            value={changesetQuery.data.author_name}
-          />
-          <RepositoryMetadataItem
-            label="Timestamp"
-            value={formatTimestamp(changesetQuery.data.timestamp)}
-          />
-        </div>
-        <div className="rounded-lg border border-border bg-canvas p-4">
-          <p className="whitespace-pre-wrap text-sm text-slate-700">
-            {changesetQuery.data.message}
-          </p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border border-border bg-canvas p-4">
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
-              Parents
-            </p>
-            {changesetQuery.data.parents.length > 0 ? (
-              <div className="mt-3 space-y-2">
-                {changesetQuery.data.parents.map((parent) => (
-                  <Link
-                    key={parent}
-                    className="block font-mono text-sm text-forge-600 underline-offset-2 hover:underline"
-                    to={`${basePath}/changesets/${parent}`}
-                  >
-                    {parent}
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-slate-500">
-                This is a root changeset.
-              </p>
-            )}
-          </div>
-          <div className="rounded-lg border border-border bg-canvas p-4">
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
-              References
-            </p>
-            <div className="mt-3 space-y-2 text-sm text-slate-700">
-              <p>
-                Tags:{" "}
-                {changesetQuery.data.tags.length > 0
-                  ? changesetQuery.data.tags.join(", ")
-                  : "none"}
-              </p>
-              <p>
-                Bookmarks:{" "}
-                {changesetQuery.data.bookmarks.length > 0
-                  ? changesetQuery.data.bookmarks.join(", ")
-                  : "none"}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-canvas p-4">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
-            Changed files
-          </p>
-          {changesetQuery.data.files_changed.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              {changesetQuery.data.files_changed.map((filePath) => (
-                <Link
-                  key={filePath}
-                  className="block font-mono text-sm text-forge-600 underline-offset-2 hover:underline"
-                  to={`${basePath}/code${repositorySearch("", {
-                    path: filePath,
-                    revision: changesetQuery.data?.node ?? null,
-                  })}`}
-                >
-                  {filePath}
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-500">
-              No file list was returned for this changeset.
-            </p>
-          )}
-        </div>
-        {diffQuery.data.is_truncated ? (
-          <MessageBanner
-            message={`Diff output was truncated${diffQuery.data.truncation_reason_when_applicable ? ` (${diffQuery.data.truncation_reason_when_applicable})` : ""}.`}
-            tone="info"
-          />
-        ) : null}
-        <pre className="overflow-x-auto rounded-lg border border-border bg-canvas p-4 text-xs text-ink-950">
-          <code>{diffQuery.data.content}</code>
-        </pre>
-      </div>
+      <ChangesetDetail
+        basePath={basePath}
+        changeset={changesetQuery.data}
+        diff={diffQuery.data}
+        backLink={`${basePath}/commits`}
+      />
     );
   }
 
