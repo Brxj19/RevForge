@@ -1,0 +1,112 @@
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --rf-black: #000000;
+  --rf-canvas: #000000;
+  --rf-canvas-raised: #050505;
+  --rf-surface: #0a0a0a;
+  --rf-surface-subtle: #101010;
+  --rf-surface-muted: #151515;
+  --rf-surface-hover: #1b1b1b;
+  --rf-surface-active: #232323;
+
+  --rf-editor-canvas: #050505;
+  --rf-editor-gutter: #090909;
+  --rf-editor-line-hover: #121212;
+  --rf-editor-line-selected: rgba(255, 255, 255, 0.08);
+  --rf-editor-border: #262626;
+
+  --rf-border: #232323;
+  --rf-border-muted: #171717;
+  --rf-border-strong: #343434;
+  --rf-hairline: rgba(255, 255, 255, 0.08);
+
+  --rf-text: #f1f1f1;
+  --rf-text-secondary: #c4c4c4;
+  --rf-text-muted: #8f8f8f;
+  --rf-text-subtle: #6f6f6f;
+  --rf-text-disabled: #4f4f4f;
+  --rf-text-inverse: #050505;
+
+  --rf-accent: #58a6ff;
+  --rf-accent-hover: #79c0ff;
+  --rf-accent-active: #1f6feb;
+  --rf-accent-subtle: rgba(88, 166, 255, 0.14);
+  --rf-accent-border: rgba(88, 166, 255, 0.38);
+
+  --rf-success: #3fb950;
+  --rf-success-subtle: rgba(63, 185, 80, 0.14);
+  --rf-success-border: rgba(63, 185, 80, 0.35);
+  --rf-danger: #f85149;
+  --rf-danger-subtle: rgba(248, 81, 73, 0.14);
+  --rf-danger-border: rgba(248, 81, 73, 0.35);
+  --rf-warning: #f2cc60;
+  --rf-warning-subtle: rgba(242, 204, 96, 0.14);
+  --rf-warning-border: rgba(242, 204, 96, 0.35);
+  --rf-info: #58a6ff;
+  --rf-info-subtle: rgba(88, 166, 255, 0.14);
+  --rf-info-border: rgba(88, 166, 255, 0.35);
+
+  --rf-diff-add-bg: rgba(46, 160, 67, 0.18);
+  --rf-diff-add-line: rgba(46, 160, 67, 0.3);
+  --rf-diff-add-text: #aff5b4;
+  --rf-diff-del-bg: rgba(248, 81, 73, 0.16);
+  --rf-diff-del-line: rgba(248, 81, 73, 0.28);
+  --rf-diff-del-text: #ffdcd7;
+  --rf-diff-hunk-bg: rgba(88, 166, 255, 0.14);
+  --rf-diff-hunk-text: #a5d6ff;
+
+  --rf-focus-ring: #58a6ff;
+  --rf-focus-ring-soft: rgba(88, 166, 255, 0.35);
+
+  --rf-font-ui:
+    "IBM Plex Sans", "IBM Plex Mono", "JetBrains Mono", system-ui, sans-serif;
+  --rf-font-mono:
+    "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+
+  --color-canvas: var(--rf-canvas);
+  --color-surface: var(--rf-surface);
+  --color-surface-subtle: var(--rf-surface-subtle);
+  --color-surface-muted: var(--rf-surface-muted);
+  --color-surface-hover: var(--rf-surface-hover);
+  --color-surface-active: var(--rf-surface-active);
+  --color-editor-canvas: var(--rf-editor-canvas);
+  --color-border: var(--rf-border);
+  --color-border-muted: var(--rf-border-muted);
+  --color-border-strong: var(--rf-border-strong);
+  --color-text-primary: var(--rf-text);
+  --color-text-secondary: var(--rf-text-secondary);
+  --color-text-muted: var(--rf-text-muted);
+  --color-text-subtle: var(--rf-text-subtle);
+  --color-text-disabled: var(--rf-text-disabled);
+  --color-text-inverse: var(--rf-text-inverse);
+  --color-accent: var(--rf-accent);
+  --color-accent-hover: var(--rf-accent-hover);
+  --color-accent-active: var(--rf-accent-active);
+  --color-accent-subtle: var(--rf-accent-subtle);
+  --color-accent-border: var(--rf-accent-border);
+  --color-accent-foreground: var(--rf-text-inverse);
+  --color-success: var(--rf-success);
+  --color-success-subtle: var(--rf-success-subtle);
+  --color-success-border: var(--rf-success-border);
+  --color-danger: var(--rf-danger);
+  --color-danger-subtle: var(--rf-danger-subtle);
+  --color-danger-border: var(--rf-danger-border);
+  --color-warning: var(--rf-warning);
+  --color-warning-subtle: var(--rf-warning-subtle);
+  --color-warning-border: var(--rf-warning-border);
+  --color-info: var(--rf-info);
+  --color-info-subtle: var(--rf-info-subtle);
+  --color-info-border: var(--rf-info-border);
+  --color-diff-add-bg: var(--rf-diff-add-bg);
+  --color-diff-add-line: var(--rf-diff-add-line);
+  --color-diff-add-text: var(--rf-diff-add-text);
+  --color-diff-del-bg: var(--rf-diff-del-bg);
+  --color-diff-del-line: var(--rf-diff-del-line);
+  --color-diff-del-text: var(--rf-diff-del-text);
+  --color-diff-hunk-bg: var(--rf-diff-hunk-bg);
+  --color-diff-hunk-text: var(--rf-diff-hunk-text);
+  --color-focus-ring: var(--rf-focus-ring);
+  --color-focus-ring-soft: var(--rf-focus-ring-soft);
+}

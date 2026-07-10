@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import select
@@ -17,6 +18,7 @@ from app.core.security import (
     validate_display_name,
 )
 from app.domain.enums import RepositoryRole
+from app.mercurial.authorized_keys import sync_authorized_keys
 from app.models.personal_access_token import PersonalAccessToken
 from app.models.ssh_public_key import SshPublicKey
 from app.models.user import User
@@ -181,6 +183,7 @@ async def create_ssh_public_key(
     public_key: str,
     label: str,
     request_id: str | None,
+    authorized_keys_output_path: Path | None = None,
 ) -> SshPublicKey:
     try:
         normalized_label = validate_display_name(label, field_name="SSH key label")
@@ -212,6 +215,8 @@ async def create_ssh_public_key(
         metadata_json={"key_id": str(key.id), "fingerprint_sha256": fingerprint},
     )
     await session.commit()
+    if authorized_keys_output_path is not None:
+        await sync_authorized_keys(session, output_path=authorized_keys_output_path)
     await session.refresh(key)
     return key
 
@@ -222,6 +227,7 @@ async def revoke_ssh_public_key(
     user: User,
     key_id: UUID,
     request_id: str | None,
+    authorized_keys_output_path: Path | None = None,
 ) -> SshPublicKey:
     key = await session.scalar(
         select(SshPublicKey).where(SshPublicKey.id == key_id, SshPublicKey.user_id == user.id)
@@ -238,6 +244,8 @@ async def revoke_ssh_public_key(
         metadata_json={"key_id": str(key.id), "fingerprint_sha256": key.fingerprint_sha256},
     )
     await session.commit()
+    if authorized_keys_output_path is not None:
+        await sync_authorized_keys(session, output_path=authorized_keys_output_path)
     await session.refresh(key)
     return key
 

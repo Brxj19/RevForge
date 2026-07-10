@@ -23,11 +23,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={inputId}
           className={clsx(
-            "h-8 w-full rounded-sm border bg-surface px-2.5 text-sm text-text-primary outline-none transition-colors",
-            "placeholder:text-text-muted",
+            "h-10 w-full rounded-sm border border-border bg-surface px-3 text-sm text-text-primary shadow-panel outline-none placeholder:text-text-muted",
             error
-              ? "border-danger focus:border-danger focus:ring-1 focus:ring-danger"
-              : "border-border focus:border-accent focus:ring-1 focus:ring-accent",
+              ? "border-danger focus:border-danger"
+              : "focus:border-border-strong focus:bg-surface-subtle",
             className,
           )}
           aria-invalid={error ? "true" : undefined}

@@ -4,6 +4,10 @@ import mimetypes
 import re
 from pathlib import PurePosixPath
 
+from mercurial import error as hgerror
+from mercurial import hg, initialization
+from mercurial import ui as uimod
+
 from app.core.config import Settings
 
 from .command_runner import HgCommandRunner
@@ -15,11 +19,14 @@ from .errors import (
     MercurialNotFoundError,
 )
 from .schemas import (
+    HgBlame,
+    HgBlameLine,
     HgChangeset,
     HgChangesetPage,
     HgDiff,
     HgDirectoryBrowse,
     HgFileBrowse,
+    HgFileSearchMatch,
     HgReference,
     HgReferences,
     HgTreeEntry,
@@ -29,6 +36,8 @@ from .schemas import (
 FULL_NODE_RE = re.compile(r"^[0-9a-f]{40}$")
 SAFE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
 
+initialization.init()
+
 
 class MercurialReadService:
     def __init__(self, *, settings: Settings, command_runner: HgCommandRunner) -> None:
@@ -37,40 +46,30 @@ class MercurialReadService:
 
     async def list_changesets(self, repository_path, *, cursor: str | None) -> HgChangesetPage:
         page_size = self._settings.max_history_page_size
+        repo = self._open_repository(repository_path)
+        if len(repo) == 0:
+            return HgChangesetPage(changesets=[], next_cursor=None)
+
         if cursor is None:
-            payload = await self._command_runner.run_json(
-                ["log", "-Tjson", "-v", "-l", str(page_size + 1)],
-                repository_path=repository_path,
-            )
+            start_revision = len(repo) - 1
         else:
-            cursor_changeset = await self.get_changeset(repository_path, cursor)
-            if cursor_changeset.revision_number <= 0:
-                return HgChangesetPage(changesets=[], next_cursor=None)
-            payload = await self._command_runner.run_json(
-                [
-                    "log",
-                    "-Tjson",
-                    "-v",
-                    "-r",
-                    f"{cursor_changeset.revision_number - 1}:0",
-                    "-l",
-                    str(page_size + 1),
-                ],
-                repository_path=repository_path,
-            )
-        changesets = [self._parse_changeset(entry) for entry in payload]
+            start_revision = self._resolve_context(repo, cursor).rev() - 1
+
+        if start_revision < 0:
+            return HgChangesetPage(changesets=[], next_cursor=None)
+
+        changesets = [
+            self._parse_changeset_context(repo[revision], include_files=True)
+            for revision in range(start_revision, max(-1, start_revision - (page_size + 1)), -1)
+        ]
         next_cursor = changesets[page_size - 1].node if len(changesets) > page_size else None
         return HgChangesetPage(changesets=changesets[:page_size], next_cursor=next_cursor)
 
     async def get_changeset(self, repository_path, revision: str) -> HgChangeset:
-        node = await self.resolve_revision(repository_path, revision)
-        payload = await self._command_runner.run_json(
-            ["log", "-Tjson", "-v", "-r", node],
-            repository_path=repository_path,
+        repo = self._open_repository(repository_path)
+        return self._parse_changeset_context(
+            self._resolve_context(repo, revision), include_files=True
         )
-        if not payload:
-            raise MercurialNotFoundError()
-        return self._parse_changeset(payload[0])
 
     async def get_diff(self, repository_path, revision: str) -> HgDiff:
         node = await self.resolve_revision(repository_path, revision)
@@ -94,15 +93,11 @@ class MercurialReadService:
 
     async def browse(self, repository_path, *, revision: str | None, path: str | None):
         normalized_path = validate_repository_relative_path(path)
-        node = await self._default_or_requested_revision(repository_path, revision)
-        manifest_args = ["manifest", "-Tjson"]
-        if node is not None:
-            manifest_args.extend(["-r", node])
-        manifest = await self._command_runner.run_json(
-            manifest_args, repository_path=repository_path
-        )
-        files = [entry["path"] for entry in manifest]
-        if node is None:
+        repo = self._open_repository(repository_path)
+        ctx = self._default_or_requested_context(repo, revision)
+        files = [] if ctx is None else self._manifest_paths(ctx)
+        node = "" if ctx is None else _decode_ascii_bytes(ctx.hex())
+        if ctx is None:
             if normalized_path != "":
                 raise MercurialNotFoundError()
             return HgDirectoryBrowse(revision="", path="", entries=[])
@@ -122,6 +117,73 @@ class MercurialReadService:
                 entries=self._build_directory_entries(files, normalized_path),
             )
         raise MercurialNotFoundError()
+
+    async def get_blame(self, repository_path, *, revision: str | None, path: str) -> HgBlame:
+        normalized_path = validate_repository_relative_path(path)
+        repo = self._open_repository(repository_path)
+        node = await self.resolve_revision(repository_path, revision)
+        try:
+            payload = await self._command_runner.run_json(
+                ["annotate", "-Tjson", "-unf", "-r", node, "--", normalized_path],
+                repository_path=repository_path,
+                stdout_limit=max(
+                    self._settings.max_file_content_bytes * 4,
+                    self._settings.hg_max_stdout_bytes,
+                ),
+            )
+        except HgCommandFailedError as exc:
+            if exc.code == "hg_missing_path":
+                raise MercurialNotFoundError() from exc
+            raise
+
+        if not payload:
+            raise MercurialNotFoundError()
+
+        lines_payload = payload[0].get("lines", [])
+        lines: list[HgBlameLine] = []
+        for index, entry in enumerate(lines_payload, start=1):
+            author_name, author_email = _parse_author(str(entry["user"]))
+            rev = int(entry["rev"])
+            resolved_ctx = repo[rev]
+            full_node = _decode_ascii_bytes(resolved_ctx.hex())
+            lines.append(
+                HgBlameLine(
+                    line_number=index,
+                    revision=full_node,
+                    short_revision=full_node[:12],
+                    author_name=author_name,
+                    author_email_when_available=author_email,
+                    path=str(entry["path"]),
+                    content=str(entry["line"]).rstrip("\n"),
+                )
+            )
+
+        return HgBlame(revision=node, path=normalized_path, lines=lines)
+
+    async def search_files(
+        self,
+        repository_path,
+        *,
+        revision: str | None,
+        query: str,
+        limit: int = 50,
+    ) -> tuple[str, list[HgFileSearchMatch]]:
+        normalized_query = query.strip().lower()
+        repo = self._open_repository(repository_path)
+        ctx = self._default_or_requested_context(repo, revision)
+        if ctx is None:
+            return "", []
+        node = _decode_ascii_bytes(ctx.hex())
+        if not normalized_query:
+            return node, []
+        files = self._manifest_paths(ctx)
+        ranked = sorted(
+            (path for path in files if normalized_query in path.lower()),
+            key=lambda path: (not path.lower().startswith(normalized_query), len(path), path),
+        )[:limit]
+        return node, [
+            HgFileSearchMatch(path=path, language_hint=_language_hint(path)) for path in ranked
+        ]
 
     async def list_refs(self, repository_path) -> HgReferences:
         branches_payload = await self._command_runner.run_json(
@@ -163,46 +225,11 @@ class MercurialReadService:
         return HgReferences(branches=branches, tags=tags, bookmarks=bookmarks)
 
     async def resolve_revision(self, repository_path, revision: str | None) -> str:
-        if revision is None or revision == "":
-            payload = await self._command_runner.run_json(
-                ["log", "-Tjson", "-l", "1"],
-                repository_path=repository_path,
-            )
-            if not payload:
-                raise MercurialNotFoundError()
-            return str(payload[0]["node"])
-        normalized_revision = revision.strip()
-        if FULL_NODE_RE.fullmatch(normalized_revision):
-            payload = await self._command_runner.run_json(
-                ["log", "-Tjson", "-r", normalized_revision],
-                repository_path=repository_path,
-            )
-            if not payload:
-                raise MercurialNotFoundError()
-            return normalized_revision
-        if not SAFE_REF_RE.fullmatch(normalized_revision):
-            raise InvalidRevisionError()
-
-        refs = await self.list_refs(repository_path)
-        for ref in refs.branches + refs.tags + refs.bookmarks:
-            if ref.name == normalized_revision:
-                return ref.node
-        raise MercurialNotFoundError()
-
-    async def _default_or_requested_revision(
-        self,
-        repository_path,
-        revision: str | None,
-    ) -> str | None:
-        if revision is not None and revision != "":
-            return await self.resolve_revision(repository_path, revision)
-        payload = await self._command_runner.run_json(
-            ["log", "-Tjson", "-l", "1"],
-            repository_path=repository_path,
-        )
-        if not payload:
-            return None
-        return str(payload[0]["node"])
+        repo = self._open_repository(repository_path)
+        ctx = self._default_or_requested_context(repo, revision)
+        if ctx is None:
+            raise MercurialNotFoundError()
+        return _decode_ascii_bytes(ctx.hex())
 
     async def _read_file(self, repository_path, *, node: str, path: str) -> HgFileBrowse:
         try:
@@ -281,23 +308,72 @@ class MercurialReadService:
                 seen.setdefault(head, HgTreeEntry(name=head, path=child_path, kind="file"))
         return sorted(seen.values(), key=lambda entry: (entry.kind != "directory", entry.name))
 
-    def _parse_changeset(self, entry: dict) -> HgChangeset:
-        author_name, author_email = _parse_author(str(entry["user"]))
+    def _open_repository(self, repository_path):
+        base_ui = uimod.ui.load()
+        base_ui.setconfig(b"ui", b"nontty", b"true", b"revforge")
+        try:
+            return hg.repository(base_ui, bytes(str(repository_path), "utf-8"))
+        except (hgerror.RepoError, FileNotFoundError) as exc:
+            raise MercurialNotFoundError() from exc
+
+    def _default_or_requested_context(self, repo, revision: str | None):
+        if len(repo) == 0:
+            return None
+        if revision is None or revision == "":
+            return repo[len(repo) - 1]
+        return self._resolve_context(repo, revision)
+
+    def _resolve_context(self, repo, revision: str):
+        normalized_revision = revision.strip()
+        if FULL_NODE_RE.fullmatch(normalized_revision):
+            try:
+                return repo[normalized_revision.encode("ascii")]
+            except (hgerror.LookupError, hgerror.RepoLookupError, KeyError) as exc:
+                raise MercurialNotFoundError() from exc
+        if not SAFE_REF_RE.fullmatch(normalized_revision):
+            raise InvalidRevisionError()
+
+        branch_name = normalized_revision.encode("utf-8")
+        if repo.branchmap().hasbranch(branch_name):
+            branch_heads = repo.branchmap().branchheads(branch_name, closed=False)
+            if branch_heads:
+                return repo[branch_heads[0]]
+
+        tag_node = repo.tags().get(branch_name)
+        if tag_node is not None:
+            return repo[tag_node]
+
+        bookmark_node = repo._bookmarks.get(branch_name)
+        if bookmark_node is not None:
+            return repo[bookmark_node]
+
+        raise MercurialNotFoundError()
+
+    def _manifest_paths(self, ctx) -> list[str]:
+        return [_decode_utf8_bytes(path) for path in ctx.manifest().keys()]
+
+    def _parse_changeset_context(self, ctx, *, include_files: bool) -> HgChangeset:
+        node = _decode_ascii_bytes(ctx.hex())
+        author_name, author_email = _parse_author(_decode_utf8_bytes(ctx.user()))
         return HgChangeset(
-            node=str(entry["node"]),
-            short_node=str(entry["node"])[:12],
+            node=node,
+            short_node=node[:12],
             parents=[
-                parent for parent in entry.get("parents", []) if not parent.startswith("0000")
+                _decode_ascii_bytes(parent.hex()) for parent in ctx.parents() if parent.rev() >= 0
             ],
             author_name=author_name,
             author_email_when_available=author_email,
-            timestamp=mercurial_timestamp(entry["date"]),
-            message=str(entry["desc"]),
-            branch=str(entry["branch"]),
-            tags=[tag for tag in entry.get("tags", []) if tag != "tip"],
-            bookmarks=list(entry.get("bookmarks", [])),
-            files_changed=list(entry.get("files", [])),
-            revision_number=int(entry["rev"]),
+            timestamp=mercurial_timestamp(list(ctx.date())),
+            message=_decode_utf8_bytes(ctx.description()),
+            branch=_decode_utf8_bytes(ctx.branch()),
+            tags=[
+                _decode_utf8_bytes(tag) for tag in ctx.tags() if _decode_utf8_bytes(tag) != "tip"
+            ],
+            bookmarks=[_decode_utf8_bytes(bookmark) for bookmark in ctx.bookmarks()],
+            files_changed=(
+                [_decode_utf8_bytes(path) for path in ctx.files()] if include_files else []
+            ),
+            revision_number=int(ctx.rev()),
         )
 
 
@@ -327,6 +403,14 @@ def _parse_author(raw_author: str) -> tuple[str, str | None]:
         name, email = raw_author.rsplit("<", 1)
         return name.strip(), email[:-1].strip() or None
     return raw_author.strip(), None
+
+
+def _decode_utf8_bytes(value: bytes) -> str:
+    return value.decode("utf-8", errors="surrogateescape")
+
+
+def _decode_ascii_bytes(value: bytes) -> str:
+    return value.decode("ascii")
 
 
 def _language_hint(path: str) -> str | None:

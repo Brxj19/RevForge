@@ -5,12 +5,17 @@ import { DevUiPage } from "../routes/dev-ui";
 import { UserSettingsPage } from "../routes/user-settings";
 import { AuditPage } from "../routes/audit";
 import {
+  CreateOrganizationMemberPage,
+  CreateOrganizationPage,
+  CreateRepositoryPage,
   DashboardPage,
   LoginPage,
   NotFoundPage,
   OrganizationDetailPage,
+  OrganizationRepositoriesPage,
   OrganizationSettingsPage,
   OrganizationsPage,
+  RepositoriesPage,
   RegisterPage,
   RepositoryDetailPage,
   RepositorySettingsPage,
@@ -27,14 +32,28 @@ export const router = createBrowserRouter([
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
       { path: "organizations", element: <OrganizationsPage /> },
+      { path: "organizations/new", element: <CreateOrganizationPage /> },
       {
         path: "organizations/:organizationSlug",
         element: <OrganizationDetailPage />,
       },
       {
+        path: "organizations/:organizationSlug/members/new",
+        element: <CreateOrganizationMemberPage />,
+      },
+      {
+        path: "organizations/:organizationSlug/repositories",
+        element: <OrganizationRepositoriesPage />,
+      },
+      {
+        path: "organizations/:organizationSlug/repositories/new",
+        element: <CreateRepositoryPage />,
+      },
+      {
         path: "organizations/:organizationSlug/settings",
         element: <OrganizationSettingsPage />,
       },
+      { path: "repositories", element: <RepositoriesPage /> },
       {
         path: "organizations/:organizationSlug/repositories/:repositorySlug",
         element: <RepositoryDetailPage />,

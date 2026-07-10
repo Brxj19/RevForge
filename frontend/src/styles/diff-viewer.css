@@ -1,0 +1,18 @@
+.rf-diff-shell {
+  background: var(--rf-editor-canvas);
+}
+
+.rf-diff-hunk {
+  background: var(--color-diff-hunk-bg);
+  color: var(--color-diff-hunk-text);
+}
+
+.rf-diff-add {
+  background: var(--color-diff-add-bg);
+  color: var(--color-diff-add-text);
+}
+
+.rf-diff-del {
+  background: var(--color-diff-del-bg);
+  color: var(--color-diff-del-text);
+}

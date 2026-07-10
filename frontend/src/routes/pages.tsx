@@ -67,6 +67,7 @@ import {
   formatAbsoluteTime,
   formatRelativeTime,
   formatShortTime,
+  slugifyName,
 } from "../lib/formatting";
 import { repositorySearch } from "../lib/repository-routing";
 
@@ -82,7 +83,7 @@ function MessageBanner({
       className={clsx(
         "rounded-md border px-3 py-2 text-sm",
         tone === "info"
-          ? "border-info/30 bg-info-subtle text-info"
+          ? "border-border-strong bg-surface-muted text-text-primary"
           : "border-danger/30 bg-danger-subtle text-danger",
       )}
       role={tone === "error" ? "alert" : "status"}
@@ -478,13 +479,13 @@ export function DashboardPage() {
         title={`Continue working${user ? `, ${user.display_name}` : ""}`}
         description="Open the next repository quickly, surface operational issues, and keep clone and history actions within reach."
         actions={
-          <Link to="/organizations">
+          <Link to="/repositories">
             <Button>Browse repositories</Button>
           </Link>
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr] xl:items-start">
         <Fieldset
           title="Continue working"
           description="Recently updated repositories across your organizations."
@@ -561,7 +562,7 @@ export function DashboardPage() {
               title="No repositories yet"
               description="Create your first organization and repository, then provision Mercurial storage."
               action={
-                <Link to="/organizations">
+                <Link to="/organizations/new">
                   <Button>Create organization</Button>
                 </Link>
               }
@@ -620,7 +621,7 @@ export function DashboardPage() {
           >
             <div className="grid gap-2 sm:grid-cols-2">
               {[
-                { label: "New repository", to: "/organizations" },
+                { label: "Repositories", to: "/repositories" },
                 { label: "Add SSH key", to: "/settings?tab=ssh-keys" },
                 { label: "Create token", to: "/settings?tab=tokens" },
                 { label: "View audit", to: "/activity" },
@@ -654,7 +655,7 @@ export function DashboardPage() {
                   <div className="min-w-0">
                     <Link
                       className="font-medium text-text-primary hover:text-accent"
-                      to={`/organizations/${repository.organization_id}/repositories/${repository.slug}`}
+                      to={`/organizations/${repository.organization_slug}/repositories/${repository.slug}`}
                     >
                       {repository.display_name}
                     </Link>
@@ -729,43 +730,19 @@ export function OrganizationsPage() {
 }
 
 function OrganizationsContent() {
-  const queryClient = useQueryClient();
-  const { csrfToken } = useAuth();
-  const [formState, setFormState] = useState({
-    slug: "",
-    display_name: "",
-    description: "",
-  });
-  const [createError, setCreateError] = useState<string | null>(null);
-
   const organizationsQuery = useQuery({
     queryKey: ["organizations"],
     queryFn: listOrganizations,
   });
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      createOrganization(
-        {
-          slug: formState.slug,
-          display_name: formState.display_name,
-          description: formState.description || null,
-        },
-        csrfToken,
-      ),
-    onSuccess: async () => {
-      setCreateError(null);
-      setFormState({ slug: "", display_name: "", description: "" });
-      await queryClient.invalidateQueries({ queryKey: ["organizations"] });
-    },
-    onError: (error) => {
-      setCreateError(
-        error instanceof Error
-          ? error.message
-          : "Unable to create the organization.",
-      );
-    },
-  });
+  if (organizationsQuery.data?.length === 1) {
+    return (
+      <Navigate
+        to={`/organizations/${organizationsQuery.data[0].slug}`}
+        replace
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -773,8 +750,13 @@ function OrganizationsContent() {
         eyebrow="Organizations"
         title="Organization workspaces"
         description="Keep repository discovery dense and explicit: members, roles, and repository catalogs stay close together without turning the page into a dashboard."
+        actions={
+          <Link to="/organizations/new">
+            <Button>New organization</Button>
+          </Link>
+        }
       />
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid gap-4">
         <Fieldset
           title="Your organizations"
           description="Open organization repository tables, membership, and settings."
@@ -844,65 +826,689 @@ function OrganizationsContent() {
             />
           )}
         </Fieldset>
+      </div>
+    </div>
+  );
+}
 
-        <Fieldset
-          title="Create organization"
-          description="Organization slugs become part of repository clone URLs and should stay deliberate and stable."
+export function CreateOrganizationPage() {
+  return (
+    <ProtectedRoute>
+      <CreateOrganizationContent />
+    </ProtectedRoute>
+  );
+}
+
+function CreateOrganizationContent() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { csrfToken } = useAuth();
+  const [formState, setFormState] = useState({
+    slug: "",
+    display_name: "",
+    description: "",
+  });
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createOrganization(
+        {
+          slug: formState.slug,
+          display_name: formState.display_name,
+          description: formState.description || null,
+        },
+        csrfToken,
+      ),
+    onSuccess: async (organization) => {
+      setCreateError(null);
+      await queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      navigate(`/organizations/${organization.slug}`);
+    },
+    onError: (error) => {
+      setCreateError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create the organization.",
+      );
+    },
+  });
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Organizations"
+        title="Create organization"
+        description="Create the single organization that will hold your repositories, members, and settings."
+        actions={
+          <Link to="/organizations">
+            <Button variant="secondary">Back</Button>
+          </Link>
+        }
+      />
+      <Fieldset
+        title="Organization identity"
+        description="The slug becomes part of repository URLs, so choose something stable."
+      >
+        <form
+          className="grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createMutation.mutateAsync();
+          }}
         >
-          <form
-            className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void createMutation.mutateAsync();
-            }}
-          >
-            <FormField label="Display name">
-              <Input
-                aria-label="Organization display name"
-                value={formState.display_name}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    display_name: event.target.value,
-                  }))
-                }
-              />
-            </FormField>
-            <FormField
-              label="Slug"
-              hint="Used in URLs and future clone targets. Keep it short and stable."
-            >
-              <Input
-                aria-label="Organization slug"
-                value={formState.slug}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    slug: event.target.value,
-                  }))
-                }
-              />
-            </FormField>
-            <FormField label="Description">
-              <textarea
-                aria-label="Organization description"
-                className="min-h-24 w-full rounded-sm border border-border bg-surface px-2.5 py-2 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-                value={formState.description}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    description: event.target.value,
-                  }))
-                }
-              />
-            </FormField>
-            {createError ? <MessageBanner message={createError} /> : null}
+          <FormField label="Display name">
+            <Input
+              aria-label="Organization display name"
+              value={formState.display_name}
+              onChange={(event) =>
+                setFormState((current) => ({
+                  ...current,
+                  display_name: event.target.value,
+                  slug: slugTouched
+                    ? current.slug
+                    : slugifyName(event.target.value),
+                }))
+              }
+            />
+          </FormField>
+          <FormField label="Slug" hint="Keep it short, URL-safe, and stable.">
+            <Input
+              aria-label="Organization slug"
+              value={formState.slug}
+              onChange={(event) => {
+                setSlugTouched(true);
+                setFormState((current) => ({
+                  ...current,
+                  slug: event.target.value,
+                }));
+              }}
+            />
+          </FormField>
+          <FormField label="Description">
+            <textarea
+              aria-label="Organization description"
+              className="min-h-24 w-full rounded-sm border border-border bg-surface px-2.5 py-2 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              value={formState.description}
+              onChange={(event) =>
+                setFormState((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
+              }
+            />
+          </FormField>
+          {createError ? <MessageBanner message={createError} /> : null}
+          <div className="flex gap-2">
             <Button loading={createMutation.isPending} type="submit">
               Create organization
             </Button>
-          </form>
-        </Fieldset>
+            <Link to="/organizations">
+              <Button type="button" variant="secondary">
+                Cancel
+              </Button>
+            </Link>
+          </div>
+        </form>
+      </Fieldset>
+    </div>
+  );
+}
+
+export function OrganizationRepositoriesPage() {
+  return (
+    <ProtectedRoute>
+      <OrganizationRepositoriesContent />
+    </ProtectedRoute>
+  );
+}
+
+function OrganizationRepositoriesContent() {
+  const { organizationSlug = "" } = useParams();
+  const organizationQuery = useQuery({
+    queryKey: ["organization", organizationSlug],
+    queryFn: () => getOrganization(organizationSlug),
+  });
+  const repositoriesQuery = useQuery({
+    queryKey: ["organization-repositories", organizationSlug, true],
+    queryFn: () => listRepositories(organizationSlug, true),
+    enabled: organizationQuery.isSuccess,
+  });
+  const [repositorySearchText, setRepositorySearchText] = useState("");
+  const [repositoryFilter, setRepositoryFilter] = useState("all");
+
+  const repositoryChangesetQueries = useQueries({
+    queries: (repositoriesQuery.data ?? []).map((repository) => ({
+      queryKey: ["repository-latest", organizationSlug, repository.slug],
+      queryFn: () => listChangesets(organizationSlug, repository.slug),
+      enabled: repository.is_browsable,
+    })),
+  });
+
+  if (organizationQuery.isLoading) {
+    return <LoadingState label="Loading repositories." />;
+  }
+
+  if (organizationQuery.isError || !organizationQuery.data) {
+    return (
+      <ErrorState
+        title="Repositories unavailable"
+        description={
+          organizationQuery.error instanceof Error
+            ? organizationQuery.error.message
+            : "Unable to load the organization."
+        }
+      />
+    );
+  }
+
+  const organization = organizationQuery.data;
+  const repositories = repositoriesQuery.data ?? [];
+  const filteredRepositories = organizationRepoFilter(
+    repositories,
+    repositorySearchText,
+    repositoryFilter,
+  );
+
+  function latestChangesetFor(repository: RepositorySummary) {
+    const index = repositories.findIndex((item) => item.id === repository.id);
+    const query = index >= 0 ? repositoryChangesetQueries[index] : undefined;
+    return query?.data?.changesets[0];
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Repositories"
+        title={`${organization.display_name} repositories`}
+        description="A dedicated repository catalog with denser scanning and direct creation flow."
+        actions={
+          <>
+            {organization.can_manage ? (
+              <Link to={`/organizations/${organization.slug}/repositories/new`}>
+                <Button>New repository</Button>
+              </Link>
+            ) : null}
+            <Link to={`/organizations/${organization.slug}/settings`}>
+              <Button variant="secondary">Settings</Button>
+            </Link>
+          </>
+        }
+      />
+      <Fieldset
+        title="Repositories"
+        description="Browse every repository in this organization with status, access, and latest changeset context."
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="min-w-0 flex-1">
+            <Input
+              aria-label="Search repositories"
+              placeholder="Search repositories"
+              value={repositorySearchText}
+              onChange={(event) => setRepositorySearchText(event.target.value)}
+            />
+          </div>
+          <div className="w-full lg:w-56">
+            <Select
+              aria-label="Filter repositories"
+              value={repositoryFilter}
+              onChange={(event) => setRepositoryFilter(event.target.value)}
+            >
+              <option value="all">All repositories</option>
+              <option value="writable">Writable</option>
+              <option value="admin">Admin</option>
+              <option value="archived">Archived</option>
+              <option value="unprovisioned">Unprovisioned</option>
+            </Select>
+          </div>
+        </div>
+        {repositoriesQuery.isLoading ? (
+          <LoadingState label="Loading repositories." />
+        ) : repositoriesQuery.isError ? (
+          <ErrorState
+            title="Repository catalog unavailable"
+            description={
+              repositoriesQuery.error instanceof Error
+                ? repositoriesQuery.error.message
+                : "Unable to load repositories."
+            }
+          />
+        ) : filteredRepositories.length > 0 ? (
+          <DataTable
+            columns={[
+              {
+                key: "name",
+                header: "Repository",
+                render: (repository) => (
+                  <div className="min-w-0">
+                    <Link
+                      className="font-medium text-text-primary hover:text-accent"
+                      to={`/organizations/${organization.slug}/repositories/${repository.slug}`}
+                    >
+                      {repository.display_name}
+                    </Link>
+                    <div className="mt-1 text-xs text-text-muted">
+                      {repository.description ?? "No description"}
+                    </div>
+                    <div className="mt-1 font-mono text-[11px] text-text-muted">
+                      {repository.slug}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: "visibility",
+                header: "Visibility",
+                render: (repository) => (
+                  <Badge variant={visibilityVariant(repository.visibility)}>
+                    {repository.visibility}
+                  </Badge>
+                ),
+              },
+              {
+                key: "state",
+                header: "State",
+                render: (repository) => (
+                  <Badge
+                    variant={provisioningVariant(repository.provisioning_state)}
+                  >
+                    {repository.provisioning_state}
+                  </Badge>
+                ),
+              },
+              {
+                key: "changeset",
+                header: "Latest changeset",
+                render: (repository) => {
+                  const latest = latestChangesetFor(repository);
+                  return latest ? (
+                    <div className="text-xs">
+                      <div className="font-mono text-text-primary">
+                        {latest.short_node}
+                      </div>
+                      <div className="text-text-muted">
+                        {firstLine(latest.message)}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-text-muted">
+                      {repository.is_browsable ? "Loading…" : "Not available"}
+                    </span>
+                  );
+                },
+              },
+              {
+                key: "updated",
+                header: "Updated",
+                render: (repository) => (
+                  <span title={formatAbsoluteTime(repository.updated_at)}>
+                    {formatRelativeTime(repository.updated_at)}
+                  </span>
+                ),
+              },
+              {
+                key: "role",
+                header: "Your role",
+                render: (repository) => repository.viewer_role ?? "metadata",
+              },
+              {
+                key: "actions",
+                header: "Actions",
+                render: (repository) =>
+                  repositoryQuickActions(organization.slug, repository),
+              },
+            ]}
+            data={filteredRepositories}
+            keyFn={(repository) => repository.id}
+          />
+        ) : (
+          <EmptyState
+            title="No repositories match"
+            description="Adjust the search or filter to surface repositories in this organization."
+          />
+        )}
+      </Fieldset>
+    </div>
+  );
+}
+
+export function CreateOrganizationMemberPage() {
+  return (
+    <ProtectedRoute>
+      <CreateOrganizationMemberContent />
+    </ProtectedRoute>
+  );
+}
+
+function CreateOrganizationMemberContent() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { csrfToken } = useAuth();
+  const { organizationSlug = "" } = useParams();
+  const organizationQuery = useQuery({
+    queryKey: ["organization", organizationSlug],
+    queryFn: () => getOrganization(organizationSlug),
+  });
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberRole, setMemberRole] = useState<"owner" | "admin" | "member">(
+    "member",
+  );
+
+  const addMemberMutation = useMutation({
+    mutationFn: () =>
+      addOrganizationMember(
+        organizationSlug,
+        { email: memberEmail, role: memberRole },
+        csrfToken,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["organization-members", organizationSlug],
+      });
+      navigate(`/organizations/${organizationSlug}`);
+    },
+  });
+
+  if (organizationQuery.isLoading) {
+    return <LoadingState label="Loading organization." />;
+  }
+
+  if (organizationQuery.isError || !organizationQuery.data) {
+    return (
+      <ErrorState
+        title="Organization unavailable"
+        description={
+          organizationQuery.error instanceof Error
+            ? organizationQuery.error.message
+            : "Unable to load the organization."
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Organization"
+        title={`Add member to ${organizationQuery.data.display_name}`}
+        description="Invite an existing account into this organization with an explicit role."
+        actions={
+          <Link to={`/organizations/${organizationSlug}`}>
+            <Button variant="secondary">Back</Button>
+          </Link>
+        }
+      />
+      <Fieldset
+        title="Member access"
+        description="Choose who to add and what role they should receive."
+      >
+        <form
+          className="grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void addMemberMutation.mutateAsync();
+          }}
+        >
+          <FormField label="User email">
+            <Input
+              aria-label="Member email"
+              value={memberEmail}
+              onChange={(event) => setMemberEmail(event.target.value)}
+            />
+          </FormField>
+          <FormField label="Role">
+            <Select
+              aria-label="Member role"
+              value={memberRole}
+              onChange={(event) =>
+                setMemberRole(
+                  event.target.value as "owner" | "admin" | "member",
+                )
+              }
+            >
+              <option value="member">member</option>
+              <option value="admin">admin</option>
+              <option value="owner">owner</option>
+            </Select>
+          </FormField>
+          {addMemberMutation.isError ? (
+            <MessageBanner
+              message={
+                addMemberMutation.error instanceof Error
+                  ? addMemberMutation.error.message
+                  : "Unable to add the member."
+              }
+            />
+          ) : null}
+          <div className="flex gap-2">
+            <Button loading={addMemberMutation.isPending} type="submit">
+              Add member
+            </Button>
+            <Link to={`/organizations/${organizationSlug}`}>
+              <Button type="button" variant="secondary">
+                Cancel
+              </Button>
+            </Link>
+          </div>
+        </form>
+      </Fieldset>
+    </div>
+  );
+}
+
+export function CreateRepositoryPage() {
+  return (
+    <ProtectedRoute>
+      <CreateRepositoryContent />
+    </ProtectedRoute>
+  );
+}
+
+export function RepositoriesPage() {
+  return (
+    <ProtectedRoute>
+      <RepositoriesContent />
+    </ProtectedRoute>
+  );
+}
+
+function RepositoriesContent() {
+  const organizationsQuery = useQuery({
+    queryKey: ["organizations"],
+    queryFn: listOrganizations,
+  });
+
+  if (organizationsQuery.isLoading) {
+    return <LoadingState label="Loading repositories." />;
+  }
+
+  if (organizationsQuery.isError) {
+    return (
+      <ErrorState
+        title="Repositories unavailable"
+        description={
+          organizationsQuery.error instanceof Error
+            ? organizationsQuery.error.message
+            : "Unable to load organizations."
+        }
+      />
+    );
+  }
+
+  if ((organizationsQuery.data ?? []).length === 0) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Repositories"
+          title="No repositories yet"
+          description="Create your organization first so repository hosting can be configured."
+          actions={
+            <Link to="/organizations/new">
+              <Button>Create organization</Button>
+            </Link>
+          }
+        />
       </div>
+    );
+  }
+
+  return (
+    <Navigate
+      to={`/organizations/${organizationsQuery.data?.[0].slug}/repositories`}
+      replace
+    />
+  );
+}
+
+function CreateRepositoryContent() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { csrfToken } = useAuth();
+  const { organizationSlug = "" } = useParams();
+  const organizationQuery = useQuery({
+    queryKey: ["organization", organizationSlug],
+    queryFn: () => getOrganization(organizationSlug),
+  });
+  const [repoState, setRepoState] = useState({
+    slug: "",
+    display_name: "",
+    description: "",
+    visibility: "private" as "public" | "internal" | "private",
+  });
+  const [slugTouched, setSlugTouched] = useState(false);
+
+  const createRepoMutation = useMutation({
+    mutationFn: () => createRepository(organizationSlug, repoState, csrfToken),
+    onSuccess: async (repository) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["organization-repositories", organizationSlug],
+      });
+      navigate(
+        `/organizations/${organizationSlug}/repositories/${repository.slug}`,
+      );
+    },
+  });
+
+  if (organizationQuery.isLoading) {
+    return <LoadingState label="Loading organization." />;
+  }
+
+  if (organizationQuery.isError || !organizationQuery.data) {
+    return (
+      <ErrorState
+        title="Organization unavailable"
+        description={
+          organizationQuery.error instanceof Error
+            ? organizationQuery.error.message
+            : "Unable to load the organization."
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Repositories"
+        title={`Create repository in ${organizationQuery.data.display_name}`}
+        description="Create repository metadata first, then provision Mercurial storage when you are ready."
+        actions={
+          <Link to={`/organizations/${organizationSlug}/repositories`}>
+            <Button variant="secondary">Back</Button>
+          </Link>
+        }
+      />
+      <Fieldset
+        title="Repository identity"
+        description="Choose the stable repository metadata that will appear throughout RevForge."
+      >
+        <form
+          className="grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createRepoMutation.mutateAsync();
+          }}
+        >
+          <FormField label="Display name">
+            <Input
+              aria-label="Repository display name"
+              value={repoState.display_name}
+              onChange={(event) =>
+                setRepoState((current) => ({
+                  ...current,
+                  display_name: event.target.value,
+                  slug: slugTouched
+                    ? current.slug
+                    : slugifyName(event.target.value),
+                }))
+              }
+            />
+          </FormField>
+          <FormField label="Slug">
+            <Input
+              aria-label="Repository slug"
+              value={repoState.slug}
+              onChange={(event) => {
+                setSlugTouched(true);
+                setRepoState((current) => ({
+                  ...current,
+                  slug: event.target.value,
+                }));
+              }}
+            />
+          </FormField>
+          <FormField label="Visibility">
+            <Select
+              aria-label="Repository visibility"
+              value={repoState.visibility}
+              onChange={(event) =>
+                setRepoState((current) => ({
+                  ...current,
+                  visibility: event.target.value as
+                    "public" | "internal" | "private",
+                }))
+              }
+            >
+              <option value="private">private</option>
+              <option value="internal">internal</option>
+              <option value="public">public</option>
+            </Select>
+          </FormField>
+          <FormField label="Description">
+            <textarea
+              aria-label="Repository description"
+              className="min-h-24 w-full rounded-sm border border-border bg-surface px-2.5 py-2 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              value={repoState.description}
+              onChange={(event) =>
+                setRepoState((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
+              }
+            />
+          </FormField>
+          {createRepoMutation.isError ? (
+            <MessageBanner
+              message={
+                createRepoMutation.error instanceof Error
+                  ? createRepoMutation.error.message
+                  : "Unable to create the repository."
+              }
+            />
+          ) : null}
+          <div className="flex gap-2">
+            <Button loading={createRepoMutation.isPending} type="submit">
+              Create repository
+            </Button>
+            <Link to={`/organizations/${organizationSlug}/repositories`}>
+              <Button type="button" variant="secondary">
+                Cancel
+              </Button>
+            </Link>
+          </div>
+        </form>
+      </Fieldset>
     </div>
   );
 }
@@ -967,8 +1573,6 @@ export function OrganizationDetailPage() {
 }
 
 function OrganizationDetailContent() {
-  const queryClient = useQueryClient();
-  const { csrfToken } = useAuth();
   const {
     membersQuery,
     organizationQuery,
@@ -977,16 +1581,6 @@ function OrganizationDetailContent() {
   } = useOrganizationRouteData();
   const [repositorySearchText, setRepositorySearchText] = useState("");
   const [repositoryFilter, setRepositoryFilter] = useState("all");
-  const [memberEmail, setMemberEmail] = useState("");
-  const [memberRole, setMemberRole] = useState<"owner" | "admin" | "member">(
-    "member",
-  );
-  const [repoState, setRepoState] = useState({
-    slug: "",
-    display_name: "",
-    description: "",
-    visibility: "private" as "public" | "internal" | "private",
-  });
 
   const repositoryChangesetQueries = useQueries({
     queries: (repositoriesQuery.data ?? []).map((repository) => ({
@@ -994,37 +1588,6 @@ function OrganizationDetailContent() {
       queryFn: () => listChangesets(organizationSlug, repository.slug),
       enabled: repository.is_browsable,
     })),
-  });
-
-  const addMemberMutation = useMutation({
-    mutationFn: () =>
-      addOrganizationMember(
-        organizationSlug,
-        { email: memberEmail, role: memberRole },
-        csrfToken,
-      ),
-    onSuccess: async () => {
-      setMemberEmail("");
-      setMemberRole("member");
-      await queryClient.invalidateQueries({
-        queryKey: ["organization-members", organizationSlug],
-      });
-    },
-  });
-
-  const createRepoMutation = useMutation({
-    mutationFn: () => createRepository(organizationSlug, repoState, csrfToken),
-    onSuccess: async () => {
-      setRepoState({
-        slug: "",
-        display_name: "",
-        description: "",
-        visibility: "private",
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["organization-repositories", organizationSlug],
-      });
-    },
   });
 
   if (organizationQuery.isLoading) {
@@ -1069,14 +1632,22 @@ function OrganizationDetailContent() {
         }
         actions={
           organization.can_manage ? (
-            <Link to={`/organizations/${organization.slug}/settings`}>
-              <Button variant="secondary">Settings</Button>
-            </Link>
+            <>
+              <Link to={`/organizations/${organization.slug}/members/new`}>
+                <Button>Add member</Button>
+              </Link>
+              <Link to={`/organizations/${organization.slug}/repositories/new`}>
+                <Button>New repository</Button>
+              </Link>
+              <Link to={`/organizations/${organization.slug}/settings`}>
+                <Button variant="secondary">Settings</Button>
+              </Link>
+            </>
           ) : undefined
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr] xl:items-start">
         <Fieldset
           title="Repositories"
           description="Searchable repository table with visibility, provisioning state, latest changeset, and your effective role."
@@ -1272,138 +1843,6 @@ function OrganizationDetailContent() {
               </>
             ) : null}
           </Fieldset>
-
-          {organization.can_manage ? (
-            <>
-              <Fieldset
-                title="Add member"
-                description="Invite an existing user into this organization with an explicit role."
-              >
-                <form
-                  className="grid gap-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void addMemberMutation.mutateAsync();
-                  }}
-                >
-                  <FormField label="User email">
-                    <Input
-                      aria-label="Member email"
-                      value={memberEmail}
-                      onChange={(event) => setMemberEmail(event.target.value)}
-                    />
-                  </FormField>
-                  <FormField label="Role">
-                    <Select
-                      aria-label="Member role"
-                      value={memberRole}
-                      onChange={(event) =>
-                        setMemberRole(
-                          event.target.value as "owner" | "admin" | "member",
-                        )
-                      }
-                    >
-                      <option value="member">member</option>
-                      <option value="admin">admin</option>
-                      <option value="owner">owner</option>
-                    </Select>
-                  </FormField>
-                  {addMemberMutation.isError ? (
-                    <MessageBanner
-                      message={
-                        addMemberMutation.error instanceof Error
-                          ? addMemberMutation.error.message
-                          : "Unable to add the member."
-                      }
-                    />
-                  ) : null}
-                  <Button loading={addMemberMutation.isPending} type="submit">
-                    Add member
-                  </Button>
-                </form>
-              </Fieldset>
-
-              <Fieldset
-                title="New repository"
-                description="Create repository metadata before provisioning Mercurial storage."
-              >
-                <form
-                  className="grid gap-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void createRepoMutation.mutateAsync();
-                  }}
-                >
-                  <FormField label="Display name">
-                    <Input
-                      aria-label="Repository display name"
-                      value={repoState.display_name}
-                      onChange={(event) =>
-                        setRepoState((current) => ({
-                          ...current,
-                          display_name: event.target.value,
-                        }))
-                      }
-                    />
-                  </FormField>
-                  <FormField label="Slug">
-                    <Input
-                      aria-label="Repository slug"
-                      value={repoState.slug}
-                      onChange={(event) =>
-                        setRepoState((current) => ({
-                          ...current,
-                          slug: event.target.value,
-                        }))
-                      }
-                    />
-                  </FormField>
-                  <FormField label="Visibility">
-                    <Select
-                      aria-label="Repository visibility"
-                      value={repoState.visibility}
-                      onChange={(event) =>
-                        setRepoState((current) => ({
-                          ...current,
-                          visibility: event.target.value as
-                            "public" | "internal" | "private",
-                        }))
-                      }
-                    >
-                      <option value="private">private</option>
-                      <option value="internal">internal</option>
-                      <option value="public">public</option>
-                    </Select>
-                  </FormField>
-                  <FormField label="Description">
-                    <textarea
-                      aria-label="Repository description"
-                      className="min-h-24 w-full rounded-sm border border-border bg-surface px-2.5 py-2 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-                      value={repoState.description}
-                      onChange={(event) =>
-                        setRepoState((current) => ({
-                          ...current,
-                          description: event.target.value,
-                        }))
-                      }
-                    />
-                  </FormField>
-                  {createRepoMutation.isError ? (
-                    <MessageBanner
-                      message={
-                        createRepoMutation.error instanceof Error
-                          ? createRepoMutation.error.message
-                          : "Unable to create the repository."
-                      }
-                    />
-                  ) : null}
-                  <Button loading={createRepoMutation.isPending} type="submit">
-                    Create repository
-                  </Button>
-                </form>
-              </Fieldset>
-            </>
-          ) : null}
         </div>
       </div>
     </div>
@@ -2548,7 +2987,7 @@ function RepositorySettingsContent() {
                 className={clsx(
                   "rounded-md px-3 py-2 text-left text-sm",
                   section === item.id
-                    ? "bg-accent-subtle font-medium text-text-primary"
+                    ? "border border-border-strong bg-surface-muted font-medium text-text-primary"
                     : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
                 )}
                 onClick={() => navigate(`?section=${item.id}`)}

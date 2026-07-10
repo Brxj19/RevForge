@@ -31,7 +31,7 @@ def render_authorized_keys_entry(key: SshPublicKey) -> str:
     command = SSH_KEY_COMMAND_TEMPLATE.format(module=SSH_GATEWAY_MODULE, key_id=key.id)
     options = ",".join((command, *SSH_KEY_COMMAND_OPTIONS))
     comment = f"revforge key_id={key.id} user_id={key.user_id}"
-    return f"{options} {key.key_type} {key.public_key_normalized} {comment}"
+    return f"{options} {key.public_key_normalized} {comment}"
 
 
 async def list_authorized_keys_entries(

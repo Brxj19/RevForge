@@ -156,6 +156,33 @@ export interface RepositoryBrowseFile {
   size_when_known: number | null;
 }
 
+export interface RepositoryBlameLine {
+  line_number: number;
+  revision: string;
+  short_revision: string;
+  author_name: string;
+  author_email_when_available: string | null;
+  path: string;
+  content: string;
+}
+
+export interface RepositoryBlame {
+  revision: string;
+  path: string;
+  lines: RepositoryBlameLine[];
+}
+
+export interface RepositoryFileSearchMatch {
+  path: string;
+  language_hint_when_available: string | null;
+}
+
+export interface RepositoryFileSearchResponse {
+  revision: string;
+  query: string;
+  results: RepositoryFileSearchMatch[];
+}
+
 export type RepositoryBrowseResult =
   RepositoryBrowseDirectory | RepositoryBrowseFile;
 
@@ -181,6 +208,30 @@ export interface RepositoryPermission {
   updated_at: string;
   user_email: string;
   user_display_name: string;
+}
+
+export interface PersonalAccessToken {
+  id: string;
+  name: string;
+  token_prefix: string;
+  capability: "read" | "write" | "admin";
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface PersonalAccessTokenCreateResponse extends PersonalAccessToken {
+  plaintext_token: string;
+}
+
+export interface SshPublicKey {
+  id: string;
+  label: string;
+  key_type: string;
+  fingerprint_sha256: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
 }
 
 export class ApiClientError extends Error {
@@ -364,6 +415,53 @@ export function deleteOrganizationMember(
   );
 }
 
+export function listPersonalAccessTokens() {
+  return request<PersonalAccessToken[]>("/api/v1/me/tokens");
+}
+
+export function createPersonalAccessToken(
+  payload: { name: string; capability: "read" | "write" | "admin" },
+  csrfToken: string | null,
+) {
+  return request<PersonalAccessTokenCreateResponse>("/api/v1/me/tokens", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    csrfToken,
+  });
+}
+
+export function revokePersonalAccessToken(
+  tokenId: string,
+  csrfToken: string | null,
+) {
+  return request<void>(`/api/v1/me/tokens/${tokenId}`, {
+    method: "DELETE",
+    csrfToken,
+  });
+}
+
+export function listSshPublicKeys() {
+  return request<SshPublicKey[]>("/api/v1/me/ssh-keys");
+}
+
+export function createSshPublicKey(
+  payload: { label: string; public_key: string },
+  csrfToken: string | null,
+) {
+  return request<SshPublicKey>("/api/v1/me/ssh-keys", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    csrfToken,
+  });
+}
+
+export function revokeSshPublicKey(keyId: string, csrfToken: string | null) {
+  return request<void>(`/api/v1/me/ssh-keys/${keyId}`, {
+    method: "DELETE",
+    csrfToken,
+  });
+}
+
 export function listRepositories(
   organizationSlug: string,
   includeArchived = false,
@@ -467,6 +565,33 @@ export function browseRepository(
   const suffix = search.size > 0 ? `?${search.toString()}` : "";
   return request<RepositoryBrowseResult>(
     `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/browse${suffix}`,
+  );
+}
+
+export function getRepositoryBlame(
+  organizationSlug: string,
+  repositorySlug: string,
+  options: { path: string; revision?: string | null },
+) {
+  const params = new URLSearchParams();
+  params.set("path", options.path);
+  if (options.revision) params.set("revision", options.revision);
+  return request<RepositoryBlame>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/blame?${params.toString()}`,
+  );
+}
+
+export function searchRepositoryFiles(
+  organizationSlug: string,
+  repositorySlug: string,
+  options: { q: string; revision?: string | null; limit?: number },
+) {
+  const params = new URLSearchParams();
+  params.set("q", options.q);
+  if (options.revision) params.set("revision", options.revision);
+  if (options.limit) params.set("limit", String(options.limit));
+  return request<RepositoryFileSearchResponse>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/search/files?${params.toString()}`,
   );
 }
 

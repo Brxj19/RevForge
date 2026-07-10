@@ -41,10 +41,14 @@ from app.schemas.repositories import (
     ChangesetDiffResponse,
     ChangesetListResponse,
     ChangesetSummaryResponse,
+    RepositoryBlameLineResponse,
+    RepositoryBlameResponse,
     RepositoryCreateRequest,
     RepositoryDetailResponse,
     RepositoryDirectoryBrowseResponse,
     RepositoryFileBrowseResponse,
+    RepositoryFileSearchMatchResponse,
+    RepositoryFileSearchResponse,
     RepositoryPermissionRequest,
     RepositoryPermissionResponse,
     RepositoryProvisionResponse,
@@ -223,6 +227,25 @@ def _serialize_browse_response(
     )
 
 
+def _serialize_blame_response(blame_result) -> RepositoryBlameResponse:
+    return RepositoryBlameResponse(
+        revision=blame_result.revision,
+        path=blame_result.path,
+        lines=[
+            RepositoryBlameLineResponse(
+                line_number=line.line_number,
+                revision=line.revision,
+                short_revision=line.short_revision,
+                author_name=line.author_name,
+                author_email_when_available=line.author_email_when_available,
+                path=line.path,
+                content=line.content,
+            )
+            for line in blame_result.lines
+        ],
+    )
+
+
 def _raise_read_error(exc: Exception) -> None:
     if isinstance(exc, HgCommandFailedError) and exc.code in {
         "hg_unknown_revision",
@@ -245,9 +268,7 @@ def _raise_read_error(exc: Exception) -> None:
             status_code=status.HTTP_404_NOT_FOUND, detail="Repository content not found."
         ) from exc
     if isinstance(exc, ForbiddenError):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied."
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.") from exc
     if isinstance(exc, InvalidRevisionError | InvalidRepositoryPathError):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -641,6 +662,92 @@ async def browse_repository_route(
         _raise_read_error(exc)
 
     return _serialize_browse_response(browse_result)
+
+
+@router.get("/{repository_slug}/blame", response_model=RepositoryBlameResponse)
+async def blame_repository_file_route(
+    organization_slug: str,
+    repository_slug: str,
+    revision: str | None = Query(default=None),
+    path: str = Query(...),
+    identity: SessionIdentity | None = Depends(get_optional_identity),
+    session: AsyncSession = Depends(get_session),
+    storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
+    read_service: MercurialReadService = Depends(get_mercurial_read_service),
+) -> RepositoryBlameResponse:
+    try:
+        (
+            _organization,
+            _repository,
+            repository_path,
+            _viewer_role,
+            _can_manage,
+            _inherited_access,
+        ) = await _ensure_browsable_repository(
+            session=session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            actor=identity.user if identity is not None else None,
+            storage_locator=storage_locator,
+        )
+        blame_result = await read_service.get_blame(
+            repository_path,
+            revision=revision,
+            path=path,
+        )
+    except _KNOWN_READ_ERRORS as exc:
+        _raise_read_error(exc)
+
+    return _serialize_blame_response(blame_result)
+
+
+@router.get("/{repository_slug}/search/files", response_model=RepositoryFileSearchResponse)
+async def search_repository_files_route(
+    organization_slug: str,
+    repository_slug: str,
+    q: str = Query(..., min_length=1),
+    revision: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    identity: SessionIdentity | None = Depends(get_optional_identity),
+    session: AsyncSession = Depends(get_session),
+    storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
+    read_service: MercurialReadService = Depends(get_mercurial_read_service),
+) -> RepositoryFileSearchResponse:
+    try:
+        (
+            _organization,
+            _repository,
+            repository_path,
+            _viewer_role,
+            _can_manage,
+            _inherited_access,
+        ) = await _ensure_browsable_repository(
+            session=session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            actor=identity.user if identity is not None else None,
+            storage_locator=storage_locator,
+        )
+        resolved_revision, matches = await read_service.search_files(
+            repository_path,
+            revision=revision,
+            query=q,
+            limit=limit,
+        )
+    except _KNOWN_READ_ERRORS as exc:
+        _raise_read_error(exc)
+
+    return RepositoryFileSearchResponse(
+        revision=resolved_revision,
+        query=q,
+        results=[
+            RepositoryFileSearchMatchResponse(
+                path=match.path,
+                language_hint_when_available=match.language_hint,
+            )
+            for match in matches
+        ],
+    )
 
 
 @router.get("/{repository_slug}/refs", response_model=RepositoryRefsResponse)

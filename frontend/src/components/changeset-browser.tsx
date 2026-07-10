@@ -17,14 +17,17 @@ import { Surface } from "./ui/surface";
 function GraphDot() {
   return (
     <svg
-      width="14"
-      height="14"
-      viewBox="0 0 14 14"
+      width="18"
+      height="28"
+      viewBox="0 0 18 28"
       fill="none"
       aria-hidden="true"
       className="flex-shrink-0"
     >
-      <circle cx="7" cy="7" r="3.5" fill="currentColor" />
+      <path d="M9 0V8" stroke="currentColor" strokeOpacity="0.4" />
+      <path d="M9 20V28" stroke="currentColor" strokeOpacity="0.4" />
+      <circle cx="9" cy="14" r="4" fill="currentColor" />
+      <circle cx="9" cy="14" r="7" fill="currentColor" fillOpacity="0.08" />
     </svg>
   );
 }
@@ -51,8 +54,8 @@ export function HistoryList({
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-sm">
           <thead>
-            <tr className="border-b border-border bg-canvas text-[11px] uppercase tracking-[0.18em] text-text-muted">
-              <th className="w-14 px-4 py-3">Graph</th>
+            <tr className="border-b border-border bg-surface-subtle font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
+              <th className="w-16 px-4 py-2">Graph</th>
               <th className="px-4 py-3">Changeset message</th>
               <th className="w-40 px-4 py-3">Author</th>
               <th className="w-28 px-4 py-3">Time</th>
@@ -64,10 +67,12 @@ export function HistoryList({
             {changesets.map((changeset) => (
               <tr
                 key={changeset.node}
-                className="align-top hover:bg-surface-subtle/50"
+                className="align-top hover:bg-surface-hover/60"
               >
-                <td className="px-4 py-3 text-accent">
-                  <GraphDot />
+                <td className="px-4 py-2 text-text-muted">
+                  <div className="flex justify-center">
+                    <GraphDot />
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <div className="min-w-0">
@@ -110,7 +115,7 @@ export function HistoryList({
       {hasNextPage ? (
         <div className="border-t border-border px-4 py-3">
           <button
-            className="rounded-sm border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60"
+            className="rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60"
             disabled={isFetchingNextPage}
             onClick={onLoadMore}
             type="button"
@@ -244,7 +249,7 @@ export function ChangesetDetail({
         </div>
 
         {changeset.message.includes("\n") ? (
-          <div className="rounded-md border border-border bg-canvas p-4 text-sm text-text-primary">
+          <div className="rounded-md border border-border bg-surface-subtle p-4 text-sm text-text-primary">
             <pre className="whitespace-pre-wrap font-sans">
               {changeset.message}
             </pre>
@@ -321,7 +326,7 @@ export function ChangesetDetail({
               return (
                 <a
                   key={filePath}
-                  className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-canvas px-4 py-3 text-sm hover:border-border-strong"
+                  className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface-subtle px-4 py-3 text-sm hover:border-border-strong"
                   href={`#file-${encodeURIComponent(filePath)}`}
                 >
                   <span className="w-5 font-mono text-xs text-text-muted">
@@ -391,21 +396,19 @@ export function ChangesetDetail({
                     View file
                   </Link>
                 </div>
-                <div className="overflow-x-auto p-4">
+                <div className="rf-diff-shell overflow-x-auto p-4">
                   <pre className="font-mono text-[13px] leading-6 text-text-primary">
                     {file.hunks.map((hunk) => (
                       <div key={`${file.path}-${hunk.header}`}>
-                        <div className="bg-surface-subtle px-2 py-1 text-text-secondary">
+                        <div className="rf-diff-hunk px-2 py-1">
                           {hunk.header}
                         </div>
                         {hunk.lines.map((line, index) => (
                           <div
                             key={`${file.path}-${hunk.header}-${index}`}
                             className={clsx(
-                              line.type === "add" &&
-                                "bg-success-subtle/60 text-success",
-                              line.type === "remove" &&
-                                "bg-danger-subtle/60 text-danger",
+                              line.type === "add" && "rf-diff-add",
+                              line.type === "remove" && "rf-diff-del",
                             )}
                           >
                             {line.text || " "}

@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.config import get_settings
 from app.mercurial.authorized_keys import render_authorized_keys, write_authorized_keys_file
 from app.models.ssh_public_key import SshPublicKey
 
@@ -89,6 +90,9 @@ def test_authorized_keys_render_and_sync(client, session_factory, tmp_path) -> N
     assert "no-X11-forwarding" in content
     assert f"revforge key_id={created_key.id} user_id={created_key.user_id}" in content
     assert created_key.public_key_normalized in content
+    assert f"{created_key.key_type} {created_key.key_type}" not in content
+    managed_output_path = Path(get_settings().ssh_authorized_keys_path)
+    assert managed_output_path.read_text(encoding="utf-8") == content
 
     output_path = tmp_path / "authorized_keys"
     write_authorized_keys_file(output_path, content)
@@ -106,3 +110,4 @@ def test_authorized_keys_render_and_sync(client, session_factory, tmp_path) -> N
 
     content_after_revoke = asyncio.run(render_after_revoke())
     assert created_key.public_key_normalized not in content_after_revoke
+    assert managed_output_path.read_text(encoding="utf-8") == content_after_revoke

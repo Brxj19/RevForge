@@ -25,6 +25,10 @@ def settings_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setenv("REVFORGE_SESSION_COOKIE_SECURE", "false")
     monkeypatch.setenv("REVFORGE_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
     monkeypatch.setenv("REVFORGE_REPOSITORY_ROOT", str(tmp_path / "repositories"))
+    monkeypatch.setenv(
+        "REVFORGE_SSH_AUTHORIZED_KEYS_PATH",
+        str(tmp_path / "ssh" / "authorized_keys"),
+    )
     monkeypatch.setenv("REVFORGE_MAX_HISTORY_PAGE_SIZE", "2")
     monkeypatch.setenv("REVFORGE_MAX_DIFF_BYTES", "65536")
     monkeypatch.setenv("REVFORGE_MAX_FILE_CONTENT_BYTES", "32768")
