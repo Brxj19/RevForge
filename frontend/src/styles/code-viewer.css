@@ -12,7 +12,7 @@
 }
 
 .rf-code-line.is-selected {
-  background: var(--rf-editor-line-selected);
+  background: var(--color-accent-subtle);
 }
 
 .rf-code-gutter {
@@ -25,7 +25,7 @@
 }
 
 .rf-code-anchor:hover {
-  color: var(--color-text-primary);
+  color: var(--color-accent);
 }
 
 .rf-token-keyword {

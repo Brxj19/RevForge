@@ -67,6 +67,10 @@ export const router = createBrowserRouter([
         element: <RepositoryDetailPage />,
       },
       {
+        path: "organizations/:organizationSlug/repositories/:repositorySlug/graph",
+        element: <RepositoryDetailPage />,
+      },
+      {
         path: "organizations/:organizationSlug/repositories/:repositorySlug/commits",
         element: <RepositoryDetailPage />,
       },

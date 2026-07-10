@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppProviders } from "../app/providers";
+import { seedAccentStorage } from "../app/accent-preference";
 import { UserSettingsPage } from "../routes/user-settings";
 
 function renderSettings(route = "/settings?tab=tokens") {
@@ -120,5 +121,23 @@ describe("user settings", () => {
 
     expect(await screen.findByText(/^Laptop$/i)).toBeInTheDocument();
     expect(screen.getByText(/SHA256:testfingerprint/i)).toBeInTheDocument();
+  });
+
+  test("persists the selected accent palette", async () => {
+    seedAccentStorage("tech");
+
+    renderSettings("/settings?tab=preferences");
+
+    const techPalette = await screen.findByRole("button", {
+      name: /tech & cyber/i,
+    });
+    expect(techPalette).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: /premium & luxury/i }));
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute("data-accent", "luxury");
+    });
+    expect(document.documentElement).toHaveAttribute("data-accent", "luxury");
   });
 });

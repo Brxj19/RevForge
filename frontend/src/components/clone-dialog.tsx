@@ -70,10 +70,10 @@ export function CloneDialog({
                 <button
                   key={item.id}
                   type="button"
-                  className={`rounded-sm border px-3 py-2 text-sm font-medium ${
+                  className={`px-3 py-2 text-sm font-medium ${
                     protocol === item.id
-                      ? "border-border-strong bg-surface-muted text-text-primary"
-                      : "border-border bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                      ? "bg-accent-subtle text-accent"
+                      : "bg-surface-subtle text-text-secondary hover:bg-accent-subtle hover:text-accent"
                   }`}
                   onClick={() => setProtocol(item.id as "https" | "ssh")}
                 >

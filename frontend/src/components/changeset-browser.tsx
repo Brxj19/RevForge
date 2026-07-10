@@ -115,7 +115,7 @@ export function HistoryList({
       {hasNextPage ? (
         <div className="border-t border-border px-4 py-3">
           <button
-            className="rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60"
+            className="px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60"
             disabled={isFetchingNextPage}
             onClick={onLoadMore}
             type="button"

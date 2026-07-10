@@ -355,7 +355,7 @@ export function CommandPalette({
           role="dialog"
           aria-modal="true"
           aria-label="Command palette"
-          className="overflow-hidden rounded-lg border border-border-strong bg-surface shadow-dialog"
+          className="overflow-hidden rounded-lg bg-surface shadow-dialog"
         >
           <div className="border-b border-border px-4 py-3">
             <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-muted">
@@ -391,10 +391,10 @@ export function CommandPalette({
                             <button
                               type="button"
                               className={clsx(
-                                "flex w-full items-start justify-between rounded-sm border px-3 py-2 text-left",
+                                "flex w-full items-start justify-between px-3 py-2 text-left transition-colors",
                                 active
-                                  ? "border-border-strong bg-surface-muted"
-                                  : "border-transparent hover:border-border hover:bg-surface-hover",
+                                  ? "bg-accent-subtle text-accent"
+                                  : "hover:bg-surface-subtle hover:text-text-primary",
                               )}
                               onMouseEnter={() => setActiveIndex(index)}
                               onClick={() => selectItem(item)}
@@ -423,18 +423,18 @@ export function CommandPalette({
                 ))}
 
                 {showUnsupportedSearch ? (
-                  <div className="rounded-md border border-border-strong bg-surface-muted px-3 py-2 text-xs text-text-muted">
+                  <div className="border border-border-strong bg-surface-muted px-3 py-2 text-xs text-text-muted">
                     Text search is not connected yet. Path and file results are
                     shown when available.
                   </div>
                 ) : null}
               </div>
             ) : fileSearchQuery.isLoading || revisionQuery.isLoading ? (
-              <div className="rounded-md border border-dashed border-border px-4 py-4 text-center text-sm text-text-muted">
+              <div className="border border-dashed border-border px-4 py-4 text-center text-sm text-text-muted">
                 Loading…
               </div>
             ) : (
-              <div className="rounded-md border border-dashed border-border px-4 py-4 text-center text-sm text-text-muted">
+              <div className="border border-dashed border-border px-4 py-4 text-center text-sm text-text-muted">
                 {modeInfo.mode === "search"
                   ? "No repository matches found. Text search is not supported yet."
                   : "No matching results."}

@@ -15,6 +15,7 @@ import {
   repositoryRevisionGroups,
   repositorySearch,
 } from "../lib/repository-routing";
+import { MarkdownRenderer } from "./markdown";
 import { EmptyState } from "./states";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -491,184 +492,6 @@ function openRawContent(content: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function renderInlineMarkdown(text: string) {
-  const parts = text.split(
-    /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g,
-  );
-  return parts.map((part, index) => {
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return (
-        <code
-          key={`${part}-${index}`}
-          className="rounded-sm bg-surface-subtle px-1.5 py-0.5 font-mono text-[0.95em]"
-        >
-          {part.slice(1, -1)}
-        </code>
-      );
-    }
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
-    }
-    if (part.startsWith("*") && part.endsWith("*")) {
-      return <em key={`${part}-${index}`}>{part.slice(1, -1)}</em>;
-    }
-    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-    if (linkMatch) {
-      return (
-        <a
-          key={`${part}-${index}`}
-          className="text-text-primary underline"
-          href={linkMatch[2]}
-          rel="noreferrer"
-          target="_blank"
-        >
-          {linkMatch[1]}
-        </a>
-      );
-    }
-    return <span key={`${part}-${index}`}>{part}</span>;
-  });
-}
-
-function renderMarkdown(content: string) {
-  const lines = content.split("\n");
-  const blocks: Array<{ type: string; content: string[] }> = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    const isCodeFence = trimmed.startsWith("```");
-    const last = blocks[blocks.length - 1];
-
-    if (isCodeFence) {
-      if (last?.type === "code") {
-        blocks.push({ type: "spacer", content: [] });
-      } else {
-        blocks.push({ type: "code", content: [] });
-      }
-      continue;
-    }
-
-    if (last?.type === "code") {
-      last.content.push(line);
-      continue;
-    }
-
-    if (!trimmed) {
-      blocks.push({ type: "spacer", content: [] });
-      continue;
-    }
-
-    const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
-    if (headingMatch) {
-      blocks.push({
-        type: `h${headingMatch[1].length}`,
-        content: [headingMatch[2]],
-      });
-      continue;
-    }
-
-    if (/^[-*]\s+/.test(trimmed)) {
-      if (last?.type === "ul") {
-        last.content.push(trimmed.replace(/^[-*]\s+/, ""));
-      } else {
-        blocks.push({ type: "ul", content: [trimmed.replace(/^[-*]\s+/, "")] });
-      }
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(trimmed)) {
-      if (last?.type === "ol") {
-        last.content.push(trimmed.replace(/^\d+\.\s+/, ""));
-      } else {
-        blocks.push({
-          type: "ol",
-          content: [trimmed.replace(/^\d+\.\s+/, "")],
-        });
-      }
-      continue;
-    }
-
-    if (trimmed.startsWith(">")) {
-      if (last?.type === "blockquote") {
-        last.content.push(trimmed.replace(/^>\s?/, ""));
-      } else {
-        blocks.push({
-          type: "blockquote",
-          content: [trimmed.replace(/^>\s?/, "")],
-        });
-      }
-      continue;
-    }
-
-    if (last?.type === "p") {
-      last.content.push(trimmed);
-    } else {
-      blocks.push({ type: "p", content: [trimmed] });
-    }
-  }
-
-  return blocks.map((block, index) => {
-    const key = `${block.type}-${index}`;
-    if (block.type === "spacer") return <div key={key} className="h-2" />;
-    if (block.type === "code") {
-      return (
-        <pre
-          key={key}
-          className="overflow-x-auto rounded-md border border-border bg-surface px-4 py-3 font-mono text-[13px] leading-6 text-text-primary"
-        >
-          <code>{block.content.join("\n")}</code>
-        </pre>
-      );
-    }
-    if (block.type === "ul" || block.type === "ol") {
-      const ListTag = block.type;
-      return (
-        <ListTag
-          key={key}
-          className="ml-5 grid gap-2 text-sm leading-7 text-text-primary"
-        >
-          {block.content.map((item, itemIndex) => (
-            <li key={`${key}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
-          ))}
-        </ListTag>
-      );
-    }
-    if (block.type === "blockquote") {
-      return (
-        <blockquote
-          key={key}
-          className="border-l-2 border-border-strong pl-4 text-sm italic leading-7 text-text-secondary"
-        >
-          {block.content.map((item, itemIndex) => (
-            <p key={`${key}-${itemIndex}`}>{renderInlineMarkdown(item)}</p>
-          ))}
-        </blockquote>
-      );
-    }
-    if (/^h[1-6]$/.test(block.type)) {
-      const level = Number(block.type[1]);
-      const className =
-        level === 1
-          ? "text-3xl font-semibold"
-          : level === 2
-            ? "text-2xl font-semibold"
-            : level === 3
-              ? "text-xl font-semibold"
-              : "text-lg font-semibold";
-      return (
-        <div key={key} className={clsx(className, "text-text-primary")}>
-          {renderInlineMarkdown(block.content[0])}
-        </div>
-      );
-    }
-    return (
-      <p key={key} className="text-sm leading-7 text-text-primary">
-        {renderInlineMarkdown(block.content.join(" "))}
-      </p>
-    );
-  });
-}
-
 function parentDirectory(path: string) {
   const segments = path.split("/").filter(Boolean);
   return segments.slice(0, -1).join("/");
@@ -809,10 +632,10 @@ function TreeNode({
             <div key={entry.path} className="grid gap-1">
               <div
                 className={clsx(
-                  "flex items-center gap-1 rounded-sm border border-transparent pr-2",
+                  "flex items-center gap-1 pr-2 transition-colors",
                   isActive
-                    ? "border-border-strong bg-surface-muted text-text-primary"
-                    : "text-text-secondary hover:border-border hover:bg-surface-subtle hover:text-text-primary",
+                    ? "bg-accent-subtle text-accent"
+                    : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
                 )}
                 style={{ paddingLeft: `${depth * 14 + 8}px` }}
               >
@@ -822,7 +645,7 @@ function TreeNode({
                     aria-label={
                       isExpanded ? "Collapse directory" : "Expand directory"
                     }
-                    className="flex h-7 w-7 items-center justify-center rounded-sm text-text-muted hover:text-text-primary"
+                    className="flex h-7 w-7 items-center justify-center text-text-muted hover:text-accent"
                     onClick={() => onToggleDirectory(entry.path)}
                   >
                     <ChevronIcon expanded={isExpanded} />
@@ -1311,7 +1134,7 @@ export function CodeBrowser({
                       </>
                     ) : null}
                     <Link
-                      className="inline-flex h-8 items-center gap-1 rounded-sm border border-border bg-surface px-3 text-sm text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
+                      className="inline-flex h-8 items-center gap-1 bg-surface px-3 text-sm text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
                       to={`${basePath}/history?historyPath=${encodeURIComponent(
                         browseResult.path,
                       )}`}
@@ -1399,9 +1222,10 @@ export function CodeBrowser({
               ) : viewerMode === "preview" &&
                 isMarkdownFile(browseResult.path) ? (
                 <article className="overflow-auto p-5">
-                  <div className="grid gap-4 text-sm leading-7 text-text-primary">
-                    {renderMarkdown(browseResult.content)}
-                  </div>
+                  <MarkdownRenderer
+                    className="text-sm leading-7 text-text-primary"
+                    content={browseResult.content}
+                  />
                 </article>
               ) : (
                 <div className="rf-code-shell overflow-auto">

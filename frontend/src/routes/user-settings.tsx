@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../app/use-auth";
+import { useAccentPreference } from "../app/accent-preference";
 import { PageHeader } from "../components/layout/page-header";
 import { EmptyState, ErrorState, LoadingState } from "../components/states";
 import { Badge } from "../components/ui/badge";
@@ -53,6 +54,11 @@ export function UserSettingsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { csrfToken, isAuthenticated, isLoading, user } = useAuth();
+  const {
+    accentPaletteId,
+    accentPalettes: accentPaletteOptions,
+    setAccentPaletteId,
+  } = useAccentPreference();
   const currentTab = getCurrentTab(location.search);
   const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(
     null,
@@ -196,10 +202,10 @@ export function UserSettingsPage() {
               <button
                 key={tab.id}
                 type="button"
-                className={`rounded-sm border px-3 py-2 text-left text-sm ${
+                className={`w-full px-3 py-2 text-left text-sm transition-colors ${
                   currentTab === tab.id
-                    ? "border-border-strong bg-surface-muted font-medium text-text-primary"
-                    : "border-transparent text-text-secondary hover:border-border hover:bg-surface-subtle hover:text-text-primary"
+                    ? "bg-accent-subtle font-medium text-accent"
+                    : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
                 }`}
                 onClick={() => navigate(`?tab=${tab.id}`)}
               >
@@ -477,14 +483,63 @@ export function UserSettingsPage() {
           ) : null}
 
           {currentTab === "preferences" ? (
-            <Surface className="grid gap-3">
+            <Surface className="grid gap-4">
               <h2 className="text-base font-semibold text-text-primary">
                 Preferences
               </h2>
               <p className="text-sm text-text-secondary">
-                This redesign is dark-only. Additional personal preferences can
-                be layered in once the transport and repository workflows are
-                stable.
+                Choose the accent palette that drives active states, selection
+                highlights, and the primary button treatment across RevForge.
+              </p>
+              <fieldset className="grid gap-3">
+                <legend className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
+                  Accent palette
+                </legend>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {accentPaletteOptions.map((palette) => {
+                    const selected = palette.id === accentPaletteId;
+
+                    return (
+                      <button
+                        key={palette.id}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setAccentPaletteId(palette.id)}
+                        className={`grid gap-3 px-4 py-4 text-left transition-colors ${
+                          selected
+                            ? "bg-accent-subtle text-text-primary"
+                            : "bg-surface-subtle text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold">
+                              {palette.label}
+                            </div>
+                            <div className="mt-1 text-xs text-text-muted">
+                              {palette.description}
+                            </div>
+                          </div>
+                          {selected ? (
+                            <Badge variant="primary">Active</Badge>
+                          ) : null}
+                        </div>
+                        <div className="flex gap-2">
+                          {palette.swatches.map((color) => (
+                            <span
+                              key={color}
+                              className="h-3 flex-1 border border-border"
+                              style={{ backgroundColor: color }}
+                            />
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              <p className="text-xs text-text-muted">
+                Changes apply immediately and persist in this browser.
               </p>
             </Surface>
           ) : null}

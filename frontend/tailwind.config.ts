@@ -3,6 +3,17 @@ import type { Config } from "tailwindcss";
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
+    borderRadius: {
+      none: "0px",
+      sm: "0px",
+      DEFAULT: "0px",
+      md: "0px",
+      lg: "0px",
+      xl: "0px",
+      "2xl": "0px",
+      "3xl": "0px",
+      full: "0px",
+    },
     extend: {
       fontFamily: {
         sans: [
@@ -66,11 +77,6 @@ export default {
         panel: "0 0 0 1px rgba(148, 163, 184, 0.06)",
         dialog: "0 18px 64px rgba(3, 8, 14, 0.68)",
         dropdown: "0 12px 32px rgba(3, 8, 14, 0.58)",
-      },
-      borderRadius: {
-        DEFAULT: "10px",
-        sm: "8px",
-        lg: "14px",
       },
       fontSize: {
         "2xs": ["10px", "14px"],

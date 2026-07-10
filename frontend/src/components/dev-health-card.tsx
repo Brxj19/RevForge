@@ -12,10 +12,10 @@ function HealthRow({
 }) {
   const tone =
     status === "ok"
-      ? "border-success-border bg-success-subtle text-success"
+      ? "bg-success-subtle text-success"
       : status === "error"
-        ? "border-danger-border bg-danger-subtle text-danger"
-        : "border-warning-border bg-warning-subtle text-warning";
+        ? "bg-danger-subtle text-danger"
+        : "bg-warning-subtle text-warning";
 
   return (
     <div className="flex items-center justify-between rounded-md border border-border bg-surface-subtle px-3 py-2">
@@ -24,7 +24,7 @@ function HealthRow({
         <p className="text-sm text-text-muted">{detail}</p>
       </div>
       <span
-        className={`rounded-sm border px-2 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.14em] ${tone}`}
+        className={`rounded-sm px-2 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.14em] ${tone}`}
       >
         {status}
       </span>

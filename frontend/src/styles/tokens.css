@@ -34,6 +34,8 @@
   --rf-accent-active: #1f6feb;
   --rf-accent-subtle: rgba(88, 166, 255, 0.14);
   --rf-accent-border: rgba(88, 166, 255, 0.38);
+  --rf-accent-secondary: #79c0ff;
+  --rf-accent-tertiary: #1f6feb;
 
   --rf-success: #3fb950;
   --rf-success-subtle: rgba(63, 185, 80, 0.14);
@@ -57,8 +59,8 @@
   --rf-diff-hunk-bg: rgba(88, 166, 255, 0.14);
   --rf-diff-hunk-text: #a5d6ff;
 
-  --rf-focus-ring: #58a6ff;
-  --rf-focus-ring-soft: rgba(88, 166, 255, 0.35);
+  --rf-focus-ring: var(--rf-accent);
+  --rf-focus-ring-soft: var(--rf-accent-subtle);
 
   --rf-font-ui:
     "IBM Plex Sans", "IBM Plex Mono", "JetBrains Mono", system-ui, sans-serif;
@@ -86,6 +88,8 @@
   --color-accent-active: var(--rf-accent-active);
   --color-accent-subtle: var(--rf-accent-subtle);
   --color-accent-border: var(--rf-accent-border);
+  --color-accent-secondary: var(--rf-accent-secondary);
+  --color-accent-tertiary: var(--rf-accent-tertiary);
   --color-accent-foreground: var(--rf-text-inverse);
   --color-success: var(--rf-success);
   --color-success-subtle: var(--rf-success-subtle);

@@ -11,13 +11,13 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: "border border-border bg-surface-subtle text-text-secondary",
-  primary: "border border-border-strong bg-surface-muted text-text-primary",
-  success: "border border-transparent bg-success-subtle text-success",
-  warning: "border border-warning-border bg-warning-subtle text-warning",
-  danger: "border border-danger-border bg-danger-subtle text-danger",
-  info: "border border-border-strong bg-surface-muted text-text-primary",
-  neutral: "border border-border-strong bg-surface-muted text-text-primary",
+  default: "bg-surface-subtle text-text-secondary",
+  primary: "bg-accent-subtle text-accent",
+  success: "bg-success-subtle text-success",
+  warning: "bg-warning-subtle text-warning",
+  danger: "bg-danger-subtle text-danger",
+  info: "bg-info-subtle text-info",
+  neutral: "bg-surface-muted text-text-primary",
 };
 
 export function Badge({

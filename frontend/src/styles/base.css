@@ -20,10 +20,11 @@ body {
 *::before,
 *::after {
   box-sizing: border-box;
+  border-radius: 0 !important;
 }
 
 *::selection {
-  background: rgba(88, 166, 255, 0.28);
+  background: var(--color-accent-subtle);
   color: var(--color-text-primary);
 }
 
@@ -68,7 +69,7 @@ samp {
 
 ::-webkit-scrollbar-thumb {
   border: 2px solid var(--color-canvas);
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--color-border-strong);
 }
 

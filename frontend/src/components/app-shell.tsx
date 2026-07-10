@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import {
+  Link,
   NavLink,
   Outlet,
   useLocation,
@@ -9,6 +10,7 @@ import {
   useParams,
 } from "react-router-dom";
 import { useAuth } from "../app/use-auth";
+import { getPrimaryNavActive } from "../lib/app-shell-nav";
 import { getOrganization, getRepository } from "../lib/api";
 import { CloneDialog } from "./clone-dialog";
 import { Badge } from "./ui/badge";
@@ -318,13 +320,13 @@ function UserMenu() {
     <div className="relative" ref={ref}>
       <button
         type="button"
-        className="flex items-center gap-2 rounded-sm border border-border bg-surface px-2.5 py-2 text-sm text-text-primary shadow-panel hover:border-border-strong hover:bg-surface-hover"
+        className="flex items-center gap-2 bg-surface-subtle px-2.5 py-2 text-sm text-text-primary shadow-panel transition-colors hover:bg-surface-hover hover:text-text-primary"
         onClick={() => setOpen((current) => !current)}
         aria-label="User menu"
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="grid h-7 w-7 place-items-center rounded-sm border border-border-strong bg-surface-muted font-mono text-xs font-semibold text-text-primary">
+        <span className="grid h-7 w-7 place-items-center bg-surface-muted font-mono text-xs font-semibold text-text-primary">
           {user?.display_name?.slice(0, 1).toUpperCase() ?? "?"}
         </span>
         <span className="hidden max-w-40 truncate md:inline">
@@ -350,7 +352,7 @@ function UserMenu() {
             <button
               key={item.label}
               type="button"
-              className="flex w-full items-center px-3 py-2.5 text-left text-sm text-text-primary hover:bg-surface-hover"
+              className="flex w-full items-center px-3 py-2.5 text-left text-sm text-text-primary hover:bg-accent-subtle hover:text-accent"
               role="menuitem"
               onClick={() => {
                 setOpen(false);
@@ -383,6 +385,7 @@ const repositoryTabs = [
   { label: "Overview", path: "" },
   { label: "Code", path: "/code" },
   { label: "History", path: "/history" },
+  { label: "Graph", path: "/graph" },
   { label: "Branches", path: "/branches" },
   { label: "Bookmarks", path: "/bookmarks" },
   { label: "Tags", path: "/tags" },
@@ -508,7 +511,9 @@ function RepositoryContextHeader() {
                     ? location.pathname === `${basePath}/history` ||
                       location.pathname === `${basePath}/commits` ||
                       location.pathname.startsWith(`${basePath}/changesets/`)
-                    : location.pathname.startsWith(to);
+                    : tab.path === "/graph"
+                      ? location.pathname === `${basePath}/graph`
+                      : location.pathname.startsWith(to);
 
               return (
                 <NavLink
@@ -516,10 +521,10 @@ function RepositoryContextHeader() {
                   to={to}
                   end={tab.path === ""}
                   className={clsx(
-                    "rounded-sm border px-3 py-2 text-sm",
+                    "px-3 py-2 text-sm transition-colors",
                     active
-                      ? "border-border-strong bg-surface-muted text-text-primary"
-                      : "border-transparent text-text-secondary hover:border-border hover:bg-surface-subtle hover:text-text-primary",
+                      ? "bg-accent-subtle text-accent"
+                      : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
                   )}
                 >
                   {tab.label}
@@ -676,6 +681,14 @@ export function AppShell() {
         group: "revisions",
       },
       {
+        id: "repo-graph",
+        label: "Open repository graph",
+        detail: `${organizationSlug}/${repositorySlug} changeset lanes`,
+        keywords: ["graph", "lanes", "commit graph", "changesets"],
+        to: `${basePath}/graph`,
+        group: "revisions",
+      },
+      {
         id: "repo-settings",
         label: "Open repository settings",
         detail: `${organizationSlug}/${repositorySlug} configuration`,
@@ -748,14 +761,14 @@ export function AppShell() {
 
           <button
             type="button"
-            className="ml-2 hidden h-9 min-w-[320px] max-w-[520px] flex-1 items-center justify-between rounded-sm border border-border bg-surface px-3 text-sm text-text-muted shadow-panel hover:border-border-strong hover:bg-surface-hover hover:text-text-primary lg:flex"
+            className="ml-2 hidden h-9 min-w-[320px] max-w-[520px] flex-1 items-center justify-between bg-surface-subtle px-3 text-sm text-text-muted shadow-panel hover:bg-accent-subtle hover:text-accent lg:flex"
             onClick={() => setCommandPaletteOpen(true)}
           >
             <span className="flex items-center gap-2">
               <SearchIcon />
               Search repositories, paths, revisions, and actions
             </span>
-            <kbd className="rounded-sm border border-border bg-canvas px-1.5 py-0.5 font-mono text-[11px] text-text-muted">
+            <kbd className="bg-surface-muted px-1.5 py-0.5 font-mono text-[11px] text-text-muted">
               {navigator.platform.includes("Mac") ? "Cmd K" : "Ctrl K"}
             </kbd>
           </button>
@@ -779,7 +792,7 @@ export function AppShell() {
         <aside
           className={clsx(
             "fixed inset-y-14 left-0 z-30 flex flex-col border-r border-border bg-surface transition-[width,transform] duration-200 lg:sticky lg:top-14 lg:h-[calc(100vh-56px)]",
-            sidebarCollapsed ? "lg:w-10" : "lg:w-72",
+            sidebarCollapsed ? "lg:w-14" : "lg:w-72",
             mobileNavOpen
               ? "translate-x-0"
               : "-translate-x-full lg:translate-x-0",
@@ -821,44 +834,49 @@ export function AppShell() {
           <nav
             className={clsx(
               "flex-1 overflow-y-auto py-4",
-              sidebarCollapsed ? "px-0.5" : "px-3",
+              sidebarCollapsed ? "px-0" : "px-0",
             )}
             aria-label="Primary navigation"
           >
             <div className="grid gap-1">
               {primaryNav.map((item) => (
-                <NavLink
+                <Link
                   key={item.label}
                   to={item.to}
-                  end={item.to === "/"}
-                  className={({ isActive }) =>
-                    clsx(
-                      "rounded-sm border transition-colors",
-                      sidebarCollapsed ? "px-0 py-3 text-center" : "px-3 py-3",
-                      isActive
-                        ? "border-border-strong bg-surface-muted"
-                        : "border-transparent hover:border-border hover:bg-surface-subtle",
-                    )
+                  aria-current={
+                    getPrimaryNavActive(item, location.pathname)
+                      ? "page"
+                      : undefined
                   }
+                  className={clsx(
+                    "grid w-full transition-colors",
+                    sidebarCollapsed
+                      ? "place-items-center px-0 py-3"
+                      : "px-4 py-3",
+                    getPrimaryNavActive(item, location.pathname)
+                      ? "bg-accent-subtle text-accent"
+                      : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
+                  )}
                   title={sidebarCollapsed ? item.label : undefined}
                 >
                   <span
                     className={clsx(
-                      "text-text-primary",
                       sidebarCollapsed
                         ? "flex items-center justify-center text-base"
-                        : "flex items-center gap-3 text-sm font-semibold",
+                        : "flex items-start gap-3 text-sm font-semibold",
                     )}
                   >
                     <item.icon />
-                    {!sidebarCollapsed ? <span>{item.label}</span> : null}
+                    {!sidebarCollapsed ? (
+                      <span className="flex flex-col gap-1">
+                        <span>{item.label}</span>
+                        <span className="block max-w-[18rem] text-xs font-normal leading-5 text-text-muted">
+                          {item.description}
+                        </span>
+                      </span>
+                    ) : null}
                   </span>
-                  {!sidebarCollapsed ? (
-                    <span className="mt-1 block text-xs text-text-muted">
-                      {item.description}
-                    </span>
-                  ) : null}
-                </NavLink>
+                </Link>
               ))}
             </div>
           </nav>

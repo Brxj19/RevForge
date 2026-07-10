@@ -12,13 +12,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "border border-border-strong bg-surface-muted text-text-primary hover:border-border-strong hover:bg-surface-hover disabled:border-border disabled:text-text-disabled",
+    "bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active disabled:bg-surface-muted disabled:text-text-disabled",
   secondary:
-    "border border-border bg-surface text-text-primary hover:border-border-strong hover:bg-surface-hover disabled:text-text-disabled",
+    "bg-accent-subtle text-accent hover:bg-accent-subtle hover:text-accent-hover disabled:bg-surface-subtle disabled:text-text-disabled",
   ghost:
-    "border border-transparent text-text-secondary hover:border-border hover:bg-surface-subtle hover:text-text-primary disabled:text-text-disabled",
+    "text-text-secondary hover:bg-accent-subtle hover:text-accent-hover disabled:text-text-disabled",
   danger:
-    "border border-danger-border bg-danger-subtle text-danger hover:border-danger hover:bg-danger-subtle/80 disabled:text-text-disabled",
+    "bg-danger-subtle text-danger hover:bg-danger-subtle hover:text-danger disabled:text-text-disabled",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -45,7 +45,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={clsx(
-          "inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap font-medium shadow-panel",
+          "inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap font-medium shadow-panel transition-colors",
           variantStyles[variant],
           sizeStyles[size],
           className,

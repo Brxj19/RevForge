@@ -29,10 +29,10 @@ export function CopyButton({
       type="button"
       onClick={handleCopy}
       className={clsx(
-        "inline-flex items-center gap-1 rounded-sm border px-2.5 py-1.5 font-mono text-xs font-medium transition-colors",
+        "inline-flex items-center gap-1 px-2.5 py-1.5 font-mono text-xs font-medium transition-colors",
         copied
-          ? "border-success-border bg-success-subtle text-success"
-          : "border-border bg-surface text-text-secondary hover:border-border-strong hover:bg-surface-hover hover:text-text-primary",
+          ? "bg-success-subtle text-success"
+          : "bg-accent-subtle text-accent hover:bg-accent-subtle hover:text-accent-hover",
         className,
       )}
     >

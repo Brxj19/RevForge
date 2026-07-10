@@ -23,7 +23,9 @@ import {
 import { CloneDialog } from "../components/clone-dialog";
 import { CodeBrowser } from "../components/code-browser";
 import { DevHealthCard } from "../components/dev-health-card";
+import { MarkdownRenderer } from "../components/markdown";
 import { EmptyState, ErrorState, LoadingState } from "../components/states";
+import { RepositoryGraphPage } from "./repository-graph";
 import { FormField } from "../components/ui/form-field";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -84,7 +86,7 @@ function MessageBanner({
         "rounded-md border px-3 py-2 text-sm",
         tone === "info"
           ? "border-border-strong bg-surface-muted text-text-primary"
-          : "border-danger/30 bg-danger-subtle text-danger",
+          : "border-transparent bg-danger-subtle text-danger",
       )}
       role={tone === "error" ? "alert" : "status"}
     >
@@ -628,7 +630,7 @@ export function DashboardPage() {
               ].map((action) => (
                 <Link
                   key={action.label}
-                  className="rounded-md border border-border bg-canvas px-4 py-3 text-sm font-medium text-text-primary hover:border-border-strong"
+                  className="bg-surface-subtle px-4 py-3 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover"
                   to={action.to}
                 >
                   {action.label}
@@ -2073,6 +2075,7 @@ type RepositorySection =
   | "overview"
   | "code"
   | "history"
+  | "graph"
   | "changeset"
   | "branches"
   | "bookmarks"
@@ -2089,6 +2092,7 @@ function resolveRepositorySection(
   ) {
     return "history";
   }
+  if (pathname === `${basePath}/graph`) return "graph";
   if (pathname.startsWith(`${basePath}/changesets/`)) return "changeset";
   if (pathname === `${basePath}/branches`) return "branches";
   if (pathname === `${basePath}/bookmarks`) return "bookmarks";
@@ -2243,7 +2247,9 @@ export function RepositoryDetailPage() {
     getNextPageParam: (page) => page.next_cursor,
     enabled:
       repositoryQuery.data?.is_browsable === true &&
-      (currentSection === "history" || currentSection === "overview"),
+      (currentSection === "history" ||
+        currentSection === "overview" ||
+        currentSection === "graph"),
   });
 
   const changesetNode =
@@ -2505,12 +2511,13 @@ export function RepositoryDetailPage() {
               {[
                 { label: "Code", to: `${basePath}/code` },
                 { label: "History", to: `${basePath}/history` },
+                { label: "Graph", to: `${basePath}/graph` },
                 { label: "Branches", to: `${basePath}/branches` },
                 { label: "Tags", to: `${basePath}/tags` },
               ].map((link) => (
                 <Link
                   key={link.label}
-                  className="rounded-md border border-border bg-canvas px-4 py-3 text-sm font-medium text-text-primary hover:border-border-strong"
+                  className="bg-surface-subtle px-4 py-3 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover"
                   to={link.to}
                 >
                   {link.label}
@@ -2527,10 +2534,11 @@ export function RepositoryDetailPage() {
             title="README preview"
             description="Root documentation preview when a README is present."
           >
-            <article className="overflow-x-auto rounded-md border border-border bg-canvas p-4 text-sm leading-6 text-text-primary">
-              <pre className="whitespace-pre-wrap font-sans">
-                {overviewReadmeQuery.data.content.slice(0, 6000)}
-              </pre>
+            <article className="overflow-x-auto border border-border bg-canvas p-4 text-text-primary">
+              <MarkdownRenderer
+                className="text-sm leading-6"
+                content={overviewReadmeQuery.data.content}
+              />
             </article>
           </Fieldset>
         ) : null}
@@ -2757,6 +2765,26 @@ export function RepositoryDetailPage() {
         );
       case "history":
         return renderHistory();
+      case "graph":
+        return (
+          <RepositoryGraphPage
+            basePath={basePath}
+            organizationSlug={organizationSlug}
+            repositorySlug={repositorySlug}
+            repository={repository}
+            refs={refs}
+            changesets={changesets}
+            isLoading={historyQuery.isLoading}
+            isError={historyQuery.isError}
+            error={
+              historyQuery.error instanceof Error ? historyQuery.error : null
+            }
+            hasNextPage={historyQuery.hasNextPage ?? false}
+            isFetchingNextPage={historyQuery.isFetchingNextPage}
+            onLoadMore={() => void historyQuery.fetchNextPage()}
+            onRefresh={() => void historyQuery.refetch()}
+          />
+        );
       case "changeset":
         if (changesetQuery.isLoading || diffQuery.isLoading) {
           return <LoadingState label="Loading changeset detail." />;
@@ -2985,9 +3013,9 @@ function RepositorySettingsContent() {
                 key={item.id}
                 type="button"
                 className={clsx(
-                  "rounded-md px-3 py-2 text-left text-sm",
+                  "px-3 py-2 text-left text-sm transition-colors",
                   section === item.id
-                    ? "border border-border-strong bg-surface-muted font-medium text-text-primary"
+                    ? "bg-accent-subtle font-medium text-accent"
                     : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary",
                 )}
                 onClick={() => navigate(`?section=${item.id}`)}
