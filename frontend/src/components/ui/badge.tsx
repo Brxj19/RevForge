@@ -2,13 +2,7 @@ import type { ReactNode } from "react";
 import clsx from "clsx";
 
 type BadgeVariant =
-  | "default"
-  | "primary"
-  | "success"
-  | "warning"
-  | "danger"
-  | "info"
-  | "neutral";
+  "default" | "primary" | "success" | "warning" | "danger" | "info" | "neutral";
 
 interface BadgeProps {
   variant?: BadgeVariant;
@@ -26,7 +20,11 @@ const variantStyles: Record<BadgeVariant, string> = {
   neutral: "bg-ink-800 text-slate-100 border border-slate-700",
 };
 
-export function Badge({ variant = "default", children, className }: BadgeProps) {
+export function Badge({
+  variant = "default",
+  children,
+  className,
+}: BadgeProps) {
   return (
     <span
       className={clsx(

@@ -14,6 +14,7 @@ import {
   RegisterPage,
   RepositoryDetailPage,
   RepositorySettingsPage,
+  ReviewsPage,
 } from "../routes/pages";
 
 export const router = createBrowserRouter([
@@ -40,6 +41,10 @@ export const router = createBrowserRouter([
       },
       {
         path: "organizations/:organizationSlug/repositories/:repositorySlug/code",
+        element: <RepositoryDetailPage />,
+      },
+      {
+        path: "organizations/:organizationSlug/repositories/:repositorySlug/history",
         element: <RepositoryDetailPage />,
       },
       {
@@ -70,6 +75,8 @@ export const router = createBrowserRouter([
         path: "organizations/:organizationSlug/activity",
         element: <AuditPage />,
       },
+      { path: "activity", element: <AuditPage /> },
+      { path: "reviews", element: <ReviewsPage /> },
       { path: "settings", element: <UserSettingsPage /> },
       { path: "dev/ui", element: <DevUiPage /> },
       { path: "*", element: <NotFoundPage /> },
