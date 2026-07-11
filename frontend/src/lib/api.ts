@@ -198,6 +198,23 @@ export interface RepositoryRefs {
   bookmarks: RepositoryRef[];
 }
 
+export interface RepositoryEvent {
+  id: string;
+  repository_id: string;
+  event_type: string;
+  actor_user_id: string | null;
+  authentication_method: string | null;
+  source_ip: string | null;
+  request_id: string | null;
+  payload_json: Record<string, unknown>;
+  occurred_at: string;
+}
+
+export interface RepositoryEventList {
+  events: RepositoryEvent[];
+  total_count: number | null;
+}
+
 export interface RepositoryPermission {
   id: string;
   repository_id: string;
@@ -604,6 +621,21 @@ export function getRepositoryRefs(
   );
 }
 
+export function listRepositoryEvents(
+  organizationSlug: string,
+  repositorySlug: string,
+  options: { eventType?: string; limit?: number; offset?: number } = {},
+) {
+  const search = new URLSearchParams();
+  if (options.eventType) search.set("event_type", options.eventType);
+  if (options.limit) search.set("limit", String(options.limit));
+  if (options.offset) search.set("offset", String(options.offset));
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  return request<RepositoryEventList>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/events${suffix}`,
+  );
+}
+
 export function updateRepository(
   organizationSlug: string,
   repositorySlug: string,
@@ -922,5 +954,100 @@ export function deleteRepositoryPermission(
       method: "DELETE",
       csrfToken,
     },
+  );
+}
+
+export interface Webhook {
+  id: string;
+  repository_id: string;
+  url: string;
+  event_types: string[];
+  is_active: boolean;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  event_type: string;
+  request_url: string;
+  response_status_code: number | null;
+  status: string;
+  retry_count: number;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export function listWebhooks(
+  organizationSlug: string,
+  repositorySlug: string,
+) {
+  return request<Webhook[]>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/webhooks`,
+  );
+}
+
+export function createWebhook(
+  organizationSlug: string,
+  repositorySlug: string,
+  payload: { url: string; event_types: string[]; secret?: string | null },
+  csrfToken: string | null,
+) {
+  return request<Webhook>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/webhooks`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
+}
+
+export function updateWebhook(
+  organizationSlug: string,
+  repositorySlug: string,
+  webhookId: string,
+  payload: {
+    url?: string | null;
+    event_types?: string[] | null;
+    is_active?: boolean;
+  },
+  csrfToken: string | null,
+) {
+  return request<Webhook>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/webhooks/${webhookId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
+}
+
+export function deleteWebhook(
+  organizationSlug: string,
+  repositorySlug: string,
+  webhookId: string,
+  csrfToken: string | null,
+) {
+  return request<void>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/webhooks/${webhookId}`,
+    {
+      method: "DELETE",
+      csrfToken,
+    },
+  );
+}
+
+export function listWebhookDeliveries(
+  organizationSlug: string,
+  repositorySlug: string,
+  webhookId: string,
+) {
+  return request<WebhookDelivery[]>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/webhooks/${webhookId}/deliveries`,
   );
 }

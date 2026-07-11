@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppProviders } from "../app/providers";
-import { RepositoryDetailPage } from "../routes/pages";
+import { RepositoryDetailPage, RepositorySettingsPage } from "../routes/pages";
 
 const readmeMarkdown = `# Repository Handbook
 
@@ -125,6 +125,10 @@ function renderRepositoryRoute(route: string) {
       <MemoryRouter initialEntries={[route]}>
         <Routes>
           <Route
+            path="/organizations/:organizationSlug/repositories/:repositorySlug/settings"
+            element={<RepositorySettingsPage />}
+          />
+          <Route
             path="/organizations/:organizationSlug/repositories/:repositorySlug/*"
             element={<RepositoryDetailPage />}
           />
@@ -151,15 +155,14 @@ beforeEach(() => {
       const requestUrl = new URL(url);
 
       if (url.includes("/api/v1/auth/me")) {
-        return jsonResponse(
-          {
-            error: {
-              code: "http_error",
-              message: "Authentication required.",
-            },
-          },
-          401,
-        );
+        return jsonResponse({
+          id: "user-1",
+          email: "owner@example.com",
+          display_name: "Owner User",
+          is_active: true,
+          created_at: "2026-07-05T08:00:00Z",
+          updated_at: "2026-07-05T08:00:00Z",
+        });
       }
 
       if (
@@ -331,6 +334,73 @@ beforeEach(() => {
         });
       }
 
+      if (
+        url.includes(
+          "/api/v1/organizations/acme/repositories/ready-repo/webhooks",
+        ) &&
+        !url.includes("/deliveries")
+      ) {
+        return jsonResponse([
+          {
+            id: "webhook-1",
+            repository_id: "repo-3",
+            url: "https://example.com/hooks/revforge",
+            event_types: [
+              "repository.push.accepted",
+              "repository.provisioned",
+            ],
+            is_active: true,
+            created_by_user_id: "user-1",
+            created_at: "2026-07-08T08:00:00Z",
+            updated_at: "2026-07-08T08:00:00Z",
+          },
+        ]);
+      }
+
+      if (
+        url.includes(
+          "/api/v1/organizations/acme/repositories/ready-repo/webhooks/webhook-1/deliveries",
+        )
+      ) {
+        return jsonResponse([
+          {
+            id: "delivery-1",
+            webhook_id: "webhook-1",
+            event_type: "repository.push.accepted",
+            request_url: "https://example.com/hooks/revforge",
+            response_status_code: 200,
+            status: "delivered",
+            retry_count: 0,
+            error_message: null,
+            created_at: "2026-07-08T08:15:00Z",
+            completed_at: "2026-07-08T08:15:01Z",
+          },
+        ]);
+      }
+
+      if (
+        url.includes(
+          "/api/v1/organizations/acme/repositories/ready-repo/events",
+        )
+      ) {
+        return jsonResponse({
+          events: [
+            {
+              id: "event-1",
+              repository_id: "repo-3",
+              event_type: "push.accepted",
+              actor_user_id: "user-1",
+              authentication_method: "ssh",
+              source_ip: "203.0.113.10",
+              request_id: "req-123",
+              payload_json: { pushed_nodes: [featureNode] },
+              occurred_at: "2026-07-11T08:00:00Z",
+            },
+          ],
+          total_count: 1,
+        });
+      }
+
       if (url.includes("/api/v1/organizations/acme/repositories/ready-repo")) {
         return jsonResponse({
           id: "repo-3",
@@ -346,9 +416,9 @@ beforeEach(() => {
           provisioning_state: "ready",
           provisioned_at: "2026-07-05T08:05:00Z",
           is_browsable: true,
-          viewer_role: "read",
-          can_manage: false,
-          inherited_access: false,
+          viewer_role: "admin",
+          can_manage: true,
+          inherited_access: true,
           organization_slug: "acme",
           phase_status:
             "Mercurial repository is provisioned and ready for browsing.",
@@ -415,15 +485,81 @@ describe("repository phase 2 pages", () => {
     ).toBeInTheDocument();
   });
 
-  test("renders markdown preview in the repository overview", async () => {
+  test("renders the repository overview with root entries and README preview", async () => {
     renderRepositoryRoute("/organizations/acme/repositories/ready-repo");
 
     expect(
-      await screen.findByRole("heading", { name: /repository handbook/i }),
+      await screen.findByRole("heading", {
+        name: /latest changeset and repository health/i,
+      }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(
+      screen.getByText("Repository root"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /readme preview/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /^src folder$/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /^README\.md file$/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /clone and access/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /quick links/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/repository handbook/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/first item/i)).toBeInTheDocument();
     expect(screen.getByText(/const total = 42;/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("link", { name: /^src folder$/i }));
+
+    expect(
+      await screen.findByRole("combobox", { name: /Browse revision/i }),
+    ).toBeInTheDocument();
+  });
+
+  test("renders repository webhooks and delivery history", async () => {
+    renderRepositoryRoute(
+      "/organizations/acme/repositories/ready-repo/settings?section=webhooks",
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /webhooks/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/webhook url/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText("https://example.com/hooks/revforge"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /deliveries/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /deliveries/i }));
+
+    expect(await screen.findByText(/delivered/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/repository\.push\.accepted/i).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test("renders repository audit activity from backend events", async () => {
+    renderRepositoryRoute(
+      "/organizations/acme/repositories/ready-repo/settings?section=audit",
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /audit/i }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/push\.accepted/i)).toBeInTheDocument();
+    expect(screen.getByText(/203\.0\.113\.10/i)).toBeInTheDocument();
+    expect(screen.getByText(/req-123/i)).toBeInTheDocument();
+    expect(screen.getByText(/"pushed_nodes"/i)).toBeInTheDocument();
   });
 
   test("renders markdown preview in the code browser", async () => {

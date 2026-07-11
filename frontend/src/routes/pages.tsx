@@ -40,8 +40,10 @@ import {
   browseRepository,
   createOrganization,
   createRepository,
+  createWebhook,
   deleteOrganizationMember,
   deleteRepositoryPermission,
+  deleteWebhook,
   getChangeset,
   getChangesetDiff,
   getOrganization,
@@ -52,17 +54,23 @@ import {
   listOrganizations,
   listRepositories,
   listRepositoryPermissions,
+  listRepositoryEvents,
+  listWebhookDeliveries,
+  listWebhooks,
   provisionRepository,
   setRepositoryPermission,
   updateOrganization,
   updateOrganizationMember,
   updateRepository,
+  updateWebhook,
   type ChangesetSummary,
   type OrganizationMember,
   type RepositoryBrowseResult,
   type RepositoryPermission,
   type RepositoryRef,
+  type RepositoryEvent,
   type RepositorySummary,
+  type RepositoryTreeEntry,
 } from "../lib/api";
 import {
   buildCloneUrls,
@@ -184,6 +192,49 @@ function EyeOffIcon() {
         stroke="currentColor"
         strokeWidth="1.2"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M8 1.5H4a1 1 0 00-1 1v9a1 1 0 001 1h6a1 1 0 001-1V4.5L8 1.5z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M8 1.5V4.5H11"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M1.5 4v7a1 1 0 001 1h9a1 1 0 001-1V5a1 1 0 00-1-1H7.5L6 2.5H2.5a1 1 0 00-1 1V4z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -2323,6 +2374,206 @@ function refRows(
   }));
 }
 
+function OverviewTreePanel({
+  basePath,
+  entries,
+  isLoading,
+  locationSearch,
+  selectedRevision,
+}: {
+  basePath: string;
+  entries: RepositoryTreeEntry[];
+  isLoading: boolean;
+  locationSearch: string;
+  selectedRevision: string | null;
+}) {
+  return (
+    <Surface className="grid gap-0 overflow-hidden p-0">
+      <div className="border-b border-border px-4 py-4">
+        <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-text-muted">
+          Repository root
+        </p>
+        <h3 className="mt-1 text-base font-semibold text-text-primary">
+          Top-level files and folders
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
+          Open a file or folder in the code tab. Folder clicks preserve the
+          path and expand the tree there.
+        </p>
+      </div>
+      <div className="grid gap-1 p-2">
+        {isLoading && entries.length === 0 ? (
+          <LoadingState label="Loading repository root." />
+        ) : entries.length > 0 ? (
+          entries.map((entry) => {
+            const entryLabel =
+              entry.kind === "directory" ? "folder" : "file";
+            return (
+              <Link
+                key={entry.path}
+                aria-label={`${entry.name} ${entryLabel}`}
+                className="flex items-center gap-3 rounded-sm px-3 py-2 text-sm text-text-primary transition-colors hover:bg-surface-subtle"
+                to={`${basePath}/code${repositorySearch(locationSearch, {
+                  path: entry.path,
+                  revision: selectedRevision,
+                })}`}
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-canvas text-text-muted">
+                    {entry.kind === "directory" ? <FolderIcon /> : <FileIcon />}
+                  </span>
+                  <span className="truncate font-medium">{entry.name}</span>
+                </span>
+              </Link>
+            );
+          })
+        ) : (
+          <EmptyState
+            title="No files at the repository root"
+            description="The repository is ready, but the root directory has no visible entries."
+          />
+        )}
+      </div>
+    </Surface>
+  );
+}
+
+function OverviewChangesetsHealthPanel({
+  basePath,
+  changesets,
+  repository,
+}: {
+  basePath: string;
+  changesets: ChangesetSummary[];
+  repository: RepositorySummary;
+}) {
+  const latestChangesets = changesets.slice(0, 1);
+
+  return (
+    <Surface className="grid gap-0 self-start overflow-hidden p-0">
+      <div className="border-b border-border px-4 py-3">
+        <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-text-muted">
+          Activity and health
+        </p>
+        <h3 className="mt-1 text-base font-semibold text-text-primary">
+          Latest changeset and repository health
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
+          Recent revision activity paired with the repository state that drives
+          browsing and access.
+        </p>
+      </div>
+      <div className="grid gap-3 p-3">
+        <div className="grid gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-text-muted">
+              Latest changesets
+            </p>
+            <Link
+              className="text-xs text-text-secondary hover:text-text-primary"
+              to={`${basePath}/history`}
+            >
+              View history
+            </Link>
+          </div>
+          {latestChangesets.length > 0 ? (
+            latestChangesets.map((changeset) => (
+              <div
+                key={changeset.node}
+                className="rounded-md border border-border bg-canvas p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                  <span className="font-mono text-text-primary">
+                    {changeset.short_node}
+                  </span>
+                  <span>{formatRelativeTime(changeset.timestamp)}</span>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-text-primary">
+                  {firstLine(changeset.message)}
+                </p>
+                <p className="mt-1 text-sm text-text-secondary">
+                  {changeset.author_name}
+                </p>
+                <div className="mt-3">
+                  <Link to={`${basePath}/changesets/${changeset.node}`}>
+                    <Button size="sm" variant="secondary">
+                      Open changeset
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            ))
+          ) : (
+            <EmptyState
+              title="No changesets yet"
+              description="This repository is provisioned but does not contain committed revisions."
+            />
+          )}
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-text-muted">
+            Repository health
+          </p>
+          <div className="mt-3 grid gap-2">
+            {[
+              ["Visibility", repository.visibility],
+              ["Provisioning", repository.provisioning_state],
+              ["Role", repository.viewer_role ?? "metadata only"],
+              ["Archive", repository.archived_at ? "Archived" : "Active"],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-md border border-border bg-canvas px-3 py-2"
+              >
+                <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">
+                  {label}
+                </div>
+                <div className="mt-2 text-sm font-medium text-text-primary">
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Surface>
+  );
+}
+
+function OverviewReadmePanel({
+  isLoading,
+  content,
+}: {
+  content: string | null;
+  isLoading: boolean;
+}) {
+  return (
+    <Surface className="grid gap-0 overflow-hidden p-0">
+      <div className="border-b border-border px-4 py-4">
+        <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-text-muted">
+          README preview
+        </p>
+        <h3 className="mt-1 text-base font-semibold text-text-primary">
+          README preview
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
+          Markdown preview when a README is present at the repository root.
+        </p>
+      </div>
+      {content ? (
+        <article className="overflow-x-auto border-t border-border bg-canvas p-4 text-text-primary">
+          <MarkdownRenderer className="text-sm leading-6" content={content} />
+        </article>
+      ) : isLoading ? (
+        <div className="border-t border-border p-4">
+          <LoadingState label="Loading README preview." />
+        </div>
+      ) : null}
+    </Surface>
+  );
+}
+
 export function RepositoryDetailPage() {
   const queryClient = useQueryClient();
   const { csrfToken } = useAuth();
@@ -2494,7 +2745,6 @@ export function RepositoryDetailPage() {
   const refs = refsQuery.data;
   const changesets =
     historyQuery.data?.pages.flatMap((page) => page.changesets) ?? [];
-  const latestChangeset = changesets[0];
 
   const historySearch = new URLSearchParams();
   if (historyFilters.q) historySearch.set("q", historyFilters.q);
@@ -2507,7 +2757,6 @@ export function RepositoryDetailPage() {
     : "";
 
   const filteredChangesets = filterChangesets(changesets, historyFilters);
-  const cloneUrls = buildCloneUrls(organizationSlug, repositorySlug);
 
   function setHistoryFilter(key: string, value: string) {
     const params = new URLSearchParams(location.search);
@@ -2569,148 +2818,42 @@ export function RepositoryDetailPage() {
       );
     }
 
+    const overviewEntries =
+      overviewRootQuery.data?.kind === "directory"
+        ? overviewRootQuery.data.entries
+        : [];
+
     return (
-      <div className="grid gap-4">
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Fieldset
-            title="Latest changeset"
-            description="The most recent revision visible from repository history."
-          >
-            {latestChangeset ? (
-              <div className="rounded-md border border-border bg-canvas p-4">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                  <span className="font-mono text-text-primary">
-                    {latestChangeset.short_node}
-                  </span>
-                  <span title={formatAbsoluteTime(latestChangeset.timestamp)}>
-                    {formatAbsoluteTime(latestChangeset.timestamp)}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm font-semibold text-text-primary">
-                  {firstLine(latestChangeset.message)}
-                </p>
-                <p className="mt-1 text-sm text-text-secondary">
-                  {latestChangeset.author_name}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Link to={`${basePath}/changesets/${latestChangeset.node}`}>
-                    <Button variant="secondary">Open changeset</Button>
-                  </Link>
-                  <Link to={`${basePath}/history`}>
-                    <Button variant="ghost">View history</Button>
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <EmptyState
-                title="No changesets yet"
-                description="This repository is provisioned but does not contain committed revisions."
-              />
-            )}
-          </Fieldset>
+      <div className="grid gap-4 xl:grid-cols-[3fr_1fr] xl:items-start">
+        <div className="grid gap-4">
+          <OverviewTreePanel
+            basePath={basePath}
+            entries={overviewEntries}
+            isLoading={overviewRootQuery.isLoading}
+            locationSearch={location.search}
+            selectedRevision={selectedRevision}
+          />
 
-          <Fieldset
-            title="Clone and access"
-            description="Trust-focused Mercurial clone flow for HTTPS and SSH."
-          >
-            <div className="grid gap-3">
-              <div className="rounded-md border border-border bg-canvas p-4">
-                <div className="text-xs font-medium uppercase tracking-[0.18em] text-text-muted">
-                  HTTPS
-                </div>
-                <code className="mt-2 block overflow-x-auto rounded-sm bg-surface px-3 py-2 font-mono text-xs text-text-primary">
-                  {cloneUrls.httpsCommand}
-                </code>
-              </div>
-              <div className="rounded-md border border-border bg-canvas p-4">
-                <div className="text-xs font-medium uppercase tracking-[0.18em] text-text-muted">
-                  SSH
-                </div>
-                <code className="mt-2 block overflow-x-auto rounded-sm bg-surface px-3 py-2 font-mono text-xs text-text-primary">
-                  {cloneUrls.sshCommand}
-                </code>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setCloneOpen(true)}>
-                  Open clone dialog
-                </Button>
-                <Link to="/settings?tab=tokens">
-                  <Button variant="secondary">Manage tokens</Button>
-                </Link>
-                <Link to="/settings?tab=ssh-keys">
-                  <Button variant="secondary">Manage SSH keys</Button>
-                </Link>
-              </div>
-            </div>
-          </Fieldset>
+          {overviewReadmeQuery.data ||
+          overviewReadmeQuery.isLoading ||
+          overviewReadmeQuery.isFetching ? (
+            <OverviewReadmePanel
+              content={
+                overviewReadmeQuery.data &&
+                overviewReadmeQuery.data.kind === "file"
+                  ? overviewReadmeQuery.data.content
+                  : null
+              }
+              isLoading={overviewReadmeQuery.isLoading}
+            />
+          ) : null}
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Fieldset
-            title="Repository health"
-            description="Provisioning, visibility, archive state, and revision targeting at a glance."
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                ["Visibility", repository.visibility],
-                ["Provisioning", repository.provisioning_state],
-                ["Role", repository.viewer_role ?? "metadata only"],
-                ["Archive", repository.archived_at ? "Archived" : "Active"],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  className="rounded-md border border-border bg-canvas px-4 py-3"
-                >
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">
-                    {label}
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-text-primary">
-                    {value}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Fieldset>
-
-          <Fieldset
-            title="Quick links"
-            description="Jump directly into repository work without reading through metadata."
-          >
-            <div className="grid gap-2 sm:grid-cols-2">
-              {[
-                { label: "Code", to: `${basePath}/code` },
-                { label: "History", to: `${basePath}/history` },
-                { label: "Graph", to: `${basePath}/graph` },
-                { label: "Branches", to: `${basePath}/branches` },
-                { label: "Tags", to: `${basePath}/tags` },
-              ].map((link) => (
-                <Link
-                  key={link.label}
-                  className="bg-surface-subtle px-4 py-3 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover"
-                  to={link.to}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </div>
-          </Fieldset>
-        </div>
-
-        {overviewReadmeQuery.data &&
-        overviewReadmeQuery.data.kind === "file" &&
-        overviewReadmeQuery.data.content ? (
-          <Fieldset
-            title="README preview"
-            description="Root documentation preview when a README is present."
-          >
-            <article className="overflow-x-auto border border-border bg-canvas p-4 text-text-primary">
-              <MarkdownRenderer
-                className="text-sm leading-6"
-                content={overviewReadmeQuery.data.content}
-              />
-            </article>
-          </Fieldset>
-        ) : null}
+        <OverviewChangesetsHealthPanel
+          basePath={basePath}
+          changesets={changesets}
+          repository={repository}
+        />
       </div>
     );
   }
@@ -3063,6 +3206,17 @@ function RepositorySettingsContent() {
   >("read");
   const [revokePermissionTarget, setRevokePermissionTarget] =
     useState<RepositoryPermission | null>(null);
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookEventTypes, setWebhookEventTypes] = useState(
+    "repository.push.accepted",
+  );
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [webhookFormError, setWebhookFormError] = useState<string | null>(
+    null,
+  );
+  const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(
+    null,
+  );
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
 
   const section = getSettingsSection(location.search);
@@ -3074,6 +3228,34 @@ function RepositorySettingsContent() {
     queryKey: ["repository-permissions", organizationSlug, repositorySlug],
     queryFn: () => listRepositoryPermissions(organizationSlug, repositorySlug),
     enabled: repositoryQuery.isSuccess,
+  });
+  const webhooksQuery = useQuery({
+    queryKey: ["repository-webhooks", organizationSlug, repositorySlug],
+    queryFn: () => listWebhooks(organizationSlug, repositorySlug),
+    enabled: repositoryQuery.isSuccess && section === "webhooks",
+  });
+  const repositoryEventsQuery = useQuery({
+    queryKey: ["repository-events", organizationSlug, repositorySlug],
+    queryFn: () => listRepositoryEvents(organizationSlug, repositorySlug),
+    enabled: repositoryQuery.isSuccess && section === "audit",
+  });
+  const webhookDeliveriesQuery = useQuery({
+    queryKey: [
+      "repository-webhook-deliveries",
+      organizationSlug,
+      repositorySlug,
+      selectedWebhookId ?? "",
+    ],
+    queryFn: () =>
+      listWebhookDeliveries(
+        organizationSlug,
+        repositorySlug,
+        selectedWebhookId ?? "",
+      ),
+    enabled:
+      repositoryQuery.isSuccess &&
+      section === "webhooks" &&
+      selectedWebhookId !== null,
   });
 
   const updateMutation = useMutation({
@@ -3127,6 +3309,76 @@ function RepositorySettingsContent() {
       });
     },
   });
+  const createWebhookMutation = useMutation({
+    mutationFn: (payload: {
+      url: string;
+      event_types: string[];
+      secret?: string | null;
+    }) =>
+      createWebhook(organizationSlug, repositorySlug, payload, csrfToken),
+    onSuccess: async (webhook) => {
+      setWebhookUrl("");
+      setWebhookEventTypes("repository.push.accepted");
+      setWebhookSecret("");
+      setWebhookFormError(null);
+      setSelectedWebhookId(webhook.id);
+      await queryClient.invalidateQueries({
+        queryKey: ["repository-webhooks", organizationSlug, repositorySlug],
+      });
+    },
+    onError: (error) => {
+      setWebhookFormError(
+        error instanceof Error ? error.message : "Unable to create webhook.",
+      );
+    },
+  });
+  const updateWebhookMutation = useMutation({
+    mutationFn: (payload: {
+      webhookId: string;
+      url?: string | null;
+      event_types?: string[] | null;
+      is_active?: boolean;
+    }) =>
+      updateWebhook(
+        organizationSlug,
+        repositorySlug,
+        payload.webhookId,
+        {
+          url: payload.url,
+          event_types: payload.event_types,
+          is_active: payload.is_active,
+        },
+        csrfToken,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["repository-webhooks", organizationSlug, repositorySlug],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: [
+          "repository-webhook-deliveries",
+          organizationSlug,
+          repositorySlug,
+          selectedWebhookId ?? "",
+        ],
+      });
+    },
+  });
+  const deleteWebhookMutation = useMutation({
+    mutationFn: (webhookId: string) =>
+      deleteWebhook(organizationSlug, repositorySlug, webhookId, csrfToken),
+    onSuccess: async (_data, webhookId) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["repository-webhooks", organizationSlug, repositorySlug],
+      });
+      setSelectedWebhookId((current) => {
+        if (current && current === webhookId) {
+          return null;
+        }
+        return current;
+      });
+    },
+  });
 
   if (repositoryQuery.isLoading) {
     return <LoadingState label="Loading repository settings." />;
@@ -3165,6 +3417,9 @@ function RepositorySettingsContent() {
   ];
 
   const cloneUrls = buildCloneUrls(organizationSlug, repositorySlug);
+  const selectedWebhook =
+    webhooksQuery.data?.find((webhook) => webhook.id === selectedWebhookId) ??
+    null;
 
   return (
     <div className="space-y-6">
@@ -3429,30 +3684,303 @@ function RepositorySettingsContent() {
           {section === "webhooks" ? (
             <Fieldset
               title="Webhooks"
-              description="Webhook delivery settings remain isolated until backend support is available."
+              description="Manage repository webhook endpoints, event subscriptions, and delivery history."
             >
-              <EmptyState
-                title="Webhook management is not connected yet"
-                description="The UI keeps this section reserved so transport, access, and webhook administration stay distinct once backend webhook endpoints land."
-              />
+              <div className="grid gap-4">
+                <form
+                  className="grid gap-4 rounded-md border border-border bg-canvas p-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const eventTypes = webhookEventTypes
+                      .split(",")
+                      .map((value) => value.trim())
+                      .filter(Boolean);
+                    if (eventTypes.length === 0) {
+                      setWebhookFormError("Add at least one event type.");
+                      return;
+                    }
+                    setWebhookFormError(null);
+                    void createWebhookMutation.mutateAsync({
+                      url: webhookUrl.trim(),
+                      event_types: eventTypes,
+                      secret: webhookSecret.trim() || null,
+                    });
+                  }}
+                >
+                  <FormField
+                    label="Webhook URL"
+                    hint="Use an HTTPS endpoint that can receive RevForge events."
+                  >
+                    <Input
+                      aria-label="Webhook URL"
+                      placeholder="https://example.com/hooks/revforge"
+                      value={webhookUrl}
+                      onChange={(event) => setWebhookUrl(event.target.value)}
+                    />
+                  </FormField>
+                  <FormField
+                    label="Event types"
+                    hint="Comma-separated event names such as repository.push.accepted."
+                  >
+                    <Input
+                      aria-label="Webhook event types"
+                      placeholder="repository.push.accepted, repository.provisioned"
+                      value={webhookEventTypes}
+                      onChange={(event) =>
+                        setWebhookEventTypes(event.target.value)
+                      }
+                    />
+                  </FormField>
+                  <FormField
+                    label="Secret"
+                    hint="Optional shared secret used to sign webhook deliveries."
+                  >
+                    <Input
+                      aria-label="Webhook secret"
+                      placeholder="Leave blank to auto-generate"
+                      type="password"
+                      value={webhookSecret}
+                      onChange={(event) => setWebhookSecret(event.target.value)}
+                    />
+                  </FormField>
+                  {webhookFormError ? (
+                    <MessageBanner message={webhookFormError} />
+                  ) : null}
+                  {createWebhookMutation.isError ? (
+                    <MessageBanner
+                      message={
+                        createWebhookMutation.error instanceof Error
+                          ? createWebhookMutation.error.message
+                          : "Unable to create webhook."
+                      }
+                    />
+                  ) : null}
+                  <Button
+                    loading={createWebhookMutation.isPending}
+                    type="submit"
+                  >
+                    Create webhook
+                  </Button>
+                </form>
+
+                {webhooksQuery.isLoading ? (
+                  <LoadingState label="Loading repository webhooks." />
+                ) : webhooksQuery.data && webhooksQuery.data.length > 0 ? (
+                  <div className="grid gap-3">
+                    {webhooksQuery.data.map((webhook) => (
+                      <Surface key={webhook.id} inset className="grid gap-3">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div className="grid gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-sm font-semibold text-text-primary">
+                                {webhook.url}
+                              </h3>
+                              <Badge
+                                variant={
+                                  webhook.is_active ? "success" : "neutral"
+                                }
+                              >
+                                {webhook.is_active ? "Active" : "Paused"}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {webhook.event_types.map((eventType) => (
+                                <Badge key={eventType} variant="default">
+                                  {eventType}
+                                </Badge>
+                              ))}
+                            </div>
+                            <p className="text-xs text-text-muted">
+                              Created {formatAbsoluteTime(webhook.created_at)}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              type="button"
+                              variant="secondary"
+                              onClick={() =>
+                                void updateWebhookMutation.mutateAsync({
+                                  webhookId: webhook.id,
+                                  url: webhook.url,
+                                  event_types: webhook.event_types,
+                                  is_active: !webhook.is_active,
+                                })
+                              }
+                            >
+                              {webhook.is_active ? "Disable" : "Enable"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              type="button"
+                              variant="secondary"
+                              onClick={() => setSelectedWebhookId(webhook.id)}
+                            >
+                              Deliveries
+                            </Button>
+                            <Button
+                              size="sm"
+                              type="button"
+                              variant="danger"
+                              onClick={() =>
+                                void deleteWebhookMutation.mutateAsync(
+                                  webhook.id,
+                                )
+                              }
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </Surface>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="No webhooks yet"
+                    description="Create a webhook to deliver repository events to your automation endpoint."
+                  />
+                )}
+
+                {selectedWebhook ? (
+                  <Surface inset className="grid gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-text-primary">
+                          Delivery history
+                        </h3>
+                        <p className="mt-1 text-xs text-text-muted">
+                          {selectedWebhook.url}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setSelectedWebhookId(null)}
+                      >
+                        Close
+                      </Button>
+                    </div>
+                    {webhookDeliveriesQuery.isLoading ? (
+                      <LoadingState label="Loading webhook deliveries." />
+                    ) : webhookDeliveriesQuery.data &&
+                      webhookDeliveriesQuery.data.length > 0 ? (
+                      <div className="grid gap-2">
+                        {webhookDeliveriesQuery.data.map((delivery) => (
+                          <div
+                            key={delivery.id}
+                            className="rounded-md border border-border bg-canvas px-4 py-3"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant={
+                                  delivery.status === "delivered"
+                                    ? "success"
+                                    : delivery.status === "failed"
+                                      ? "danger"
+                                      : "warning"
+                                }
+                              >
+                                {delivery.status}
+                              </Badge>
+                              <span className="text-xs text-text-muted">
+                                {delivery.event_type}
+                              </span>
+                              <span className="text-xs text-text-muted">
+                                {formatAbsoluteTime(delivery.created_at)}
+                              </span>
+                            </div>
+                            <div className="mt-2 text-sm text-text-primary">
+                              {delivery.response_status_code
+                                ? `HTTP ${delivery.response_status_code}`
+                                : "No response recorded yet"}
+                            </div>
+                            {delivery.error_message ? (
+                              <div className="mt-1 text-xs text-danger">
+                                {delivery.error_message}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyState
+                        title="No deliveries yet"
+                        description="Webhook deliveries will appear here after the endpoint receives events."
+                      />
+                    )}
+                  </Surface>
+                ) : null}
+              </div>
             </Fieldset>
           ) : null}
 
           {section === "audit" ? (
             <Fieldset
               title="Audit"
-              description="Repository-scoped audit views will land once the backend exposes repository activity filters."
+              description="Repository-scoped event history is pulled from the backend and shown here."
             >
-              <div className="rounded-md border border-border bg-canvas px-4 py-3 text-sm text-text-secondary">
-                Use the global activity page for current audit exploration.
-                Repository-specific activity filtering will plug into this
-                section without mixing audit concerns into general settings.
-              </div>
-              <div>
-                <Link to="/activity">
-                  <Button variant="secondary">Open activity</Button>
-                </Link>
-              </div>
+              {repositoryEventsQuery.isLoading ? (
+                <LoadingState label="Loading repository activity." />
+              ) : repositoryEventsQuery.data &&
+                repositoryEventsQuery.data.events.length > 0 ? (
+                <DataTable
+                  columns={[
+                    {
+                      key: "occurred_at",
+                      header: "Time",
+                      render: (event: RepositoryEvent) =>
+                        formatAbsoluteTime(event.occurred_at),
+                    },
+                    {
+                      key: "event_type",
+                      header: "Event",
+                      render: (event: RepositoryEvent) => (
+                        <span className="font-mono text-xs text-text-primary">
+                          {event.event_type}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "actor",
+                      header: "Actor",
+                      render: (event: RepositoryEvent) =>
+                        event.actor_user_id ?? "system",
+                    },
+                    {
+                      key: "source",
+                      header: "Source",
+                      render: (event: RepositoryEvent) =>
+                        event.source_ip
+                          ? `${event.source_ip}${event.authentication_method ? ` · ${event.authentication_method}` : ""}`
+                          : event.authentication_method ?? "internal",
+                    },
+                    {
+                      key: "request",
+                      header: "Request",
+                      render: (event: RepositoryEvent) =>
+                        event.request_id ?? "not recorded",
+                    },
+                    {
+                      key: "details",
+                      header: "Details",
+                      render: (event: RepositoryEvent) => (
+                        <span className="break-all text-xs text-text-secondary">
+                          {JSON.stringify(event.payload_json)}
+                        </span>
+                      ),
+                    },
+                  ]}
+                  data={repositoryEventsQuery.data.events}
+                  keyFn={(event) => event.id}
+                />
+              ) : (
+                <EmptyState
+                  title="No repository activity yet"
+                  description="Pushes and transport events will appear here after the backend records them."
+                />
+              )}
             </Fieldset>
           ) : null}
 
