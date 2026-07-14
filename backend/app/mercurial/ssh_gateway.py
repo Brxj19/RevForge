@@ -199,8 +199,7 @@ class MercurialSshGateway:
                 repository_id=repository.id,
                 request_id=os.environ.get("REVFORGE_REQUEST_ID"),
                 metadata_json={
-                    "key_id": str(key.id),
-                    "repository_path": request.repository_path,
+                    "repository_slug": repository.slug,
                     "can_write": permission.can_write,
                 },
             )

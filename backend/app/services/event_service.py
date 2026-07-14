@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.repository_event import EventSpoolEntry, RepositoryEvent
 from app.services.audit import record_audit_event
@@ -153,6 +154,7 @@ class EventService:
     ) -> list[RepositoryEvent]:
         query = (
             select(RepositoryEvent)
+            .options(selectinload(RepositoryEvent.actor_user))
             .where(RepositoryEvent.repository_id == repository_id)
             .order_by(RepositoryEvent.occurred_at.desc())
             .offset(offset)

@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID as UUIDType
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, Uuid
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
@@ -32,6 +32,8 @@ class RepositoryEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
+
+    actor_user = relationship("User")
 
 
 class EventSpoolEntry(UUIDPrimaryKeyMixin, Base):

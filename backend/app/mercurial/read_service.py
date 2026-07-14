@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 import re
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 
 from mercurial import error as hgerror
@@ -37,6 +38,12 @@ from .schemas import (
 
 FULL_NODE_RE = re.compile(r"^[0-9a-f]{40}$")
 SAFE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
+DIFFSTAT_SUMMARY_RE = re.compile(
+    r"^\s*(?P<files>\d+)\s+files?\s+changed"
+    r"(?:,\s*(?P<insertions>\d+)\s+insertions?\(\+\))?"
+    r"(?:,\s*(?P<deletions>\d+)\s+deletions?\(-\))?\s*$"
+)
+DIFFSTAT_PER_FILE_FALLBACK_LIMIT = 200
 
 initialization.init()
 
@@ -397,10 +404,10 @@ class MercurialReadService:
                 repository_path=repository_path,
                 stdout_limit=self._settings.hg_max_stdout_bytes,
             )
-            diff_result = await self._command_runner.run(
-                ["diff", "--git", "-c", node],
+            diffstat_result = await self._command_runner.run(
+                ["diff", "--stat", "-c", node],
                 repository_path=repository_path,
-                stdout_limit=self._settings.max_diff_bytes,
+                stdout_limit=self._settings.hg_max_stdout_bytes,
             )
         except (HgCommandFailedError, HgCommandOutputLimitError):
             return None
@@ -427,9 +434,23 @@ class MercurialReadService:
                 str(copy_source) if copy_source is not None else None,
             )
 
-        changed_files = _parse_changed_files_from_diff(
-            diff_result.stdout.decode("utf-8", errors="replace")
-        )
+        diffstat = _parse_diffstat_output(diffstat_result.stdout.decode("utf-8", errors="replace"))
+
+        changed_files: list[HgChangedFile] = []
+        try:
+            diff_result = await self._command_runner.run(
+                ["diff", "--git", "-c", node],
+                repository_path=repository_path,
+                stdout_limit=self._settings.max_diff_bytes,
+            )
+        except (HgCommandFailedError, HgCommandOutputLimitError):
+            diff_result = None
+
+        if diff_result is not None:
+            changed_files = _parse_changed_files_from_diff(
+                diff_result.stdout.decode("utf-8", errors="replace")
+            )
+
         for changed_file in changed_files:
             if changed_file.path in status_by_path:
                 status, old_path = status_by_path[changed_file.path]
@@ -440,35 +461,62 @@ class MercurialReadService:
                 changed_file.status = "renamed" if status == "deleted" else status
 
         if not changed_files and status_by_path:
+            exact_file_stats: dict[str, tuple[int | None, int | None]] = {}
+            if len(status_by_path) <= DIFFSTAT_PER_FILE_FALLBACK_LIMIT:
+                exact_file_stats = await self._load_per_file_diffstats(
+                    repository_path,
+                    node=node,
+                    paths=list(status_by_path.keys()),
+                )
             changed_files = [
                 HgChangedFile(
                     path=path,
                     status=status,
-                    insertions=None,
-                    deletions=None,
+                    insertions=exact_file_stats.get(path, (None, None))[0],
+                    deletions=exact_file_stats.get(path, (None, None))[1],
                     old_path=old_path,
                 )
                 for path, (status, old_path) in status_by_path.items()
                 if status != "clean"
             ]
 
-        files_changed = len(changed_files) if changed_files else None
-        insertions = (
-            sum(file.insertions or 0 for file in changed_files)
-            if changed_files and all(file.insertions is not None for file in changed_files)
-            else None
-        )
-        deletions = (
-            sum(file.deletions or 0 for file in changed_files)
-            if changed_files and all(file.deletions is not None for file in changed_files)
-            else None
-        )
+        files_changed = diffstat.files_changed
+        if files_changed is None and changed_files:
+            files_changed = len(changed_files)
+
         return HgChangesetStats(
             files_changed=files_changed,
-            insertions=insertions,
-            deletions=deletions,
+            insertions=diffstat.insertions,
+            deletions=diffstat.deletions,
             changed_files=changed_files,
         )
+
+    async def _load_per_file_diffstats(
+        self,
+        repository_path,
+        *,
+        node: str,
+        paths: list[str],
+    ) -> dict[str, tuple[int | None, int | None]]:
+        stats_by_path: dict[str, tuple[int | None, int | None]] = {}
+
+        for path in paths:
+            try:
+                result = await self._command_runner.run(
+                    ["diff", "--stat", "-c", node, "--", path],
+                    repository_path=repository_path,
+                    stdout_limit=self._settings.hg_max_stdout_bytes,
+                )
+            except (HgCommandFailedError, HgCommandOutputLimitError):
+                continue
+
+            diffstat = _parse_diffstat_output(result.stdout.decode("utf-8", errors="replace"))
+            if diffstat.files_changed is None:
+                continue
+
+            stats_by_path[path] = (diffstat.insertions, diffstat.deletions)
+
+        return stats_by_path
 
 
 def validate_repository_relative_path(value: str | None) -> str:
@@ -596,3 +644,33 @@ def _parse_changed_files_from_diff(content: str) -> list[HgChangedFile]:
         changed_files.append(current)
 
     return [file for file in changed_files if file.path != "unknown"]
+
+
+@dataclass(slots=True)
+class _HgDiffStat:
+    files_changed: int | None
+    insertions: int | None
+    deletions: int | None
+
+
+def _parse_diffstat_output(content: str) -> _HgDiffStat:
+    files_changed: int | None = None
+    insertions: int | None = None
+    deletions: int | None = None
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        match = DIFFSTAT_SUMMARY_RE.match(line)
+        if not match:
+            continue
+        files_changed = int(match.group("files"))
+        insertions = int(match.group("insertions") or 0)
+        deletions = int(match.group("deletions") or 0)
+
+    return _HgDiffStat(
+        files_changed=files_changed,
+        insertions=insertions,
+        deletions=deletions,
+    )

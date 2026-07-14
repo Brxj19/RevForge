@@ -227,7 +227,7 @@ async def revoke_user_session(
             event_type="user.session.revoked",
             actor_user_id=user.id,
             request_id=request_id,
-            metadata_json={"session_id": str(user_session.id)},
+            metadata_json={"status": "revoked"},
         )
         await session.commit()
     return user_session

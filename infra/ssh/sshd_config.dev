@@ -1,8 +1,8 @@
 Port 2222
 ListenAddress 0.0.0.0
 Protocol 2
-HostKey /etc/ssh/ssh_host_ed25519_key
-HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /srv/revforge-ssh/host_keys/ssh_host_ed25519_key
+HostKey /srv/revforge-ssh/host_keys/ssh_host_rsa_key
 UsePAM no
 PasswordAuthentication no
 KbdInteractiveAuthentication no

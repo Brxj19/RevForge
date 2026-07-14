@@ -41,6 +41,7 @@ import {
   createOrganization,
   createRepository,
   createWebhook,
+  deleteRepository,
   deleteOrganizationMember,
   deleteRepositoryPermission,
   deleteWebhook,
@@ -1457,7 +1458,7 @@ function CreateOrganizationMemberContent() {
     queryKey: ["organization", organizationSlug],
     queryFn: () => getOrganization(organizationSlug),
   });
-  const [memberEmail, setMemberEmail] = useState("");
+  const [memberIdentifier, setMemberIdentifier] = useState("");
   const [memberRole, setMemberRole] = useState<"owner" | "admin" | "member">(
     "member",
   );
@@ -1466,7 +1467,7 @@ function CreateOrganizationMemberContent() {
     mutationFn: () =>
       addOrganizationMember(
         organizationSlug,
-        { email: memberEmail, role: memberRole },
+        { user: memberIdentifier, role: memberRole },
         csrfToken,
       ),
     onSuccess: async () => {
@@ -1517,11 +1518,12 @@ function CreateOrganizationMemberContent() {
             void addMemberMutation.mutateAsync();
           }}
         >
-          <FormField label="User email">
+          <FormField label="User email or display name">
             <Input
-              aria-label="Member email"
-              value={memberEmail}
-              onChange={(event) => setMemberEmail(event.target.value)}
+              aria-label="Member email or display name"
+              placeholder="name@example.com or Display Name"
+              value={memberIdentifier}
+              onChange={(event) => setMemberIdentifier(event.target.value)}
             />
           </FormField>
           <FormField label="Role">
@@ -3176,6 +3178,17 @@ export function RepositoryDetailPage() {
             basePath={basePath}
             changeset={changesetQuery.data}
             diff={diffQuery.data}
+            selectedFilePath={new URLSearchParams(location.search).get("file")}
+            onSelectFile={(path) => {
+              const params = new URLSearchParams(location.search);
+              params.set("file", path);
+              navigate(
+                `${basePath}/changesets/${changesetNode}?${params.toString()}`,
+                {
+                  replace: true,
+                },
+              );
+            }}
           />
         );
       case "branches":
@@ -3245,7 +3258,7 @@ function RepositorySettingsContent() {
   const { organizationSlug = "", repositorySlug = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [permissionUserId, setPermissionUserId] = useState("");
+  const [permissionUserIdentifier, setPermissionUserIdentifier] = useState("");
   const [permissionRole, setPermissionRole] = useState<
     "read" | "write" | "admin"
   >("read");
@@ -3263,6 +3276,8 @@ function RepositorySettingsContent() {
     null,
   );
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [renameSlug, setRenameSlug] = useState("");
 
   const section = getSettingsSection(location.search);
   const repositoryQuery = useQuery({
@@ -3310,19 +3325,26 @@ function RepositorySettingsContent() {
 
   const updateMutation = useMutation({
     mutationFn: (payload: {
+      slug?: string;
       display_name?: string;
       description?: string | null;
       visibility?: "public" | "internal" | "private";
       archived?: boolean;
     }) =>
       updateRepository(organizationSlug, repositorySlug, payload, csrfToken),
-    onSuccess: async () => {
+    onSuccess: async (updatedRepository) => {
       await queryClient.invalidateQueries({
         queryKey: ["repository", organizationSlug, repositorySlug],
       });
       await queryClient.invalidateQueries({
         queryKey: ["organization-repositories", organizationSlug],
       });
+      if (updatedRepository.slug !== repositorySlug) {
+        navigate(
+          `/organizations/${organizationSlug}/repositories/${updatedRepository.slug}/settings?section=${section}`,
+          { replace: true },
+        );
+      }
     },
   });
 
@@ -3331,16 +3353,25 @@ function RepositorySettingsContent() {
       setRepositoryPermission(
         organizationSlug,
         repositorySlug,
-        permissionUserId,
-        { role: permissionRole },
+        { user: permissionUserIdentifier, role: permissionRole },
         csrfToken,
       ),
     onSuccess: async () => {
-      setPermissionUserId("");
+      setPermissionUserIdentifier("");
       setPermissionRole("read");
       await queryClient.invalidateQueries({
         queryKey: ["repository-permissions", organizationSlug, repositorySlug],
       });
+    },
+  });
+
+  const deleteRepositoryMutation = useMutation({
+    mutationFn: () => deleteRepository(organizationSlug, repositorySlug, csrfToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["organization-repositories", organizationSlug],
+      });
+      navigate(`/organizations/${organizationSlug}`);
     },
   });
 
@@ -3469,6 +3500,26 @@ function RepositorySettingsContent() {
   const selectedWebhook =
     webhooksQuery.data?.find((webhook) => webhook.id === selectedWebhookId) ??
     null;
+  const renderRepositoryEventDetails = (event: RepositoryEvent) => (
+    <div className="grid gap-2">
+      <div className="text-sm text-text-primary">{event.summary}</div>
+      {event.details.length > 0 ? (
+        <div className="grid gap-1 text-xs text-text-secondary">
+          {event.details.map((detail) => (
+            <div
+              key={`${event.id}-${detail.label}`}
+              className="flex flex-wrap items-center gap-2"
+            >
+              <span className="font-mono uppercase tracking-[0.12em] text-text-muted">
+                {detail.label}
+              </span>
+              <span>{detail.value}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -3589,15 +3640,15 @@ function RepositorySettingsContent() {
                 }}
               >
                 <FormField
-                  label="Target user ID"
-                  hint="Current backend support accepts a user UUID."
+                  label="Target user"
+                  hint="Use an exact email address or an exact display name."
                 >
                   <Input
-                    aria-label="Permission user ID"
-                    placeholder="Paste a user UUID"
-                    value={permissionUserId}
+                    aria-label="Permission user"
+                    placeholder="name@example.com or Display Name"
+                    value={permissionUserIdentifier}
                     onChange={(event) =>
-                      setPermissionUserId(event.target.value)
+                      setPermissionUserIdentifier(event.target.value)
                     }
                   />
                 </FormField>
@@ -3626,7 +3677,7 @@ function RepositorySettingsContent() {
                   />
                 ) : null}
                 <Button
-                  disabled={!permissionUserId.trim()}
+                  disabled={!permissionUserIdentifier.trim()}
                   loading={permissionMutation.isPending}
                   type="submit"
                 >
@@ -3983,15 +4034,26 @@ function RepositorySettingsContent() {
                       key: "actor",
                       header: "Actor",
                       render: (event: RepositoryEvent) =>
-                        event.actor_user_id ?? "system",
+                        event.actor_display_name || event.actor_email ? (
+                          <div className="min-w-0">
+                            <div className="font-medium text-text-primary">
+                              {event.actor_display_name ?? event.actor_email}
+                            </div>
+                            {event.actor_email ? (
+                              <div className="text-xs text-text-muted">
+                                {event.actor_email}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          "system"
+                        ),
                     },
                     {
                       key: "source",
                       header: "Source",
                       render: (event: RepositoryEvent) =>
-                        event.source_ip
-                          ? `${event.source_ip}${event.authentication_method ? ` · ${event.authentication_method}` : ""}`
-                          : event.authentication_method ?? "internal",
+                        event.authentication_method ?? "internal",
                     },
                     {
                       key: "request",
@@ -4002,11 +4064,7 @@ function RepositorySettingsContent() {
                     {
                       key: "details",
                       header: "Details",
-                      render: (event: RepositoryEvent) => (
-                        <span className="break-all text-xs text-text-secondary">
-                          {JSON.stringify(event.payload_json)}
-                        </span>
-                      ),
+                      render: renderRepositoryEventDetails,
                     },
                   ]}
                   data={repositoryEventsQuery.data.events}
@@ -4052,13 +4110,35 @@ function RepositorySettingsContent() {
                       Rename slug
                     </h3>
                     <p className="mt-1 text-sm text-text-secondary">
-                      Future backend work will add safe slug changes once clone
-                      URL migration rules are defined.
+                      Update the clone URL slug without moving repository
+                      storage on disk. Anyone cloning or pulling later should
+                      use the new URL.
                     </p>
                   </div>
-                  <Button disabled type="button" variant="danger">
-                    Rename
-                  </Button>
+                  <form
+                    className="grid min-w-[280px] gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void updateMutation.mutateAsync({ slug: renameSlug.trim() });
+                    }}
+                  >
+                    <Input
+                      aria-label="New repository slug"
+                      placeholder={repository.slug}
+                      value={renameSlug}
+                      onChange={(event) => setRenameSlug(event.target.value)}
+                    />
+                    <Button
+                      disabled={
+                        !renameSlug.trim() || renameSlug.trim() === repository.slug
+                      }
+                      loading={updateMutation.isPending}
+                      type="submit"
+                      variant="danger"
+                    >
+                      Rename
+                    </Button>
+                  </form>
                 </div>
                 <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -4066,11 +4146,17 @@ function RepositorySettingsContent() {
                       Delete repository
                     </h3>
                     <p className="mt-1 text-sm text-text-secondary">
-                      This remains disabled until backend deletion flows are
-                      implemented safely.
+                      Permanently remove the repository metadata and the local
+                      Mercurial storage. Archive the repository first so the
+                      deletion is intentional and reviewable.
                     </p>
                   </div>
-                  <Button disabled type="button" variant="danger">
+                  <Button
+                    disabled={repository.archived_at === null}
+                    type="button"
+                    variant="danger"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
                     Delete
                   </Button>
                 </div>
@@ -4091,6 +4177,19 @@ function RepositorySettingsContent() {
         open={archiveDialogOpen}
         requireTyping={repository.slug}
         title="Archive repository"
+      />
+
+      <ConfirmDialog
+        confirmLabel="Delete repository"
+        confirmVariant="danger"
+        message={`Delete ${repository.display_name} and remove its local Mercurial storage?`}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={() => {
+          void deleteRepositoryMutation.mutateAsync();
+        }}
+        open={deleteDialogOpen}
+        requireTyping={repository.slug}
+        title="Delete repository"
       />
 
       <ConfirmDialog

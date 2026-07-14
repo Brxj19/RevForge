@@ -68,6 +68,7 @@ from app.schemas.repositories import (
 from app.services.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailure
 from app.services.repository_service import (
     create_repository,
+    delete_repository,
     delete_repository_permission,
     get_organization_by_slug_for_repo_routes,
     get_repository_for_actor,
@@ -198,7 +199,9 @@ def _serialize_changeset_summary(changeset) -> ChangesetSummaryResponse:
         timestamp=changeset.timestamp,
         message=changeset.message,
         branch=changeset.branch,
-        files_changed_count_when_available=len(changeset.files_changed),
+        files_changed_count_when_available=(
+            changeset.stats.files_changed if changeset.stats else len(changeset.files_changed)
+        ),
         insertions_when_available=changeset.stats.insertions if changeset.stats else None,
         deletions_when_available=changeset.stats.deletions if changeset.stats else None,
     )
@@ -441,14 +444,14 @@ async def create_repository_route(
     except ForbiddenError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ConflictError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValidationFailure as exc:
         await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
-    except ConflictError as exc:
-        await session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     return _serialize_repository_detail(
         repository=repository,
@@ -941,6 +944,7 @@ async def patch_repository(
             actor=identity.user,
             actor_membership=membership,
             actor_permission=permission,
+            slug=payload.slug,
             display_name=payload.display_name,
             description=payload.description,
             visibility=payload.visibility,
@@ -966,6 +970,56 @@ async def patch_repository(
         can_manage=can_manage,
         inherited_access=inherited_access,
     )
+
+
+@router.delete("/{repository_slug}", response_model=None, status_code=status.HTTP_204_NO_CONTENT)
+async def remove_repository(
+    organization_slug: str,
+    repository_slug: str,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+    storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
+) -> None:
+    try:
+        (
+            organization,
+            repository,
+            _viewer_role,
+            _can_manage,
+            _inherited_access,
+        ) = await _get_repository_with_access(
+            session=session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            actor=identity.user,
+            allow_archived=True,
+        )
+        membership = await get_membership(
+            session, organization_id=organization.id, user_id=identity.user.id
+        )
+        permission = await get_permission(
+            session, repository_id=repository.id, user_id=identity.user.id
+        )
+        await delete_repository(
+            session,
+            organization=organization,
+            repository=repository,
+            actor=identity.user,
+            actor_membership=membership,
+            actor_permission=permission,
+            request_id=request_id,
+            repository_path=storage_locator.repository_path(repository),
+        )
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ForbiddenError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ConflictError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.get("/{repository_slug}/permissions", response_model=list[RepositoryPermissionResponse])
@@ -1005,11 +1059,10 @@ async def get_permissions(
     return [_serialize_permission(permission) for permission in permissions]
 
 
-@router.put("/{repository_slug}/permissions/{user_id}", response_model=RepositoryPermissionResponse)
+@router.put("/{repository_slug}/permissions", response_model=RepositoryPermissionResponse)
 async def put_permission(
     organization_slug: str,
     repository_slug: str,
-    user_id: UUID,
     payload: RepositoryPermissionRequest,
     identity: SessionIdentity = Depends(require_csrf),
     session: AsyncSession = Depends(get_session),
@@ -1034,7 +1087,7 @@ async def put_permission(
             organization=organization,
             repository=repository,
             actor=identity.user,
-            target_user_id=user_id,
+            target_user_identifier=payload.user,
             role=payload.role,
             request_id=request_id,
         )
@@ -1044,6 +1097,11 @@ async def put_permission(
     except ForbiddenError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValidationFailure as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
 
     return _serialize_permission(permission)
 

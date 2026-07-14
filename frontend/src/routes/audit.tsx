@@ -10,14 +10,20 @@ import { Surface } from "../components/ui/surface";
 import { listAuditEvents, type AuditEventRecord } from "../lib/api";
 import { formatAbsoluteTime } from "../lib/formatting";
 
-function describeAuditEvent(event: AuditEventRecord) {
-  const pushedNodes = Array.isArray(event.metadata_json.pushed_nodes)
-    ? event.metadata_json.pushed_nodes
-    : [];
-  if (event.event_type === "repository.push.accepted") {
-    return `Push accepted: ${pushedNodes.length} changeset${pushedNodes.length === 1 ? "" : "s"}`;
+function renderActor(event: AuditEventRecord) {
+  if (event.actor_display_name || event.actor_email) {
+    return (
+      <div className="min-w-0">
+        <div className="font-medium text-text-primary">
+          {event.actor_display_name ?? event.actor_email}
+        </div>
+        {event.actor_email ? (
+          <div className="text-xs text-text-muted">{event.actor_email}</div>
+        ) : null}
+      </div>
+    );
   }
-  return JSON.stringify(event.metadata_json);
+  return "system";
 }
 
 export function AuditPage() {
@@ -63,7 +69,9 @@ export function AuditPage() {
   }
 
   const events = (query.data ?? []).filter((event) => {
-    if (actor && !(event.actor_user_id ?? "").includes(actor)) {
+    const actorText =
+      `${event.actor_display_name ?? ""} ${event.actor_email ?? ""}`.toLowerCase();
+    if (actor && !actorText.includes(actor.toLowerCase())) {
       return false;
     }
     if (action && event.event_type !== action) {
@@ -83,8 +91,8 @@ export function AuditPage() {
       <Surface className="grid gap-3 lg:grid-cols-2">
         <Input
           aria-label="Filter by actor"
-          label="Actor user ID"
-          placeholder="user UUID"
+          label="Actor"
+          placeholder="name or email"
           value={actor}
           onChange={(event) => setFilter("actor", event.target.value)}
         />
@@ -125,9 +133,7 @@ export function AuditPage() {
                       <td className="px-4 py-3 text-text-secondary">
                         {formatAbsoluteTime(event.created_at)}
                       </td>
-                      <td className="px-4 py-3 text-text-primary">
-                        {event.actor_user_id ?? "system"}
-                      </td>
+                      <td className="px-4 py-3 text-text-primary">{renderActor(event)}</td>
                       <td className="px-4 py-3">
                         <Badge variant="default">{event.event_type}</Badge>
                       </td>
@@ -152,10 +158,26 @@ export function AuditPage() {
                       <tr key={`${event.id}-details`} className="bg-canvas">
                         <td colSpan={5} className="px-4 py-4">
                           <div className="grid gap-2 text-sm text-text-secondary">
-                            <div>{describeAuditEvent(event)}</div>
-                            <pre className="overflow-x-auto rounded-sm border border-border bg-surface px-3 py-3 font-mono text-xs text-text-muted">
-                              {JSON.stringify(event.metadata_json, null, 2)}
-                            </pre>
+                            <div className="text-text-primary">{event.summary}</div>
+                            {event.details.length > 0 ? (
+                              <div className="grid gap-2 rounded-sm border border-border bg-surface px-3 py-3">
+                                {event.details.map((detail) => (
+                                  <div
+                                    key={`${event.id}-${detail.label}`}
+                                    className="flex flex-wrap items-center justify-between gap-3 text-xs"
+                                  >
+                                    <span className="font-mono uppercase tracking-[0.12em] text-text-muted">
+                                      {detail.label}
+                                    </span>
+                                    <span className="text-text-primary">{detail.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-text-muted">
+                                No additional safe details were recorded for this event.
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>

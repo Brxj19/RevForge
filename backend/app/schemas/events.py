@@ -6,15 +6,22 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class RepositoryEventDetailResponse(BaseModel):
+    label: str
+    value: str
+
+
 class RepositoryEventResponse(BaseModel):
     id: UUID
     repository_id: UUID
     event_type: str
     actor_user_id: UUID | None = None
+    actor_display_name: str | None = None
+    actor_email: str | None = None
     authentication_method: str | None = None
-    source_ip: str | None = None
     request_id: str | None = None
-    payload_json: dict[str, object] = {}
+    summary: str
+    details: list[RepositoryEventDetailResponse] = []
     occurred_at: datetime
 
 

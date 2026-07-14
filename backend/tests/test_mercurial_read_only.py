@@ -285,6 +285,9 @@ def test_public_repository_provisioning_and_read_only_browser(
     history_payload = history.json()
     assert len(history_payload["changesets"]) == 2
     assert history_payload["next_cursor"] is not None
+    assert history_payload["changesets"][0]["files_changed_count_when_available"] == 1
+    assert history_payload["changesets"][0]["insertions_when_available"] == 7000
+    assert history_payload["changesets"][0]["deletions_when_available"] == 0
 
     second_page = client.get(
         "/api/v1/organizations/acme/repositories/public-repo/changesets",
@@ -298,8 +301,20 @@ def test_public_repository_provisioning_and_read_only_browser(
         f"/api/v1/organizations/acme/repositories/public-repo/changesets/{latest_node}"
     )
     assert detail.status_code == 200
-    assert detail.json()["branch"] == "release"
-    assert "docs/large.txt" in detail.json()["files_changed"]
+    detail_payload = detail.json()
+    assert detail_payload["branch"] == "release"
+    assert "docs/large.txt" in detail_payload["files_changed"]
+    assert detail_payload["insertions_when_available"] == 7000
+    assert detail_payload["deletions_when_available"] == 0
+    assert detail_payload["changed_files"] == [
+        {
+            "path": "docs/large.txt",
+            "status": "added",
+            "insertions": 7000,
+            "deletions": 0,
+            "old_path": None,
+        }
+    ]
 
     diff = client.get(
         f"/api/v1/organizations/acme/repositories/public-repo/changesets/{latest_node}/diff"
@@ -394,6 +409,8 @@ def test_large_repository_browse_and_history_summary_do_not_hit_output_limits(
     history_payload = history.json()
     assert len(history_payload["changesets"]) == 1
     assert history_payload["changesets"][0]["files_changed_count_when_available"] == 5000
+    assert history_payload["changesets"][0]["insertions_when_available"] == 5000
+    assert history_payload["changesets"][0]["deletions_when_available"] == 0
 
     browse = client.get("/api/v1/organizations/scale/repositories/large-repo/browse")
     assert browse.status_code == 200
@@ -418,7 +435,7 @@ def test_provisioning_denials_do_not_invoke_mercurial_dependencies(
     _login(client)
     add_member = client.post(
         "/api/v1/organizations/secure/members",
-        json={"email": "member@example.com", "role": "member"},
+        json={"user": "member@example.com", "role": "member"},
         headers=_csrf_headers(client),
     )
     assert add_member.status_code == 201
@@ -473,13 +490,13 @@ def test_repository_admin_can_provision_idempotently_and_archived_repo_is_blocke
     _login(client)
     add_member = client.post(
         "/api/v1/organizations/phase2/members",
-        json={"email": "admin@example.com", "role": "member"},
+        json={"user": "admin@example.com", "role": "member"},
         headers=_csrf_headers(client),
     )
     assert add_member.status_code == 201
     grant_admin = client.put(
-        f"/api/v1/organizations/phase2/repositories/admin-repo/permissions/{add_member.json()['user_id']}",
-        json={"role": "admin"},
+        "/api/v1/organizations/phase2/repositories/admin-repo/permissions",
+        json={"user": "admin@example.com", "role": "admin"},
         headers=_csrf_headers(client),
     )
     assert grant_admin.status_code == 200
@@ -546,7 +563,7 @@ def test_internal_and_private_read_authorization(client) -> None:
     _login(client)
     add_member = client.post(
         "/api/v1/organizations/visibility/members",
-        json={"email": "reader@example.com", "role": "member"},
+        json={"user": "reader@example.com", "role": "member"},
         headers=_csrf_headers(client),
     )
     assert add_member.status_code == 201
@@ -574,8 +591,8 @@ def test_internal_and_private_read_authorization(client) -> None:
 
     assert _login(client).status_code == 200
     grant_write = client.put(
-        f"/api/v1/organizations/visibility/repositories/private-repo/permissions/{add_member.json()['user_id']}",
-        json={"role": "write"},
+        "/api/v1/organizations/visibility/repositories/private-repo/permissions",
+        json={"user": "reader@example.com", "role": "write"},
         headers=_csrf_headers(client),
     )
     assert grant_write.status_code == 200

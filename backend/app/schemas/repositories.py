@@ -20,6 +20,7 @@ class RepositoryCreateRequest(BaseModel):
 
 
 class RepositoryUpdateRequest(BaseModel):
+    slug: str | None = Field(default=None, min_length=1, max_length=80)
     display_name: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=4000)
     visibility: RepositoryVisibility | None = None
@@ -27,6 +28,7 @@ class RepositoryUpdateRequest(BaseModel):
 
 
 class RepositoryPermissionRequest(BaseModel):
+    user: str = Field(min_length=1, max_length=320)
     role: RepositoryRole
 
 

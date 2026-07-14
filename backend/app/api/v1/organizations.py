@@ -231,7 +231,7 @@ async def create_member(
             organization=organization,
             actor_membership=membership,
             actor=identity.user,
-            email=payload.email,
+            user_identifier=payload.user,
             role=payload.role,
             request_id=request_id,
         )

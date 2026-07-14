@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import UUID as UUIDType
 
 from sqlalchemy import JSON, ForeignKey, String, Uuid
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
@@ -29,3 +29,5 @@ class AuditEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     event_type: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+    actor_user = relationship("User")

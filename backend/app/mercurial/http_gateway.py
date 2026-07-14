@@ -378,7 +378,7 @@ class HgHttpGatewayApplication:
                 request_id=request_id,
                 metadata_json={
                     "command_kind": command_kind.value,
-                    "token_used": str(token.id) if token is not None else None,
+                    "authentication_method": "token" if token is not None else "session",
                 },
             )
             await session.commit()

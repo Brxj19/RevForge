@@ -9,7 +9,6 @@ from sqlalchemy.orm import selectinload
 from app.core.security import (
     normalize_optional_text,
     validate_display_name,
-    validate_email,
     validate_slug,
 )
 from app.domain.enums import OrganizationRole
@@ -28,6 +27,7 @@ from app.repositories.organizations import (
 from app.services.audit import record_audit_event
 from app.services.authorization import can_manage_owner_memberships, organization_can_manage
 from app.services.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailure
+from app.services.user_resolution import resolve_active_user_by_identifier
 
 
 async def list_organizations_for_user(
@@ -151,7 +151,7 @@ async def add_member(
     organization: Organization,
     actor_membership: OrganizationMember,
     actor: User,
-    email: str,
+    user_identifier: str,
     role: OrganizationRole,
     request_id: str | None,
 ) -> OrganizationMember:
@@ -160,16 +160,10 @@ async def add_member(
     if role == OrganizationRole.OWNER and not can_manage_owner_memberships(actor_membership.role):
         raise ForbiddenError("Only organization owners can assign the owner role.")
 
-    try:
-        normalized_email = validate_email(email)
-    except ValueError as exc:
-        raise ValidationFailure(str(exc)) from exc
-
-    user = await session.scalar(select(User).where(User.email == normalized_email))
+    user = await resolve_active_user_by_identifier(session, identifier=user_identifier)
     existing: OrganizationMember | None = None
-    if user is not None:
-        existing = await get_membership(session, organization_id=organization.id, user_id=user.id)
-    if user is None or existing is not None:
+    existing = await get_membership(session, organization_id=organization.id, user_id=user.id)
+    if existing is not None:
         raise ConflictError("User cannot be added to this organization.")
 
     membership = OrganizationMember(
@@ -187,7 +181,11 @@ async def add_member(
         actor_user_id=actor.id,
         organization_id=organization.id,
         request_id=request_id,
-        metadata_json={"member_user_id": str(user.id), "role": role.value},
+        metadata_json={
+            "member_user_display_name": user.display_name,
+            "member_user_email": user.email,
+            "role": role.value,
+        },
     )
     await session.commit()
     refreshed_membership = await session.scalar(
@@ -246,7 +244,11 @@ async def update_member_role(
         actor_user_id=actor.id,
         organization_id=organization.id,
         request_id=request_id,
-        metadata_json={"member_user_id": str(membership.user_id), "role": new_role.value},
+        metadata_json={
+            "member_user_display_name": membership.user.display_name,
+            "member_user_email": membership.user.email,
+            "role": new_role.value,
+        },
     )
     await session.commit()
     membership = await session.scalar(
@@ -279,6 +281,7 @@ async def remove_member(
     )
     if membership is None:
         raise NotFoundError("Organization member not found.")
+    await session.refresh(membership, attribute_names=["user"])
 
     if membership.role == OrganizationRole.OWNER:
         if not can_manage_owner_memberships(actor_membership.role):
@@ -293,7 +296,10 @@ async def remove_member(
         actor_user_id=actor.id,
         organization_id=organization.id,
         request_id=request_id,
-        metadata_json={"member_user_id": str(membership.user_id)},
+        metadata_json={
+            "member_user_display_name": membership.user.display_name,
+            "member_user_email": membership.user.email,
+        },
     )
     repository_ids = await session.scalars(
         select(Repository.id).where(Repository.organization_id == organization.id)

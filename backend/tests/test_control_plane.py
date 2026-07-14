@@ -148,7 +148,7 @@ def test_organization_creation_and_last_owner_protection(client, session_factory
 
     add_member = client.post(
         "/api/v1/organizations/acme/members",
-        json={"email": "admin@example.com", "role": "admin"},
+        json={"user": "Admin User", "role": "admin"},
         headers=_csrf_headers(client),
     )
     assert add_member.status_code == 201
@@ -191,7 +191,7 @@ def test_repository_visibility_permissions_and_cross_org_isolation(client, sessi
     _login(client)
     member_add_response = client.post(
         "/api/v1/organizations/acme/members",
-        json={"email": "member@example.com", "role": "member"},
+        json={"user": "member@example.com", "role": "member"},
         headers=_csrf_headers(client),
     )
     assert member_add_response.status_code == 201
@@ -247,8 +247,8 @@ def test_repository_visibility_permissions_and_cross_org_isolation(client, sessi
 
     assert _login(client).status_code == 200
     permissions = client.put(
-        f"/api/v1/organizations/acme/repositories/private-repo/permissions/{member_add_response.json()['user_id']}",
-        json={"role": "read"},
+        "/api/v1/organizations/acme/repositories/private-repo/permissions",
+        json={"user": "Member User", "role": "read"},
         headers=_csrf_headers(client),
     )
     assert permissions.status_code == 200
@@ -340,3 +340,61 @@ def test_audit_events_are_recorded_for_control_plane_changes(client, session_fac
     assert "user.logged_in" in event_types
     assert all("password" not in str(event.metadata_json).lower() for event in events)
     assert all("token" not in str(event.metadata_json).lower() for event in events)
+
+
+def test_repository_slug_rename_and_archived_delete_flow(client, session_factory) -> None:
+    _register(client)
+    client.post(
+        "/api/v1/organizations",
+        json={"slug": "rename", "display_name": "Rename Org", "description": None},
+        headers=_csrf_headers(client),
+    )
+    create_repository = client.post(
+        "/api/v1/organizations/rename/repositories",
+        json={
+            "slug": "before-slug",
+            "display_name": "Before Slug",
+            "description": None,
+            "visibility": "private",
+        },
+        headers=_csrf_headers(client),
+    )
+    assert create_repository.status_code == 201
+
+    rename_repository = client.patch(
+        "/api/v1/organizations/rename/repositories/before-slug",
+        json={"slug": "after-slug"},
+        headers=_csrf_headers(client),
+    )
+    assert rename_repository.status_code == 200
+    assert rename_repository.json()["slug"] == "after-slug"
+
+    old_route = client.get("/api/v1/organizations/rename/repositories/before-slug")
+    assert old_route.status_code == 404
+
+    renamed_route = client.get("/api/v1/organizations/rename/repositories/after-slug")
+    assert renamed_route.status_code == 200
+
+    delete_without_archive = client.delete(
+        "/api/v1/organizations/rename/repositories/after-slug",
+        headers=_csrf_headers(client),
+    )
+    assert delete_without_archive.status_code == 409
+
+    archive_repository = client.patch(
+        "/api/v1/organizations/rename/repositories/after-slug",
+        json={"archived": True},
+        headers=_csrf_headers(client),
+    )
+    assert archive_repository.status_code == 200
+
+    delete_repository = client.delete(
+        "/api/v1/organizations/rename/repositories/after-slug",
+        headers=_csrf_headers(client),
+    )
+    assert delete_repository.status_code == 204
+
+    deleted_record = _run_query(
+        session_factory, select(Repository).where(Repository.slug == "after-slug")
+    )
+    assert deleted_record is None

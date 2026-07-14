@@ -10,11 +10,14 @@ export interface ApiHealth extends ServiceHealth {
 export interface AuditEventRecord {
   id: string;
   actor_user_id: string | null;
+  actor_display_name: string | null;
+  actor_email: string | null;
   organization_id: string | null;
   repository_id: string | null;
   event_type: string;
   request_id: string | null;
-  metadata_json: Record<string, unknown>;
+  summary: string;
+  details: Array<{ label: string; value: string }>;
   created_at: string;
 }
 
@@ -236,10 +239,12 @@ export interface RepositoryEvent {
   repository_id: string;
   event_type: string;
   actor_user_id: string | null;
+  actor_display_name: string | null;
+  actor_email: string | null;
   authentication_method: string | null;
-  source_ip: string | null;
   request_id: string | null;
-  payload_json: Record<string, unknown>;
+  summary: string;
+  details: Array<{ label: string; value: string }>;
   occurred_at: string;
 }
 
@@ -487,7 +492,7 @@ export function listOrganizationMembers(organizationSlug: string) {
 
 export function addOrganizationMember(
   organizationSlug: string,
-  payload: { email: string; role: "owner" | "admin" | "member" },
+  payload: { user: string; role: "owner" | "admin" | "member" },
   csrfToken: string | null,
 ) {
   return request<OrganizationMember>(
@@ -769,6 +774,7 @@ export function updateRepository(
   organizationSlug: string,
   repositorySlug: string,
   payload: {
+    slug?: string;
     display_name?: string;
     description?: string | null;
     visibility?: "public" | "internal" | "private";
@@ -798,15 +804,28 @@ export function listRepositoryPermissions(
 export function setRepositoryPermission(
   organizationSlug: string,
   repositorySlug: string,
-  userId: string,
-  payload: { role: "read" | "write" | "admin" },
+  payload: { user: string; role: "read" | "write" | "admin" },
   csrfToken: string | null,
 ) {
   return request<RepositoryPermission>(
-    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/permissions/${userId}`,
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/permissions`,
     {
       method: "PUT",
       body: JSON.stringify(payload),
+      csrfToken,
+    },
+  );
+}
+
+export function deleteRepository(
+  organizationSlug: string,
+  repositorySlug: string,
+  csrfToken: string | null,
+) {
+  return request<void>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}`,
+    {
+      method: "DELETE",
       csrfToken,
     },
   );

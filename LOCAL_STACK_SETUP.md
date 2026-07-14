@@ -1136,6 +1136,36 @@ Fix on all platforms:
 docker compose -f infra/docker-compose.yml up -d --build sshd
 ```
 
+### `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!`
+
+Cause:
+
+- the SSH server host key changed after a container rebuild
+- your local `known_hosts` file still has the old key for `localhost:2222`
+
+Fix on macOS/Linux:
+
+```bash
+ssh-keygen -R "[localhost]:2222"
+ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts
+```
+
+Fix on Windows PowerShell:
+
+```powershell
+ssh-keygen -R "[localhost]:2222"
+ssh-keyscan -p 2222 localhost >> $HOME\.ssh\known_hosts
+```
+
+Fix on Windows WSL2:
+
+```bash
+ssh-keygen -R "[localhost]:2222"
+ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts
+```
+
+RevForge now persists local dev SSH host keys under the mounted SSH data directory so future rebuilds should not keep changing the host identity.
+
 ### `Permission denied (publickey)`
 
 Cause:

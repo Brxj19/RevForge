@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from uuid import UUID
 
 from sqlalchemy import select
@@ -26,6 +27,7 @@ from app.repositories.repositories import (
 from app.services.audit import record_audit_event
 from app.services.authorization import organization_can_manage, repository_access_for_actor
 from app.services.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailure
+from app.services.user_resolution import resolve_active_user_by_identifier
 
 
 async def get_organization_by_slug_for_repo_routes(
@@ -180,6 +182,7 @@ async def update_repository(
     actor: User,
     actor_membership: OrganizationMember | None,
     actor_permission: RepositoryPermission | None,
+    slug: str | None,
     display_name: str | None,
     description: str | None,
     visibility: RepositoryVisibility | None,
@@ -192,6 +195,25 @@ async def update_repository(
     if repository.archived_at is not None and archived is not False:
         raise ForbiddenError("Archived repositories must be unarchived before other updates.")
 
+    event_type = "repository.updated"
+    metadata_json: dict[str, object] = {"visibility": repository.visibility.value}
+
+    if slug is not None:
+        try:
+            normalized_slug = validate_slug(slug)
+        except ValueError as exc:
+            raise ValidationFailure(str(exc)) from exc
+        if normalized_slug != repository.slug:
+            existing = await get_repository_by_slug(
+                session, organization_id=organization.id, slug=normalized_slug
+            )
+            if existing is not None and existing.id != repository.id:
+                raise ConflictError("Repository slug is already in use for this organization.")
+            metadata_json["previous_slug"] = repository.slug
+            metadata_json["new_slug"] = normalized_slug
+            repository.slug = normalized_slug
+            event_type = "repository.slug_renamed"
+
     if display_name is not None:
         try:
             repository.display_name = validate_display_name(display_name)
@@ -202,7 +224,6 @@ async def update_repository(
     if visibility is not None:
         repository.visibility = visibility
 
-    event_type = "repository.updated"
     if archived is True and repository.archived_at is None:
         from app.core.security import utc_now
 
@@ -212,6 +233,9 @@ async def update_repository(
         repository.archived_at = None
         event_type = "repository.unarchived"
 
+    metadata_json["visibility"] = repository.visibility.value
+    metadata_json["repository_slug"] = repository.slug
+
     await record_audit_event(
         session,
         event_type=event_type,
@@ -219,7 +243,7 @@ async def update_repository(
         organization_id=organization.id,
         repository_id=repository.id,
         request_id=request_id,
-        metadata_json={"visibility": repository.visibility.value},
+        metadata_json=metadata_json,
     )
     await session.commit()
     await session.refresh(repository)
@@ -249,7 +273,7 @@ async def upsert_repository_permission(
     organization: Organization,
     repository: Repository,
     actor: User,
-    target_user_id: UUID,
+    target_user_identifier: str,
     role: RepositoryRole,
     request_id: str | None,
 ) -> RepositoryPermission:
@@ -259,23 +283,23 @@ async def upsert_repository_permission(
     if not access.can_manage:
         raise ForbiddenError("You do not have permission to manage repository permissions.")
 
-    target_user = await session.get(User, target_user_id)
-    if target_user is None:
-        raise NotFoundError("User not found.")
+    target_user = await resolve_active_user_by_identifier(
+        session, identifier=target_user_identifier
+    )
     target_membership = await get_membership(
         session,
         organization_id=organization.id,
-        user_id=target_user_id,
+        user_id=target_user.id,
     )
     if target_membership is None:
         raise ForbiddenError("Repository permissions require organization membership.")
 
-    permission = await get_permission(session, repository_id=repository.id, user_id=target_user_id)
+    permission = await get_permission(session, repository_id=repository.id, user_id=target_user.id)
     event_type = "repository.permission_granted"
     if permission is None:
         permission = RepositoryPermission(
             repository_id=repository.id,
-            user_id=target_user_id,
+            user_id=target_user.id,
             role=role,
             granted_by_user_id=actor.id,
         )
@@ -295,7 +319,11 @@ async def upsert_repository_permission(
         organization_id=organization.id,
         repository_id=repository.id,
         request_id=request_id,
-        metadata_json={"user_id": str(target_user_id), "role": role.value},
+        metadata_json={
+            "user_display_name": target_user.display_name,
+            "user_email": target_user.email,
+            "role": role.value,
+        },
     )
     await session.commit()
     permission = await session.scalar(
@@ -326,6 +354,7 @@ async def delete_repository_permission(
     permission = await get_permission(session, repository_id=repository.id, user_id=target_user_id)
     if permission is None:
         raise NotFoundError("Repository permission not found.")
+    await session.refresh(permission, attribute_names=["user"])
 
     await record_audit_event(
         session,
@@ -334,10 +363,45 @@ async def delete_repository_permission(
         organization_id=organization.id,
         repository_id=repository.id,
         request_id=request_id,
-        metadata_json={"user_id": str(target_user_id)},
+        metadata_json={
+            "user_display_name": permission.user.display_name,
+            "user_email": permission.user.email,
+        },
     )
     await session.delete(permission)
     await session.commit()
+
+
+async def delete_repository(
+    session: AsyncSession,
+    *,
+    organization: Organization,
+    repository: Repository,
+    actor: User,
+    actor_membership: OrganizationMember | None,
+    actor_permission: RepositoryPermission | None,
+    request_id: str | None,
+    repository_path,
+) -> None:
+    access = repository_access_for_actor(actor, actor_membership, repository, actor_permission)
+    if not access.can_manage:
+        raise ForbiddenError("You do not have permission to delete this repository.")
+    if repository.archived_at is None:
+        raise ConflictError("Archive the repository before deleting it.")
+
+    await record_audit_event(
+        session,
+        event_type="repository.deleted",
+        actor_user_id=actor.id,
+        organization_id=organization.id,
+        repository_id=repository.id,
+        request_id=request_id,
+        metadata_json={"repository_slug": repository.slug},
+    )
+    await session.delete(repository)
+    await session.commit()
+    if repository_path.exists():
+        shutil.rmtree(repository_path, ignore_errors=True)
 
 
 def repository_is_browsable(repository: Repository) -> bool:

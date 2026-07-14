@@ -18,6 +18,14 @@ import {
   type RepositoryDetail,
   type RepositoryRefs,
 } from "../lib/api";
+import {
+  buildDiffFileViewModels,
+  fileBadgeVariant,
+  formatLineDelta,
+  parseChangesetDiff,
+  renderLineDelta,
+  statusLabel,
+} from "../lib/changeset-diff";
 import { firstLine, formatAbsoluteTime, formatRelativeTime } from "../lib/formatting";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -47,13 +55,6 @@ interface ReferenceSummary {
   branches: string[];
   bookmarks: string[];
   tags: string[];
-}
-
-interface DiffFileSummary {
-  path: string;
-  status: "A" | "M" | "D" | "R" | "B";
-  additions: number;
-  deletions: number;
 }
 
 interface GraphRowModel {
@@ -118,52 +119,6 @@ function buildBranchOrder(
   }
 
   return ordered;
-}
-
-function summarizeDiff(content: string) {
-  const files: DiffFileSummary[] = [];
-  let current: DiffFileSummary | null = null;
-
-  for (const line of content.split("\n")) {
-    if (line.startsWith("diff -r ")) {
-      if (current) files.push(current);
-      current = {
-        path: "unknown",
-        status: "M",
-        additions: 0,
-        deletions: 0,
-      };
-      continue;
-    }
-
-    if (line.startsWith("--- ") || line.startsWith("+++ ")) {
-      const path = line.replace(/^(\+\+\+|---)\s+[ab]\//, "").trim();
-      if (current && path !== "/dev/null") {
-        current.path = path;
-      }
-      if (current && line.startsWith("--- /dev/null")) {
-        current.status = "A";
-      }
-      if (current && line.startsWith("+++ /dev/null")) {
-        current.status = "D";
-      }
-      continue;
-    }
-
-    if (!current) continue;
-
-    if (line.startsWith("+") && !line.startsWith("+++")) {
-      current.additions += 1;
-      continue;
-    }
-
-    if (line.startsWith("-") && !line.startsWith("---")) {
-      current.deletions += 1;
-    }
-  }
-
-  if (current) files.push(current);
-  return files.filter((file) => file.path !== "unknown");
 }
 
 function buildGraphSearchSuffix(locationSearch: string) {
@@ -483,23 +438,47 @@ export function RepositoryGraphPage({
       tags: references?.tags ?? [],
       bookmarks: references?.bookmarks ?? [],
       files_changed: [],
+      files_changed_count_when_available:
+        selectedSummary.files_changed_count_when_available,
+      insertions_when_available: selectedSummary.insertions_when_available,
+      deletions_when_available: selectedSummary.deletions_when_available,
+      changed_files: [],
     };
   }, [referenceByNode, selectedDetailQuery.data, selectedSummary]);
 
   const selectedDiff = selectedDiffQuery.data;
   const parsedDiffFiles = useMemo(
-    () => summarizeDiff(selectedDiff?.content ?? ""),
+    () => parseChangesetDiff(selectedDiff?.content ?? ""),
     [selectedDiff],
   );
+  const diffFileViewModels = useMemo(
+    () =>
+      selectedChangeset
+        ? buildDiffFileViewModels(selectedChangeset, parsedDiffFiles)
+        : [],
+    [parsedDiffFiles, selectedChangeset],
+  );
   const diffAdditions = useMemo(
-    () => parsedDiffFiles.reduce((total, file) => total + file.additions, 0),
-    [parsedDiffFiles],
+    () =>
+      diffFileViewModels.reduce(
+        (total, file) => total + (file.additions ?? 0),
+        0,
+      ),
+    [diffFileViewModels],
   );
   const diffDeletions = useMemo(
-    () => parsedDiffFiles.reduce((total, file) => total + file.deletions, 0),
-    [parsedDiffFiles],
+    () =>
+      diffFileViewModels.reduce(
+        (total, file) => total + (file.deletions ?? 0),
+        0,
+      ),
+    [diffFileViewModels],
   );
-  const diffHasStats = parsedDiffFiles.length > 0;
+  const diffHasStats =
+    diffFileViewModels.length > 0 &&
+    diffFileViewModels.every(
+      (file) => file.additions !== null && file.deletions !== null,
+    );
 
   const rowHeight = compactRows ? 52 : 60;
   const rowPitch = rowHeight + 1;
@@ -791,8 +770,12 @@ export function RepositoryGraphPage({
     const selectedBranchColor = getBranchColor(
       laneIndexByBranch.get(selectedChangeset.branch) ?? 0,
     );
-    const lineStatsAvailable =
-      diffHasStats && selectedNode === selectedChangeset.node;
+    const totalInsertions =
+      selectedChangeset.insertions_when_available ??
+      (diffHasStats ? diffAdditions : null);
+    const totalDeletions =
+      selectedChangeset.deletions_when_available ??
+      (diffHasStats ? diffDeletions : null);
 
     return (
       <Surface className="flex h-full min-h-0 flex-col gap-3 overflow-hidden xl:sticky xl:top-4 xl:h-[calc(100vh-1rem)]">
@@ -907,7 +890,9 @@ export function RepositoryGraphPage({
                 Inserted
               </div>
               <div className="mt-2 font-mono text-sm text-success">
-                {lineStatsAvailable ? `+${diffAdditions}` : "n/a"}
+                {totalInsertions !== null
+                  ? `+${totalInsertions}`
+                  : "Binary or not counted"}
               </div>
             </Surface>
             <Surface inset>
@@ -915,7 +900,9 @@ export function RepositoryGraphPage({
                 Removed
               </div>
               <div className="mt-2 font-mono text-sm text-danger">
-                {lineStatsAvailable ? `-${diffDeletions}` : "n/a"}
+                {totalDeletions !== null
+                  ? `-${totalDeletions}`
+                  : "Binary or not counted"}
               </div>
             </Surface>
           </div>
@@ -1006,50 +993,52 @@ export function RepositoryGraphPage({
                 retry={() => void selectedDiffQuery.refetch()}
               />
             </div>
-          ) : parsedDiffFiles.length > 0 ? (
+          ) : diffFileViewModels.length > 0 ? (
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
               <div className="grid gap-2">
-                {parsedDiffFiles.map((file) => (
-                  <div
-                    key={file.path}
-                    className="flex flex-wrap items-center gap-3 bg-surface-subtle px-3 py-2 text-sm text-text-primary"
-                  >
-                    <Badge
-                      variant={
-                        file.status === "A"
-                          ? "success"
-                          : file.status === "D"
-                            ? "danger"
-                            : "default"
+                {diffFileViewModels.map((file) => {
+                  const lineDelta = renderLineDelta(file.additions, file.deletions);
+
+                  return (
+                    <button
+                      key={file.path}
+                      type="button"
+                      className={clsx(
+                        "flex w-full flex-wrap items-center gap-3 px-3 py-2 text-left text-sm text-text-primary transition-colors",
+                        "bg-surface-subtle hover:bg-surface-hover/60",
+                      )}
+                      onClick={() =>
+                        navigate(
+                          `${basePath}/changesets/${selectedChangeset.node}?file=${encodeURIComponent(file.path)}`,
+                        )
                       }
                     >
-                      {file.status}
-                    </Badge>
-                    <span className="font-mono text-xs">{file.path}</span>
-                    <span className="ml-auto font-mono text-[11px] text-success">
-                      +{file.additions}
-                    </span>
-                    <span className="font-mono text-[11px] text-danger">
-                      -{file.deletions}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : selectedChangeset.files_changed.length > 0 ? (
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-              <div className="grid gap-2">
-                {selectedChangeset.files_changed.map((filePath) => (
-                  <div
-                    key={filePath}
-                    className="flex items-center gap-3 bg-surface-subtle px-3 py-2 text-sm text-text-primary"
-                  >
-                    <span className="font-mono text-xs">{filePath}</span>
-                    <span className="ml-auto text-xs text-text-muted">
-                      n/a
-                    </span>
-                  </div>
-                ))}
+                      <Badge variant={fileBadgeVariant(file.status)}>
+                        {statusLabel(file.status)}
+                      </Badge>
+                      <span className="font-mono text-xs">{file.path}</span>
+                      {file.oldPath ? (
+                        <span className="text-xs text-text-muted">
+                          from {file.oldPath}
+                        </span>
+                      ) : null}
+                      {lineDelta ? (
+                        <span className="ml-auto flex items-center gap-2 font-mono text-[11px]">
+                          <span className="text-success">
+                            {lineDelta.additionsLabel}
+                          </span>
+                          <span className="text-danger">
+                            {lineDelta.deletionsLabel}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="ml-auto font-mono text-[11px] text-text-muted">
+                          {formatLineDelta(file.additions, file.deletions)}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -1414,7 +1403,12 @@ export function RepositoryGraphPage({
             <div className="relative z-10 flex min-h-0 flex-col pb-3">
               {graphRows.map((row, index) => {
                 const rowStatsLabel =
-                  row.isSelected && diffHasStats ? `+${diffAdditions} / -${diffDeletions}` : "n/a";
+                  row.changeset.insertions_when_available !== null &&
+                  row.changeset.deletions_when_available !== null
+                    ? `+${row.changeset.insertions_when_available} / -${row.changeset.deletions_when_available}`
+                    : row.isSelected && diffHasStats
+                      ? `+${diffAdditions} / -${diffDeletions}`
+                      : "Binary or not counted";
                 const rowFilesLabel =
                   row.changeset.files_changed_count_when_available ??
                   selectedSummary?.files_changed_count_when_available ??

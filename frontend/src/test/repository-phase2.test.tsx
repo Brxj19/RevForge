@@ -36,6 +36,8 @@ const graphChangesets = [
     message: "Merge feature branch",
     branch: "default",
     files_changed_count_when_available: 4,
+    insertions_when_available: 6,
+    deletions_when_available: 2,
   },
   {
     node: featureNode,
@@ -46,7 +48,9 @@ const graphChangesets = [
     timestamp: "2026-07-11T08:00:00Z",
     message: "Add repository graph page",
     branch: "feature/graph",
-    files_changed_count_when_available: 3,
+    files_changed_count_when_available: 2,
+    insertions_when_available: 4,
+    deletions_when_available: 1,
   },
   {
     node: rootNode,
@@ -58,6 +62,8 @@ const graphChangesets = [
     message: "Initial import",
     branch: "default",
     files_changed_count_when_available: 1,
+    insertions_when_available: 1,
+    deletions_when_available: 0,
   },
 ] as const;
 
@@ -78,7 +84,25 @@ const graphDetails = new Map([
       files_changed: [
         "frontend/src/routes/repository-graph.tsx",
         "frontend/src/components/repo/graph-view.tsx",
-        "frontend/src/components/repo/repo-tabs.tsx",
+      ],
+      files_changed_count_when_available: 2,
+      insertions_when_available: 4,
+      deletions_when_available: 1,
+      changed_files: [
+        {
+          path: "frontend/src/routes/repository-graph.tsx",
+          status: "modified",
+          insertions: 2,
+          deletions: 1,
+          old_path: null,
+        },
+        {
+          path: "frontend/src/components/repo/graph-view.tsx",
+          status: "added",
+          insertions: 2,
+          deletions: 0,
+          old_path: null,
+        },
       ],
     },
   ],
@@ -96,6 +120,18 @@ const graphDetails = new Map([
       tags: [],
       bookmarks: [],
       files_changed: ["README.md"],
+      files_changed_count_when_available: 1,
+      insertions_when_available: 1,
+      deletions_when_available: 0,
+      changed_files: [
+        {
+          path: "README.md",
+          status: "added",
+          insertions: 1,
+          deletions: 0,
+          old_path: null,
+        },
+      ],
     },
   ],
 ]);
@@ -104,7 +140,7 @@ const graphDiffs = new Map([
   [
     featureNode,
     {
-      content: `diff -r ${rootNode} ${featureNode}\n--- a/frontend/src/routes/repository-graph.tsx\n+++ b/frontend/src/routes/repository-graph.tsx\n@@ -1,1 +1,2 @@\n-old line\n+new line\n+another line\ndiff -r ${rootNode} ${featureNode}\n--- /dev/null\n+++ b/frontend/src/components/repo/graph-view.tsx\n@@ -0,0 +1,2 @@\n+graph row\n+graph lane\n`,
+      content: `diff --git a/frontend/src/routes/repository-graph.tsx b/frontend/src/routes/repository-graph.tsx\n--- a/frontend/src/routes/repository-graph.tsx\n+++ b/frontend/src/routes/repository-graph.tsx\n@@ -1,1 +1,2 @@\n-old line\n+new line\n+another line\ndiff --git a/frontend/src/components/repo/graph-view.tsx b/frontend/src/components/repo/graph-view.tsx\n--- /dev/null\n+++ b/frontend/src/components/repo/graph-view.tsx\n@@ -0,0 +1,2 @@\n+graph row\n+graph lane\n`,
       is_truncated: false,
       truncation_reason_when_applicable: null,
     },
@@ -319,6 +355,10 @@ beforeEach(() => {
             tags: [],
             bookmarks: [],
             files_changed: [],
+            files_changed_count_when_available: 0,
+            insertions_when_available: null,
+            deletions_when_available: null,
+            changed_files: [],
           },
         );
       }
@@ -388,12 +428,17 @@ beforeEach(() => {
             {
               id: "event-1",
               repository_id: "repo-3",
-              event_type: "push.accepted",
+              event_type: "repository.push.accepted",
               actor_user_id: "user-1",
+              actor_display_name: "Owner User",
+              actor_email: "owner@example.com",
               authentication_method: "ssh",
-              source_ip: "203.0.113.10",
               request_id: "req-123",
-              payload_json: { pushed_nodes: [featureNode] },
+              summary: "Push accepted: 1 changeset over ssh",
+              details: [
+                { label: "Changesets received", value: "1" },
+                { label: "Authentication", value: "ssh" },
+              ],
               occurred_at: "2026-07-11T08:00:00Z",
             },
           ],
@@ -556,10 +601,13 @@ describe("repository phase 2 pages", () => {
     expect(
       await screen.findByRole("heading", { name: /audit/i }),
     ).toBeInTheDocument();
-    expect(await screen.findByText(/push\.accepted/i)).toBeInTheDocument();
-    expect(screen.getByText(/203\.0\.113\.10/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/repository\.push\.accepted/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/owner user/i)).toBeInTheDocument();
     expect(screen.getByText(/req-123/i)).toBeInTheDocument();
-    expect(screen.getByText(/"pushed_nodes"/i)).toBeInTheDocument();
+    expect(screen.getByText(/push accepted: 1 changeset over ssh/i)).toBeInTheDocument();
+    expect(screen.getByText(/changesets received/i)).toBeInTheDocument();
   });
 
   test("renders markdown preview in the code browser", async () => {
@@ -597,8 +645,10 @@ describe("repository phase 2 pages", () => {
     expect(screen.getByText("+4")).toBeInTheDocument();
     expect(screen.getByText("Removed")).toBeInTheDocument();
     expect(
-      screen.getByText(/frontend\/src\/routes\/repository-graph\.tsx/i),
-    ).toBeInTheDocument();
+      screen.getAllByText(/frontend\/src\/routes\/repository-graph\.tsx/i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("+2").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("-1").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /initial import/i }));
 
@@ -607,6 +657,79 @@ describe("repository phase 2 pages", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /initial import/i }),
+    ).toBeInTheDocument();
+  });
+
+  test("changeset detail uses per-file stats and focuses a selected file", async () => {
+    renderRepositoryRoute(
+      `/organizations/acme/repositories/ready-repo/changesets/${featureNode}?file=${encodeURIComponent("frontend/src/routes/repository-graph.tsx")}`,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: featureNode.slice(0, 12) }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("+2 -1").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/focused file: frontend\/src\/routes\/repository-graph\.tsx/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /diff --git a\/frontend\/src\/routes\/repository-graph\.tsx b\/frontend\/src\/routes\/repository-graph\.tsx/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.textContent === "new line"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /diff --git a\/frontend\/src\/components\/repo\/graph-view\.tsx b\/frontend\/src\/components\/repo\/graph-view\.tsx/i,
+      ),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /frontend\/src\/components\/repo\/graph-view\.tsx/i,
+      }),
+    );
+
+    expect(screen.getAllByText("+2 -0").length).toBeGreaterThan(0);
+    expect(
+      await screen.findByText(
+        /focused file: frontend\/src\/components\/repo\/graph-view\.tsx/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /diff --git a\/frontend\/src\/components\/repo\/graph-view\.tsx b\/frontend\/src\/components\/repo\/graph-view\.tsx/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.textContent === "graph row"),
+    ).toBeInTheDocument();
+  });
+
+  test("graph changed file click opens the history diff for that file", async () => {
+    renderRepositoryRoute(
+      `/organizations/acme/repositories/ready-repo/graph?node=${featureNode}`,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: featureNode.slice(0, 12) }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /frontend\/src\/components\/repo\/graph-view\.tsx/i,
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        /focused file: frontend\/src\/components\/repo\/graph-view\.tsx/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /back to history/i }),
     ).toBeInTheDocument();
   });
 });

@@ -103,10 +103,8 @@ async def create_personal_access_token(
         actor_user_id=user.id,
         request_id=request_id,
         metadata_json={
-            "token_id": str(token.id),
+            "token_scope": "repository" if repository_id else "organization" if organization_id else "personal",
             "capability": capability.value,
-            "organization_id": str(organization_id) if organization_id else None,
-            "repository_id": str(repository_id) if repository_id else None,
             "expires_at": expires_at.isoformat() if expires_at else None,
         },
     )
@@ -137,7 +135,16 @@ async def revoke_personal_access_token(
         event_type="token.revoked",
         actor_user_id=user.id,
         request_id=request_id,
-        metadata_json={"token_id": str(token.id), "capability": token.capability.value},
+        metadata_json={
+            "token_scope": (
+                "repository"
+                if token.repository_id is not None
+                else "organization"
+                if token.organization_id is not None
+                else "personal"
+            ),
+            "capability": token.capability.value,
+        },
     )
     await session.commit()
     await session.refresh(token)
@@ -186,7 +193,16 @@ async def authenticate_personal_access_token(
         event_type="transport.personal_access_token.used",
         actor_user_id=user.id,
         request_id=request_id,
-        metadata_json={"token_id": str(token.id), "capability": token.capability.value},
+        metadata_json={
+            "token_scope": (
+                "repository"
+                if token.repository_id is not None
+                else "organization"
+                if token.organization_id is not None
+                else "personal"
+            ),
+            "capability": token.capability.value,
+        },
     )
     await session.flush()
     return user, token
@@ -241,7 +257,7 @@ async def create_ssh_public_key(
         event_type="ssh_key.added",
         actor_user_id=user.id,
         request_id=request_id,
-        metadata_json={"key_id": str(key.id), "fingerprint_sha256": fingerprint},
+        metadata_json={"key_label": normalized_label},
     )
     await session.commit()
     if authorized_keys_output_path is not None:
@@ -270,7 +286,7 @@ async def revoke_ssh_public_key(
         event_type="ssh_key.removed",
         actor_user_id=user.id,
         request_id=request_id,
-        metadata_json={"key_id": str(key.id), "fingerprint_sha256": key.fingerprint_sha256},
+        metadata_json={"key_label": key.label},
     )
     await session.commit()
     if authorized_keys_output_path is not None:
@@ -300,7 +316,7 @@ async def authenticate_ssh_public_key(
         event_type="transport.ssh_public_key.used",
         actor_user_id=user.id,
         request_id=request_id,
-        metadata_json={"key_id": str(key.id), "fingerprint_sha256": key.fingerprint_sha256},
+        metadata_json={"key_label": key.label},
     )
     await session.flush()
     return user, key

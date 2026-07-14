@@ -2,17 +2,80 @@
   background: var(--rf-editor-canvas);
 }
 
+.rf-diff-file-header {
+  background: color-mix(in srgb, var(--rf-editor-canvas) 88%, black);
+}
+
 .rf-diff-hunk {
   background: var(--color-diff-hunk-bg);
   color: var(--color-diff-hunk-text);
+  border-left: 3px solid var(--color-info);
 }
 
-.rf-diff-add {
-  background: var(--color-diff-add-bg);
+.rf-diff-row {
+  position: relative;
+}
+
+.rf-diff-row:hover {
+  filter: brightness(1.08);
+}
+
+.rf-diff-row-add {
+  background: color-mix(in srgb, var(--color-diff-add-bg) 88%, var(--rf-editor-canvas));
+}
+
+.rf-diff-row-del {
+  background: color-mix(in srgb, var(--color-diff-del-bg) 88%, var(--rf-editor-canvas));
+}
+
+.rf-diff-row-context {
+  background: var(--rf-editor-canvas);
+}
+
+.rf-diff-gutter {
+  background: rgba(110, 118, 129, 0.3);
+}
+
+.rf-diff-row-add .rf-diff-gutter {
+  background: var(--color-diff-add-line);
+}
+
+.rf-diff-row-del .rf-diff-gutter {
+  background: var(--color-diff-del-line);
+}
+
+.rf-diff-line-number {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 0.75rem;
+  border-right: 1px solid rgba(48, 54, 61, 0.72);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  background: rgba(13, 17, 23, 0.72);
+}
+
+.rf-diff-line-number:hover {
+  color: var(--color-text-primary);
+}
+
+.rf-diff-line-number-add {
+  color: var(--color-diff-add-line);
+}
+
+.rf-diff-line-number-del {
+  color: var(--color-diff-del-line);
+}
+
+.rf-diff-code-cell {
+  display: block;
+  overflow-x: auto;
+}
+
+.rf-diff-row-add .rf-diff-code-cell {
   color: var(--color-diff-add-text);
 }
 
-.rf-diff-del {
-  background: var(--color-diff-del-bg);
+.rf-diff-row-del .rf-diff-code-cell {
   color: var(--color-diff-del-text);
 }

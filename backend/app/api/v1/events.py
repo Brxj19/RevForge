@@ -13,6 +13,7 @@ from app.schemas.events import (
     RepositoryEventListResponse,
     RepositoryEventResponse,
 )
+from app.services.activity_presenter import present_activity
 from app.services.errors import NotFoundError
 from app.services.event_service import EventService
 from app.services.repository_service import get_repository_for_actor
@@ -28,15 +29,24 @@ def _get_event_service() -> EventService:
 
 
 def _serialize_event(event) -> RepositoryEventResponse:
+    presented = present_activity(
+        event.event_type,
+        {
+            **event.payload_json,
+            "authentication_method": event.authentication_method,
+        },
+    )
     return RepositoryEventResponse(
         id=event.id,
         repository_id=event.repository_id,
         event_type=event.event_type,
         actor_user_id=event.actor_user_id,
+        actor_display_name=event.actor_user.display_name if event.actor_user else None,
+        actor_email=event.actor_user.email if event.actor_user else None,
         authentication_method=event.authentication_method,
-        source_ip=event.source_ip,
         request_id=event.request_id,
-        payload_json=event.payload_json,
+        summary=presented.summary,
+        details=[{"label": detail.label, "value": detail.value} for detail in presented.details],
         occurred_at=event.occurred_at,
     )
 
