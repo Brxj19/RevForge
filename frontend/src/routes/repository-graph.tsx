@@ -12,17 +12,13 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   getChangeset,
   getChangesetDiff,
+  getRepositoryTransport,
   type ChangesetDetail,
   type ChangesetSummary,
   type RepositoryDetail,
   type RepositoryRefs,
 } from "../lib/api";
-import {
-  buildCloneUrls,
-  firstLine,
-  formatAbsoluteTime,
-  formatRelativeTime,
-} from "../lib/formatting";
+import { firstLine, formatAbsoluteTime, formatRelativeTime } from "../lib/formatting";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { CopyButton } from "../components/ui/copy-button";
@@ -308,6 +304,10 @@ export function RepositoryGraphPage({
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [detailsVisible, setDetailsVisible] = useState(true);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const transportQuery = useQuery({
+    queryKey: ["repository-transport", organizationSlug, repositorySlug],
+    queryFn: () => getRepositoryTransport(organizationSlug, repositorySlug),
+  });
 
   const searchParams = useMemo(
     () => new URLSearchParams(location.search),
@@ -381,15 +381,32 @@ export function RepositoryGraphPage({
     null;
 
   useEffect(() => {
-    if (selectedNode || visibleChangesets.length === 0) {
+    if (visibleChangesets.length === 0) {
       return;
     }
 
-    const initialNode = visibleChangesets[0]?.node;
-    if (!initialNode) return;
+    const firstVisibleNode = visibleChangesets[0]?.node;
+    if (!firstVisibleNode) return;
+
+    if (!selectedNode) {
+      const next = new URLSearchParams(location.search);
+      next.set("node", firstVisibleNode);
+
+      navigate(`${basePath}/graph?${next.toString()}`, { replace: true });
+      return;
+    }
+
+    const selectedStillVisible = visibleChangesets.some(
+      (changeset) => changeset.node === selectedNode,
+    );
+    if (selectedStillVisible) {
+      return;
+    }
 
     const next = new URLSearchParams(location.search);
-    next.set("node", initialNode);
+    next.set("node", firstVisibleNode);
+    next.delete("bookmark");
+    next.delete("tag");
 
     navigate(`${basePath}/graph?${next.toString()}`, { replace: true });
   }, [basePath, location.search, navigate, selectedNode, visibleChangesets]);
@@ -723,7 +740,7 @@ export function RepositoryGraphPage({
   function renderDetailsPanel() {
     if (!detailsVisible) {
       return (
-        <Surface className="flex h-full min-h-0 flex-col gap-3 overflow-hidden xl:sticky xl:top-4">
+        <Surface className="flex h-full min-h-0 flex-col gap-3 overflow-hidden xl:sticky xl:top-4 xl:h-[calc(100vh-1rem)]">
           <div>
             <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
               Changeset details
@@ -778,7 +795,7 @@ export function RepositoryGraphPage({
       diffHasStats && selectedNode === selectedChangeset.node;
 
     return (
-      <Surface className="flex h-full min-h-0 flex-col gap-3 overflow-hidden xl:sticky xl:top-4">
+      <Surface className="flex h-full min-h-0 flex-col gap-3 overflow-hidden xl:sticky xl:top-4 xl:h-[calc(100vh-1rem)]">
         <div className="grid gap-2">
           <div className="flex items-center justify-between gap-2">
             <div>
@@ -1132,8 +1149,6 @@ export function RepositoryGraphPage({
   }
 
   if (changesets.length === 0) {
-    const cloneUrls = buildCloneUrls(organizationSlug, repositorySlug);
-
     return (
       <EmptyState
         title="Empty repository"
@@ -1142,7 +1157,10 @@ export function RepositoryGraphPage({
           <div className="flex flex-wrap items-center justify-center gap-2">
             <CopyButton
               label="Copy clone command"
-              text={cloneUrls.httpsCommand}
+              text={
+                transportQuery.data?.https.clone_command ??
+                "Clone setup unavailable"
+              }
             />
             <Link to={`${basePath}/history`}>
               <Button variant="secondary">Open History</Button>
@@ -1164,8 +1182,8 @@ export function RepositoryGraphPage({
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px] xl:items-start">
-      <div className="grid min-w-0 gap-4 xl:min-h-0">
-        <Surface className="sticky top-4 z-20 grid gap-3">
+      <div className="grid min-w-0 gap-4 xl:sticky xl:top-4 xl:h-[calc(100vh-1rem)] xl:min-h-0 xl:grid-rows-[auto_minmax(0,1fr)]">
+        <Surface className="z-20 grid gap-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
@@ -1283,7 +1301,7 @@ export function RepositoryGraphPage({
           </div>
         </Surface>
 
-        <Surface className="overflow-hidden p-0 xl:max-h-[40vh] xl:min-h-0">
+        <Surface className="overflow-hidden p-0 xl:flex xl:min-h-0 xl:flex-col">
           <div className="border-b border-border bg-surface-subtle px-4 py-3">
             <div className="grid text-[11px] uppercase tracking-[0.18em] text-text-muted [grid-template-columns:minmax(0,1fr)_96px_92px] md:[grid-template-columns:var(--graph-canvas-width,_160px)_minmax(0,1fr)_160px_96px]">
               <div>Graph</div>
@@ -1294,7 +1312,7 @@ export function RepositoryGraphPage({
           </div>
 
           <div
-            className="relative min-h-0 overflow-hidden xl:flex xl:flex-1 xl:flex-col"
+            className="relative min-h-0 overflow-auto xl:flex-1"
             style={
               {
                 "--graph-canvas-width": `${canvasWidth}px`,
@@ -1393,7 +1411,7 @@ export function RepositoryGraphPage({
               </svg>
             </div>
 
-            <div className="relative z-10 grid min-h-0 pb-3 xl:flex-1 xl:overflow-y-auto">
+            <div className="relative z-10 flex min-h-0 flex-col pb-3">
               {graphRows.map((row, index) => {
                 const rowStatsLabel =
                   row.isSelected && diffHasStats ? `+${diffAdditions} / -${diffDeletions}` : "n/a";
@@ -1410,7 +1428,7 @@ export function RepositoryGraphPage({
                     }}
                     type="button"
                     className={clsx(
-                      "grid w-full items-stretch border-b border-border text-left transition-colors last:border-b-0",
+                      "grid w-full shrink-0 items-stretch border-b border-border text-left transition-colors last:border-b-0",
                       row.isSelected
                         ? "bg-transparent"
                         : row.isHovered
@@ -1418,7 +1436,7 @@ export function RepositoryGraphPage({
                           : "bg-transparent",
                     )}
                     style={{
-                      minHeight: `${rowHeight}px`,
+                      height: `${rowHeight}px`,
                       gridTemplateColumns: `${canvasWidth}px minmax(0,1fr) 160px 96px`,
                     }}
                     onClick={() => selectNode(row.changeset.node)}
@@ -1552,7 +1570,7 @@ export function RepositoryGraphPage({
         ) : null}
       </div>
 
-      <div className="min-w-0 xl:h-[82vh] xl:min-h-0">
+      <div className="min-w-0 xl:min-h-0">
         {renderDetailsPanel()}
       </div>
     </div>

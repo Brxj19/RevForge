@@ -21,8 +21,10 @@ from .errors import (
 from .schemas import (
     HgBlame,
     HgBlameLine,
+    HgChangedFile,
     HgChangeset,
     HgChangesetPage,
+    HgChangesetStats,
     HgDiff,
     HgDirectoryBrowse,
     HgFileBrowse,
@@ -58,17 +60,20 @@ class MercurialReadService:
         if start_revision < 0:
             return HgChangesetPage(changesets=[], next_cursor=None)
 
-        changesets = [
-            self._parse_changeset_context(repo[revision], include_files=True)
-            for revision in range(start_revision, max(-1, start_revision - (page_size + 1)), -1)
-        ]
+        changesets: list[HgChangeset] = []
+        for revision in range(start_revision, max(-1, start_revision - (page_size + 1)), -1):
+            changesets.append(
+                await self._build_changeset(repository_path, repo[revision], include_files=True)
+            )
         next_cursor = changesets[page_size - 1].node if len(changesets) > page_size else None
         return HgChangesetPage(changesets=changesets[:page_size], next_cursor=next_cursor)
 
     async def get_changeset(self, repository_path, revision: str) -> HgChangeset:
         repo = self._open_repository(repository_path)
-        return self._parse_changeset_context(
-            self._resolve_context(repo, revision), include_files=True
+        return await self._build_changeset(
+            repository_path,
+            self._resolve_context(repo, revision),
+            include_files=True,
         )
 
     async def get_diff(self, repository_path, revision: str) -> HgDiff:
@@ -376,6 +381,95 @@ class MercurialReadService:
             revision_number=int(ctx.rev()),
         )
 
+    async def _build_changeset(self, repository_path, ctx, *, include_files: bool) -> HgChangeset:
+        changeset = self._parse_changeset_context(ctx, include_files=include_files)
+        changeset.stats = await self._load_changeset_stats(repository_path, changeset.node)
+        return changeset
+
+    async def _load_changeset_stats(
+        self,
+        repository_path,
+        node: str,
+    ) -> HgChangesetStats | None:
+        try:
+            status_payload = await self._command_runner.run_json(
+                ["status", "--change", node, "--copies", "-Tjson"],
+                repository_path=repository_path,
+                stdout_limit=self._settings.hg_max_stdout_bytes,
+            )
+            diff_result = await self._command_runner.run(
+                ["diff", "--git", "-c", node],
+                repository_path=repository_path,
+                stdout_limit=self._settings.max_diff_bytes,
+            )
+        except (HgCommandFailedError, HgCommandOutputLimitError):
+            return None
+
+        status_by_path: dict[str, tuple[str, str | None]] = {}
+        for entry in status_payload:
+            path = str(entry.get("path", ""))
+            if not path:
+                continue
+            status = str(entry.get("status", "M")).lower()
+            copy_source = entry.get("source")
+            normalized_status = {
+                "a": "added",
+                "m": "modified",
+                "r": "deleted",
+                "!": "deleted",
+                "?": "unknown",
+                "c": "clean",
+            }.get(status, "modified")
+            if copy_source:
+                normalized_status = "copied"
+            status_by_path[path] = (
+                normalized_status,
+                str(copy_source) if copy_source is not None else None,
+            )
+
+        changed_files = _parse_changed_files_from_diff(
+            diff_result.stdout.decode("utf-8", errors="replace")
+        )
+        for changed_file in changed_files:
+            if changed_file.path in status_by_path:
+                status, old_path = status_by_path[changed_file.path]
+                changed_file.status = status
+                changed_file.old_path = old_path
+            elif changed_file.old_path and changed_file.old_path in status_by_path:
+                status, _ = status_by_path[changed_file.old_path]
+                changed_file.status = "renamed" if status == "deleted" else status
+
+        if not changed_files and status_by_path:
+            changed_files = [
+                HgChangedFile(
+                    path=path,
+                    status=status,
+                    insertions=None,
+                    deletions=None,
+                    old_path=old_path,
+                )
+                for path, (status, old_path) in status_by_path.items()
+                if status != "clean"
+            ]
+
+        files_changed = len(changed_files) if changed_files else None
+        insertions = (
+            sum(file.insertions or 0 for file in changed_files)
+            if changed_files and all(file.insertions is not None for file in changed_files)
+            else None
+        )
+        deletions = (
+            sum(file.deletions or 0 for file in changed_files)
+            if changed_files and all(file.deletions is not None for file in changed_files)
+            else None
+        )
+        return HgChangesetStats(
+            files_changed=files_changed,
+            insertions=insertions,
+            deletions=deletions,
+            changed_files=changed_files,
+        )
+
 
 def validate_repository_relative_path(value: str | None) -> str:
     if value is None or value == "":
@@ -423,3 +517,82 @@ def _language_hint(path: str) -> str | None:
 
 def _looks_binary(value: bytes) -> bool:
     return b"\x00" in value
+
+
+def _parse_changed_files_from_diff(content: str) -> list[HgChangedFile]:
+    changed_files: list[HgChangedFile] = []
+    current: HgChangedFile | None = None
+    saw_binary_marker = False
+
+    for raw_line in content.splitlines():
+        if raw_line.startswith("diff -r "):
+            if current is not None:
+                if saw_binary_marker:
+                    current.insertions = None
+                    current.deletions = None
+                changed_files.append(current)
+            current = HgChangedFile(
+                path="unknown",
+                status="modified",
+                insertions=0,
+                deletions=0,
+                old_path=None,
+            )
+            saw_binary_marker = False
+            continue
+
+        if current is None:
+            continue
+
+        if raw_line.startswith("rename from "):
+            current.old_path = raw_line.removeprefix("rename from ").strip()
+            current.status = "renamed"
+            continue
+
+        if raw_line.startswith("rename to "):
+            current.path = raw_line.removeprefix("rename to ").strip()
+            current.status = "renamed"
+            continue
+
+        if raw_line.startswith("copy from "):
+            current.old_path = raw_line.removeprefix("copy from ").strip()
+            current.status = "copied"
+            continue
+
+        if raw_line.startswith("copy to "):
+            current.path = raw_line.removeprefix("copy to ").strip()
+            current.status = "copied"
+            continue
+
+        if raw_line.startswith("--- ") or raw_line.startswith("+++ "):
+            if raw_line.endswith("/dev/null"):
+                if raw_line.startswith("--- "):
+                    current.status = "added"
+                else:
+                    current.status = "deleted"
+                continue
+            next_path = raw_line.replace("+++ b/", "").replace("--- a/", "").strip()
+            if next_path and next_path != raw_line:
+                current.path = next_path
+            continue
+
+        if raw_line.startswith("Binary file ") or raw_line.startswith("GIT binary patch"):
+            saw_binary_marker = True
+            continue
+
+        if raw_line.startswith("+") and not raw_line.startswith("+++"):
+            if current.insertions is not None:
+                current.insertions += 1
+            continue
+
+        if raw_line.startswith("-") and not raw_line.startswith("---"):
+            if current.deletions is not None:
+                current.deletions += 1
+
+    if current is not None:
+        if saw_binary_marker:
+            current.insertions = None
+            current.deletions = None
+        changed_files.append(current)
+
+    return [file for file in changed_files if file.path != "unknown"]

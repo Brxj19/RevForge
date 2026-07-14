@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "../components/app-shell";
 import { RouteErrorState } from "../components/states";
 import { DevUiPage } from "../routes/dev-ui";
+import { DeveloperDocsPage } from "../routes/developer-docs";
 import { UserSettingsPage } from "../routes/user-settings";
 import { AuditPage } from "../routes/audit";
 import {
@@ -29,6 +30,8 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorState />,
     children: [
       { index: true, element: <HomePage /> },
+      { path: "developer-docs", element: <DeveloperDocsPage /> },
+      { path: "developer-docs/:slug", element: <DeveloperDocsPage /> },
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
       { path: "organizations", element: <OrganizationsPage /> },

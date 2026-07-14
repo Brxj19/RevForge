@@ -1,0 +1,30 @@
+FROM python:3.12-slim
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential mercurial openssh-server netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp/revforge-backend
+
+COPY backend/README.md backend/pyproject.toml ./
+COPY backend/app ./app
+
+RUN pip install --no-cache-dir .
+
+RUN mkdir -p /var/run/sshd /srv/revforge-ssh /data/repositories /data/event-spool \
+    && useradd --create-home --shell /bin/sh revforge-hg \
+    && passwd -d revforge-hg
+
+COPY infra/ssh/sshd_config.dev /etc/ssh/sshd_config_revforge
+COPY infra/ssh/revforge-ssh-gateway.sh /usr/local/bin/revforge-ssh-gateway
+COPY infra/ssh/start-sshd.sh /usr/local/bin/start-sshd.sh
+
+RUN chmod 755 /usr/local/bin/revforge-ssh-gateway /usr/local/bin/start-sshd.sh
+
+EXPOSE 2222
+
+CMD ["/usr/local/bin/start-sshd.sh"]

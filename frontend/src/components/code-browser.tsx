@@ -1026,7 +1026,7 @@ export function CodeBrowser({
       </Surface>
 
       <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <Surface className="grid h-[calc(100vh-14rem)] min-h-[520px] gap-3 overflow-hidden p-0">
+        <Surface className="grid h-[calc(100vh-14rem)] min-h-[520px] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden p-0">
           <div className="border-b border-border bg-surface-subtle px-4 py-3">
             <div className="font-mono text-sm font-semibold uppercase tracking-[0.14em] text-text-primary">
               Worktree
@@ -1036,7 +1036,7 @@ export function CodeBrowser({
               URL.
             </div>
           </div>
-          <div className="px-4 pb-4">
+          <div className="border-b border-border px-4 py-3">
             <Input
               aria-label="Filter file tree"
               placeholder="Filter visible paths"
@@ -1045,7 +1045,7 @@ export function CodeBrowser({
             />
           </div>
           <div
-            className="overflow-y-auto px-2 pb-3"
+            className="overflow-y-auto px-2 py-3"
             role="tree"
             aria-label="Repository file tree"
           >

@@ -60,6 +60,9 @@ async def create_token(
             user=identity.user,
             name=payload.name,
             capability=payload.capability,
+            expires_at=payload.expires_at,
+            organization_id=payload.organization_id,
+            repository_id=payload.repository_id,
             request_id=request_id,
         )
     except ValidationFailure as exc:

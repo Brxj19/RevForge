@@ -18,7 +18,14 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REVFORGE_REDIS_URL")
     repository_root: str = Field(default="./.local/repositories", alias="REVFORGE_REPOSITORY_ROOT")
+    public_base_url: str = Field(default="http://localhost:8000", alias="REVFORGE_PUBLIC_BASE_URL")
     hg_http_base_path: str = Field(default="/hg", alias="REVFORGE_HG_HTTP_BASE_PATH")
+    hg_http_public_base_url: str | None = Field(
+        default=None,
+        alias="REVFORGE_HG_HTTP_PUBLIC_BASE_URL",
+    )
+    ssh_public_host: str = Field(default="localhost", alias="REVFORGE_SSH_PUBLIC_HOST")
+    ssh_public_port: int | None = Field(default=None, alias="REVFORGE_SSH_PUBLIC_PORT")
     transport_hg_username: str = Field(
         default="revforge-hg", alias="REVFORGE_TRANSPORT_HG_USERNAME"
     )
@@ -37,6 +44,10 @@ class Settings(BaseSettings):
     ssh_authorized_keys_path: str = Field(
         default="./.local/ssh/authorized_keys",
         alias="REVFORGE_SSH_AUTHORIZED_KEYS_PATH",
+    )
+    ssh_gateway_command: str = Field(
+        default="python -m app.mercurial.ssh_gateway",
+        alias="REVFORGE_SSH_GATEWAY_COMMAND",
     )
     event_spool_dir: str = Field(default="./.local/event-spool", alias="REVFORGE_EVENT_SPOOL_DIR")
     hg_executable: str = Field(default="hg", alias="REVFORGE_HG_EXECUTABLE")
@@ -103,10 +114,36 @@ class Settings(BaseSettings):
             raise ValueError("Mercurial HTTP base path must start with '/'.")
         return normalized.rstrip("/") or "/"
 
+    @field_validator("public_base_url", "hg_http_public_base_url", mode="before")
+    @classmethod
+    def normalize_public_urls(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        return normalized.rstrip("/")
+
     @field_validator("ssh_authorized_keys_path")
     @classmethod
     def normalize_ssh_authorized_keys_path(cls, value: str) -> str:
         normalized = value.strip() or "./.local/ssh/authorized_keys"
+        return normalized
+
+    @field_validator("ssh_public_host")
+    @classmethod
+    def normalize_ssh_public_host(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("SSH public host cannot be empty.")
+        return normalized
+
+    @field_validator("ssh_gateway_command")
+    @classmethod
+    def normalize_ssh_gateway_command(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("SSH gateway command cannot be empty.")
         return normalized
 
     @field_validator("session_cookie_name")
@@ -132,6 +169,15 @@ class Settings(BaseSettings):
     def validate_positive_limits(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("Mercurial limits must be positive integers.")
+        return value
+
+    @field_validator("ssh_public_port")
+    @classmethod
+    def validate_ssh_public_port(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value <= 0:
+            raise ValueError("SSH public port must be a positive integer.")
         return value
 
 

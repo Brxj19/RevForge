@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { buildCloneUrls } from "../lib/formatting";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { getRepositoryTransport } from "../lib/api";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { CopyButton } from "./ui/copy-button";
+import { ErrorState, LoadingState } from "./states";
 
 interface CloneDialogProps {
   organizationSlug: string;
@@ -18,11 +21,182 @@ export function CloneDialog({
   onClose,
 }: CloneDialogProps) {
   const [protocol, setProtocol] = useState<"https" | "ssh">("https");
-  const cloneUrls = buildCloneUrls(organizationSlug, repositorySlug);
+  const navigate = useNavigate();
+  const transportQuery = useQuery({
+    queryKey: ["repository-transport", organizationSlug, repositorySlug],
+    queryFn: () => getRepositoryTransport(organizationSlug, repositorySlug),
+    enabled: open,
+  });
 
   if (!open) {
     return null;
   }
+
+  const body = (() => {
+    if (transportQuery.isLoading) {
+      return <LoadingState label="Loading clone setup." />;
+    }
+    if (transportQuery.isError || !transportQuery.data) {
+      return (
+        <ErrorState
+          title="Clone setup unavailable"
+          description={
+            transportQuery.error instanceof Error
+              ? transportQuery.error.message
+              : "Unable to load repository transport metadata."
+          }
+        />
+      );
+    }
+
+    const transport = transportQuery.data;
+    const command =
+      protocol === "https"
+        ? transport.https.clone_command
+        : transport.ssh.clone_command;
+    const permissionLabel = transport.repository.viewer_role ?? "no access";
+    const isHttpsReady = transport.setup.has_active_token;
+    const isSshReady = transport.setup.has_active_ssh_key;
+
+    return (
+      <div className="grid flex-1 gap-4 overflow-y-auto px-5 py-5">
+        <div className="grid gap-3 rounded-md border border-border bg-canvas p-4 md:grid-cols-3">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-text-muted">
+              Provisioning
+            </div>
+            <div className="mt-2 text-sm text-text-primary">
+              {transport.repository.provisioning_state}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-text-muted">
+              Permission
+            </div>
+            <div className="mt-2 text-sm text-text-primary">
+              {permissionLabel}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-text-muted">
+              Next step
+            </div>
+            <div className="mt-2 text-sm text-text-primary">
+              {transport.setup.recommended_next_step.replaceAll("_", " ")}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-md border border-border bg-canvas p-4">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-text-muted">
+            {protocol === "https" ? "HTTPS command" : "SSH command"}
+          </div>
+          <code className="mt-3 block overflow-x-auto rounded-sm border border-border bg-surface px-3 py-3 font-mono text-xs text-text-primary">
+            {command}
+          </code>
+          <div className="mt-3">
+            <CopyButton label="Copy command" text={command} />
+          </div>
+        </div>
+
+        {protocol === "https" ? (
+          <div className="rounded-md border border-border-strong bg-surface-muted p-4">
+            <div className="flex items-center gap-2">
+              <Badge variant={isHttpsReady ? "success" : "info"}>
+                {isHttpsReady ? "Ready" : "Setup required"}
+              </Badge>
+              <span className="text-sm font-medium text-text-primary">
+                HTTPS clone
+              </span>
+            </div>
+            <div className="mt-3 grid gap-2 text-sm text-text-secondary">
+              <div>
+                Username:{" "}
+                <span className="font-mono text-text-primary">
+                  {transport.https.username_hint}
+                </span>
+              </div>
+              <div>
+                Password:{" "}
+                <span className="font-mono text-text-primary">
+                  {transport.https.password_hint}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  navigate("/settings?tab=tokens&intent=create");
+                  onClose();
+                }}
+              >
+                Create token
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  navigate("/settings?tab=tokens");
+                  onClose();
+                }}
+              >
+                Manage tokens
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-md border border-border bg-canvas p-4">
+            <div className="flex items-center gap-2">
+              <Badge variant={isSshReady ? "success" : "warning"}>
+                {isSshReady ? "Ready" : "Setup required"}
+              </Badge>
+              <span className="text-sm font-medium text-text-primary">
+                SSH clone
+              </span>
+            </div>
+            <div className="mt-3 grid gap-2 text-sm text-text-secondary">
+              <div>
+                SSH username:{" "}
+                <span className="font-mono text-text-primary">
+                  {transport.ssh.username}
+                </span>
+              </div>
+              <div>
+                Port:{" "}
+                <span className="font-mono text-text-primary">
+                  {transport.ssh.port ?? 22}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  navigate("/settings?tab=ssh-keys&intent=create");
+                  onClose();
+                }}
+              >
+                Add SSH key
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  navigate("/settings?tab=ssh-keys");
+                  onClose();
+                }}
+              >
+                Manage SSH keys
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  })();
 
   return (
     <div
@@ -83,70 +257,7 @@ export function CloneDialog({
             </div>
           </div>
 
-          <div className="grid flex-1 gap-4 overflow-y-auto px-5 py-5">
-            <div className="rounded-md border border-border bg-canvas p-4">
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-text-muted">
-                {protocol === "https" ? "HTTPS command" : "SSH command"}
-              </div>
-              <code className="mt-3 block overflow-x-auto rounded-sm border border-border bg-surface px-3 py-3 font-mono text-xs text-text-primary">
-                {protocol === "https"
-                  ? cloneUrls.httpsCommand
-                  : cloneUrls.sshCommand}
-              </code>
-              <div className="mt-3">
-                <CopyButton
-                  label="Copy command"
-                  text={
-                    protocol === "https"
-                      ? cloneUrls.httpsCommand
-                      : cloneUrls.sshCommand
-                  }
-                />
-              </div>
-            </div>
-
-            {protocol === "https" ? (
-              <div className="rounded-md border border-border-strong bg-surface-muted p-4">
-                <div className="flex items-center gap-2">
-                  <Badge variant="info">Authentication</Badge>
-                  <span className="text-sm font-medium text-text-primary">
-                    Personal access token
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-text-secondary">
-                  Use your RevForge username and a personal access token as the
-                  password. Tokens belong in your credential manager, not shell
-                  history.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="secondary" onClick={onClose}>
-                    Create token
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={onClose}>
-                    Manage tokens
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-md border border-border bg-canvas p-4">
-                <div className="flex items-center gap-2">
-                  <Badge variant="warning">SSH status</Badge>
-                  <span className="text-sm font-medium text-text-primary">
-                    Key status not connected yet
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-text-secondary">
-                  Live SSH key health is not connected in this environment yet.
-                  Review keys in user settings before cloning over SSH.
-                </p>
-                <div className="mt-3">
-                  <Button size="sm" variant="secondary" onClick={onClose}>
-                    Manage SSH keys
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
+          {body}
         </div>
       </div>
     </div>

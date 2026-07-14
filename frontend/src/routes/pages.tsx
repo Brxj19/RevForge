@@ -48,6 +48,7 @@ import {
   getChangesetDiff,
   getOrganization,
   getRepository,
+  getRepositoryTransport,
   getRepositoryRefs,
   listChangesets,
   listOrganizationMembers,
@@ -67,13 +68,13 @@ import {
   type OrganizationMember,
   type RepositoryBrowseResult,
   type RepositoryPermission,
+  type RepositoryTransportMetadata,
   type RepositoryRef,
   type RepositoryEvent,
   type RepositorySummary,
   type RepositoryTreeEntry,
 } from "../lib/api";
 import {
-  buildCloneUrls,
   firstLine,
   formatAbsoluteTime,
   formatRelativeTime,
@@ -123,6 +124,50 @@ function Fieldset({
       </div>
       {children}
     </Surface>
+  );
+}
+
+function RepositoryTransportSection({
+  transport,
+}: {
+  transport: RepositoryTransportMetadata;
+}) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      <Surface inset>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text-primary">HTTPS</h3>
+          <Badge
+            variant={transport.setup.has_active_token ? "success" : "warning"}
+          >
+            {transport.setup.has_active_token ? "Ready" : "Token needed"}
+          </Badge>
+        </div>
+        <code className="mt-2 block overflow-x-auto rounded-sm bg-canvas px-3 py-2 font-mono text-xs text-text-primary">
+          {transport.https.clone_command}
+        </code>
+        <p className="mt-2 text-sm text-text-secondary">
+          Username: {transport.https.username_hint} · Password:{" "}
+          {transport.https.password_hint}
+        </p>
+      </Surface>
+      <Surface inset>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text-primary">SSH</h3>
+          <Badge
+            variant={transport.setup.has_active_ssh_key ? "success" : "warning"}
+          >
+            {transport.setup.has_active_ssh_key ? "Ready" : "SSH key needed"}
+          </Badge>
+        </div>
+        <code className="mt-2 block overflow-x-auto rounded-sm bg-canvas px-3 py-2 font-mono text-xs text-text-primary">
+          {transport.ssh.clone_command}
+        </code>
+        <p className="mt-2 text-sm text-text-secondary">
+          SSH user: {transport.ssh.username} · Port {transport.ssh.port ?? 22}
+        </p>
+      </Surface>
+    </div>
   );
 }
 
@@ -3239,6 +3284,11 @@ function RepositorySettingsContent() {
     queryFn: () => listRepositoryEvents(organizationSlug, repositorySlug),
     enabled: repositoryQuery.isSuccess && section === "audit",
   });
+  const transportQuery = useQuery({
+    queryKey: ["repository-transport", organizationSlug, repositorySlug],
+    queryFn: () => getRepositoryTransport(organizationSlug, repositorySlug),
+    enabled: repositoryQuery.isSuccess && section === "transport",
+  });
   const webhookDeliveriesQuery = useQuery({
     queryKey: [
       "repository-webhook-deliveries",
@@ -3416,7 +3466,6 @@ function RepositorySettingsContent() {
     { id: "danger", label: "Danger zone" },
   ];
 
-  const cloneUrls = buildCloneUrls(organizationSlug, repositorySlug);
   const selectedWebhook =
     webhooksQuery.data?.find((webhook) => webhook.id === selectedWebhookId) ??
     null;
@@ -3652,32 +3701,20 @@ function RepositorySettingsContent() {
               title="Clone and transport"
               description="HTTPS and SSH clone posture, rate limiting, and access guidance."
             >
-              <div className="grid gap-3 lg:grid-cols-2">
-                <Surface inset>
-                  <h3 className="text-sm font-semibold text-text-primary">
-                    HTTPS
-                  </h3>
-                  <code className="mt-2 block overflow-x-auto rounded-sm bg-canvas px-3 py-2 font-mono text-xs text-text-primary">
-                    {cloneUrls.httpsCommand}
-                  </code>
-                  <p className="mt-2 text-sm text-text-secondary">
-                    Use your RevForge username and a personal access token as
-                    the password.
-                  </p>
-                </Surface>
-                <Surface inset>
-                  <h3 className="text-sm font-semibold text-text-primary">
-                    SSH
-                  </h3>
-                  <code className="mt-2 block overflow-x-auto rounded-sm bg-canvas px-3 py-2 font-mono text-xs text-text-primary">
-                    {cloneUrls.sshCommand}
-                  </code>
-                  <p className="mt-2 text-sm text-text-secondary">
-                    SSH key status and transport telemetry will appear here once
-                    backend key endpoints are connected.
-                  </p>
-                </Surface>
-              </div>
+              {transportQuery.isLoading ? (
+                <LoadingState label="Loading transport metadata." />
+              ) : transportQuery.isError || !transportQuery.data ? (
+                <ErrorState
+                  title="Transport metadata unavailable"
+                  description={
+                    transportQuery.error instanceof Error
+                      ? transportQuery.error.message
+                      : "Unable to load repository transport settings."
+                  }
+                />
+              ) : (
+                <RepositoryTransportSection transport={transportQuery.data} />
+              )}
             </Fieldset>
           ) : null}
 

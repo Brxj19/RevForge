@@ -60,27 +60,6 @@ export function firstLine(value: string): string {
   return line && line.length > 0 ? line : "(no changeset message)";
 }
 
-export function buildCloneUrls(
-  organizationSlug: string,
-  repositorySlug: string,
-): {
-  httpsUrl: string;
-  sshUrl: string;
-  httpsCommand: string;
-  sshCommand: string;
-} {
-  const host = window.location.host;
-  const httpsUrl = `https://${host}/hg/${organizationSlug}/${repositorySlug}`;
-  const sshUrl = `ssh://hg@${host}/${organizationSlug}/${repositorySlug}`;
-
-  return {
-    httpsUrl,
-    sshUrl,
-    httpsCommand: `hg clone ${httpsUrl}`,
-    sshCommand: `hg clone ${sshUrl}`,
-  };
-}
-
 export function slugifyName(value: string): string {
   return value
     .trim()

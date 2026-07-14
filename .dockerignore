@@ -1,0 +1,11 @@
+.cache
+.git
+.github
+backend/.local
+backend/.mypy_cache
+backend/.pytest_cache
+backend/.ruff_cache
+backend/.venv
+frontend/dist
+frontend/node_modules
+graphify-out
