@@ -11,6 +11,9 @@ from app.domain.enums import RepositoryRole
 class PersonalAccessTokenCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     capability: RepositoryRole
+    expires_at: datetime | None = None
+    organization_id: UUID | None = None
+    repository_id: UUID | None = None
 
 
 class PersonalAccessTokenResponse(BaseModel):
@@ -20,6 +23,9 @@ class PersonalAccessTokenResponse(BaseModel):
     name: str
     token_prefix: str
     capability: RepositoryRole
+    organization_id: UUID | None
+    repository_id: UUID | None
+    expires_at: datetime | None
     created_at: datetime
     last_used_at: datetime | None
     revoked_at: datetime | None

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.repository_event import EventSpoolEntry
+from app.models.repository_event import EventSpoolEntry, RepositoryEvent
 
 
 class FileEventSpoolReader:
@@ -50,9 +50,10 @@ class FileEventSpoolReader:
             except ValueError:
                 continue
             idempotency_key = f"file:{data.get('request_id', os.urandom(8).hex())}"
+            event_type = str(data.get("event_type", "repository.push.accepted"))
             spool_entry = EventSpoolEntry(
                 repository_id=repo_id,
-                event_type=data.get("event_type", "push.accepted"),
+                event_type=event_type,
                 payload_json={
                     "pushed_nodes": data.get("pushed_nodes", []),
                     "actor_user_id": data.get("actor_user_id"),
@@ -68,6 +69,27 @@ class FileEventSpoolReader:
                 created_at=datetime.now(UTC),
             )
             session.add(spool_entry)
+            session.add(
+                RepositoryEvent(
+                    repository_id=repo_id,
+                    event_type=event_type,
+                    actor_user_id=UUID(data["actor_user_id"])
+                    if data.get("actor_user_id")
+                    else None,
+                    authentication_method=str(data.get("authentication_method"))
+                    if data.get("authentication_method")
+                    else None,
+                    credential_id=UUID(data["credential_id"])
+                    if data.get("credential_id")
+                    else None,
+                    source_ip=str(data.get("source_ip")) if data.get("source_ip") else None,
+                    request_id=str(data.get("request_id")) if data.get("request_id") else None,
+                    payload_json={"pushed_nodes": data.get("pushed_nodes", [])},
+                    occurred_at=datetime.fromisoformat(str(data.get("timestamp")))
+                    if data.get("timestamp")
+                    else datetime.now(UTC),
+                )
+            )
             imported += 1
         if imported:
             await session.flush()

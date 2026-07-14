@@ -141,6 +141,7 @@ def run_worker() -> None:
         settings=settings,
         session_factory=SessionLocal,
         poll_interval_seconds=int(sys.argv[1]) if len(sys.argv) > 1 else 2,
+        event_spool_dir=settings.event_spool_dir,
     )
     asyncio.run(worker.run_forever())
 

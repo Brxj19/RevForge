@@ -16,6 +16,7 @@ from app.api.deps import (
     get_session,
     require_csrf,
 )
+from app.core.config import Settings, get_settings
 from app.domain.enums import RepositoryRole
 from app.mercurial.command_runner import HgCommandRunner
 from app.mercurial.errors import (
@@ -37,6 +38,7 @@ from app.mercurial.storage_locator import RepositoryStorageLocator
 from app.repositories.organizations import get_membership
 from app.repositories.repositories import get_permission
 from app.schemas.repositories import (
+    ChangesetChangedFileResponse,
     ChangesetDetailResponse,
     ChangesetDiffResponse,
     ChangesetListResponse,
@@ -49,12 +51,17 @@ from app.schemas.repositories import (
     RepositoryFileBrowseResponse,
     RepositoryFileSearchMatchResponse,
     RepositoryFileSearchResponse,
+    RepositoryHttpsTransportResponse,
     RepositoryPermissionRequest,
     RepositoryPermissionResponse,
     RepositoryProvisionResponse,
     RepositoryRefResponse,
     RepositoryRefsResponse,
+    RepositorySshTransportResponse,
     RepositorySummary,
+    RepositoryTransportInfo,
+    RepositoryTransportResponse,
+    RepositoryTransportSetupResponse,
     RepositoryTreeEntryResponse,
     RepositoryUpdateRequest,
 )
@@ -70,6 +77,13 @@ from app.services.repository_service import (
     repository_phase_status,
     update_repository,
     upsert_repository_permission,
+)
+from app.services.transport_metadata import (
+    build_https_clone_url,
+    build_ssh_clone_url,
+    has_active_personal_access_token,
+    has_active_ssh_key,
+    recommended_next_transport_step,
 )
 
 _KNOWN_READ_ERRORS = (
@@ -185,6 +199,8 @@ def _serialize_changeset_summary(changeset) -> ChangesetSummaryResponse:
         message=changeset.message,
         branch=changeset.branch,
         files_changed_count_when_available=len(changeset.files_changed),
+        insertions_when_available=changeset.stats.insertions if changeset.stats else None,
+        deletions_when_available=changeset.stats.deletions if changeset.stats else None,
     )
 
 
@@ -201,6 +217,21 @@ def _serialize_changeset_detail(changeset) -> ChangesetDetailResponse:
         tags=changeset.tags,
         bookmarks=changeset.bookmarks,
         files_changed=changeset.files_changed,
+        files_changed_count_when_available=(
+            changeset.stats.files_changed if changeset.stats else len(changeset.files_changed)
+        ),
+        insertions_when_available=changeset.stats.insertions if changeset.stats else None,
+        deletions_when_available=changeset.stats.deletions if changeset.stats else None,
+        changed_files=[
+            ChangesetChangedFileResponse(
+                path=changed_file.path,
+                status=changed_file.status,
+                insertions=changed_file.insertions,
+                deletions=changed_file.deletions,
+                old_path=changed_file.old_path,
+            )
+            for changed_file in (changeset.stats.changed_files if changeset.stats else [])
+        ],
     )
 
 
@@ -518,6 +549,86 @@ async def get_repository(
         viewer_role=viewer_role,
         can_manage=can_manage,
         inherited_access=inherited_access,
+    )
+
+
+@router.get("/{repository_slug}/transport", response_model=RepositoryTransportResponse)
+async def get_repository_transport(
+    organization_slug: str,
+    repository_slug: str,
+    identity: SessionIdentity = Depends(get_current_identity),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> RepositoryTransportResponse:
+    try:
+        (
+            organization,
+            repository,
+            viewer_role,
+            _can_manage,
+            _inherited_access,
+        ) = await _get_repository_with_access(
+            session=session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            actor=identity.user,
+            allow_archived=True,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+    can_read = viewer_role is not None
+    can_write = viewer_role in {RepositoryRole.WRITE, RepositoryRole.ADMIN}
+    active_token = await has_active_personal_access_token(session, user_id=identity.user.id)
+    active_ssh_key = await has_active_ssh_key(session, user_id=identity.user.id)
+    https_clone_url = build_https_clone_url(
+        settings,
+        organization_slug=organization.slug,
+        repository_slug=repository.slug,
+    )
+    ssh_clone_url = build_ssh_clone_url(
+        settings,
+        organization_slug=organization.slug,
+        repository_slug=repository.slug,
+    )
+
+    return RepositoryTransportResponse(
+        repository=RepositoryTransportInfo(
+            organization_slug=organization.slug,
+            repository_slug=repository.slug,
+            provisioning_state=repository.provisioning_state,
+            is_browsable=repository_is_browsable(repository),
+            viewer_role=viewer_role,
+            can_read=can_read,
+            can_write=can_write,
+        ),
+        https=RepositoryHttpsTransportResponse(
+            enabled=True,
+            clone_url=https_clone_url,
+            clone_command=f"hg clone {https_clone_url}",
+            username_hint=identity.user.email,
+            password_hint="Personal Access Token",
+        ),
+        ssh=RepositorySshTransportResponse(
+            enabled=True,
+            clone_url=ssh_clone_url,
+            clone_command=f"hg clone {ssh_clone_url}",
+            username=settings.transport_hg_username,
+            port=settings.ssh_public_port,
+            authorized_keys_path_hint=settings.ssh_authorized_keys_path,
+        ),
+        setup=RepositoryTransportSetupResponse(
+            has_active_token=active_token,
+            has_active_ssh_key=active_ssh_key,
+            recommended_next_step=recommended_next_transport_step(
+                repository=repository,
+                can_read=can_read,
+                has_active_token=active_token,
+                has_active_ssh_key=active_ssh_key,
+            ),
+        ),
     )
 
 

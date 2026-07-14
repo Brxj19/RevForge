@@ -1,71 +1,23 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/layout/page-header";
 import { EmptyState, ErrorState, LoadingState } from "../components/states";
 import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Surface } from "../components/ui/surface";
+import { listAuditEvents, type AuditEventRecord } from "../lib/api";
+import { formatAbsoluteTime } from "../lib/formatting";
 
-interface AuditEvent {
-  id: string;
-  timestamp: string;
-  actor: string;
-  action: string;
-  resource: string;
-  source: string;
-  outcome: "allowed" | "denied" | "error";
-  details: string;
-  request_id: string | null;
-}
-
-const PLACEHOLDER_EVENTS: AuditEvent[] = [
-  {
-    id: "evt_001",
-    timestamp: "2026-07-09T18:20:00Z",
-    actor: "alice@example.com",
-    action: "repo.push",
-    resource: "acme/payments-api",
-    source: "192.168.1.100",
-    outcome: "allowed",
-    details: "Push accepted: 3 changesets, branch default",
-    request_id: "req_abc123",
-  },
-  {
-    id: "evt_002",
-    timestamp: "2026-07-09T17:00:00Z",
-    actor: "charlie@example.com",
-    action: "repo.pull",
-    resource: "acme/private-tooling",
-    source: "203.0.113.42",
-    outcome: "denied",
-    details: "Read access denied: user is not a member of organization acme",
-    request_id: "req_ghi789",
-  },
-  {
-    id: "evt_003",
-    timestamp: "2026-07-09T14:00:00Z",
-    actor: "system",
-    action: "repo.provision",
-    resource: "acme/payments-api",
-    source: "internal",
-    outcome: "error",
-    details: "Storage provisioning failed: disk quota exceeded",
-    request_id: "req_mno345",
-  },
-];
-
-function formatTimestamp(value: string) {
-  return new Date(value).toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
+function describeAuditEvent(event: AuditEventRecord) {
+  const pushedNodes = Array.isArray(event.metadata_json.pushed_nodes)
+    ? event.metadata_json.pushed_nodes
+    : [];
+  if (event.event_type === "repository.push.accepted") {
+    return `Push accepted: ${pushedNodes.length} changeset${pushedNodes.length === 1 ? "" : "s"}`;
+  }
+  return JSON.stringify(event.metadata_json);
 }
 
 export function AuditPage() {
@@ -76,12 +28,11 @@ export function AuditPage() {
 
   const query = useQuery({
     queryKey: ["audit-events"],
-    queryFn: async () => PLACEHOLDER_EVENTS,
+    queryFn: () => listAuditEvents(),
   });
 
   const actor = params.get("actor") ?? "";
   const action = params.get("action") ?? "";
-  const outcome = params.get("outcome") ?? "";
 
   function setFilter(key: string, value: string) {
     const next = new URLSearchParams(location.search);
@@ -90,7 +41,8 @@ export function AuditPage() {
     } else {
       next.delete(key);
     }
-    navigate(`${location.pathname}?${next.toString()}`);
+    const suffix = next.toString();
+    navigate(suffix ? `${location.pathname}?${suffix}` : location.pathname);
   }
 
   if (query.isLoading) {
@@ -111,13 +63,10 @@ export function AuditPage() {
   }
 
   const events = (query.data ?? []).filter((event) => {
-    if (actor && !event.actor.toLowerCase().includes(actor.toLowerCase())) {
+    if (actor && !(event.actor_user_id ?? "").includes(actor)) {
       return false;
     }
-    if (action && event.action !== action) {
-      return false;
-    }
-    if (outcome && event.outcome !== outcome) {
+    if (action && event.event_type !== action) {
       return false;
     }
     return true;
@@ -128,47 +77,32 @@ export function AuditPage() {
       <PageHeader
         eyebrow="Activity"
         title="Audit and operational activity"
-        description="This table remains intentionally dense so clone, push, permission, and provisioning events are easy to scan during incident response."
-        actions={<Button variant="secondary">Export coming soon</Button>}
+        description="This feed uses backend audit records only, so clone, push, token, and provisioning events stay trustworthy."
       />
 
-      <Surface className="grid gap-4">
-        <div className="rounded-md border border-border-strong bg-surface-muted px-4 py-3 text-sm text-text-secondary">
-          The current audit page uses isolated placeholder records until backend
-          audit APIs are connected. The layout, filters, and details drawer are
-          production-intended.
-        </div>
-        <div className="grid gap-3 lg:grid-cols-3">
-          <Input
-            aria-label="Filter by actor"
-            label="Actor"
-            placeholder="alice@example.com"
-            value={actor}
-            onChange={(event) => setFilter("actor", event.target.value)}
-          />
-          <Select
-            aria-label="Filter by action"
-            label="Action"
-            value={action}
-            onChange={(event) => setFilter("action", event.target.value)}
-          >
-            <option value="">All actions</option>
-            <option value="repo.push">repo.push</option>
-            <option value="repo.pull">repo.pull</option>
-            <option value="repo.provision">repo.provision</option>
-          </Select>
-          <Select
-            aria-label="Filter by outcome"
-            label="Outcome"
-            value={outcome}
-            onChange={(event) => setFilter("outcome", event.target.value)}
-          >
-            <option value="">All outcomes</option>
-            <option value="allowed">allowed</option>
-            <option value="denied">denied</option>
-            <option value="error">error</option>
-          </Select>
-        </div>
+      <Surface className="grid gap-3 lg:grid-cols-2">
+        <Input
+          aria-label="Filter by actor"
+          label="Actor user ID"
+          placeholder="user UUID"
+          value={actor}
+          onChange={(event) => setFilter("actor", event.target.value)}
+        />
+        <Select
+          aria-label="Filter by action"
+          label="Action"
+          value={action}
+          onChange={(event) => setFilter("action", event.target.value)}
+        >
+          <option value="">All actions</option>
+          {[...new Set((query.data ?? []).map((event) => event.event_type))].map(
+            (eventType) => (
+              <option key={eventType} value={eventType}>
+                {eventType}
+              </option>
+            ),
+          )}
+        </Select>
       </Surface>
 
       {events.length > 0 ? (
@@ -180,43 +114,25 @@ export function AuditPage() {
                   <th className="px-4 py-3">Time</th>
                   <th className="px-4 py-3">Actor</th>
                   <th className="px-4 py-3">Action</th>
-                  <th className="px-4 py-3">Resource</th>
-                  <th className="px-4 py-3">Source</th>
-                  <th className="px-4 py-3">Outcome</th>
+                  <th className="px-4 py-3">Request</th>
                   <th className="px-4 py-3">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {events.map((event) => (
-                  <>
+                  <Fragment key={event.id}>
                     <tr key={event.id} className="hover:bg-surface-subtle/50">
                       <td className="px-4 py-3 text-text-secondary">
-                        {formatTimestamp(event.timestamp)}
+                        {formatAbsoluteTime(event.created_at)}
                       </td>
                       <td className="px-4 py-3 text-text-primary">
-                        {event.actor}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-text-primary">
-                        {event.action}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-text-secondary">
-                        {event.resource}
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">
-                        {event.source}
+                        {event.actor_user_id ?? "system"}
                       </td>
                       <td className="px-4 py-3">
-                        <Badge
-                          variant={
-                            event.outcome === "allowed"
-                              ? "success"
-                              : event.outcome === "denied"
-                                ? "warning"
-                                : "danger"
-                          }
-                        >
-                          {event.outcome}
-                        </Badge>
+                        <Badge variant="default">{event.event_type}</Badge>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-text-muted">
+                        {event.request_id ?? "not recorded"}
                       </td>
                       <td className="px-4 py-3">
                         <button
@@ -234,17 +150,17 @@ export function AuditPage() {
                     </tr>
                     {expandedId === event.id ? (
                       <tr key={`${event.id}-details`} className="bg-canvas">
-                        <td colSpan={7} className="px-4 py-4">
+                        <td colSpan={5} className="px-4 py-4">
                           <div className="grid gap-2 text-sm text-text-secondary">
-                            <div>{event.details}</div>
-                            <div className="font-mono text-xs text-text-muted">
-                              Request ID: {event.request_id ?? "not recorded"}
-                            </div>
+                            <div>{describeAuditEvent(event)}</div>
+                            <pre className="overflow-x-auto rounded-sm border border-border bg-surface px-3 py-3 font-mono text-xs text-text-muted">
+                              {JSON.stringify(event.metadata_json, null, 2)}
+                            </pre>
                           </div>
                         </td>
                       </tr>
                     ) : null}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -252,8 +168,8 @@ export function AuditPage() {
         </Surface>
       ) : (
         <EmptyState
-          title="No matching audit events"
-          description="Adjust the filters to inspect a different slice of activity."
+          title="No audit activity yet"
+          description="Real audit events will appear here after you create repositories, provision storage, clone, push, or manage credentials."
         />
       )}
     </div>

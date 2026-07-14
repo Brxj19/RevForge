@@ -31,6 +31,32 @@ type MarkdownBlock =
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  headingIdPrefix?: string;
+}
+
+function extractPlainText(nodes: InlineNode[]): string {
+  return nodes
+    .map((node) => {
+      switch (node.type) {
+        case "text":
+        case "code":
+          return node.value;
+        case "strong":
+        case "em":
+        case "strike":
+        case "link":
+          return extractPlainText(node.children);
+      }
+    })
+    .join("");
+}
+
+function slugifyHeading(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 const inlinePattern =
@@ -142,7 +168,7 @@ function startsNewBlock(lines: string[], index: number) {
   const nextLine = lines[index + 1]?.trim() ?? "";
 
   if (!currentLine) return true;
-  if (currentLine.startsWith("```")) return true;
+  if (currentLine.startsWith("```") || currentLine.startsWith("~~~")) return true;
   if (/^(#{1,6})\s+/.test(currentLine)) return true;
   if (/^(?:[-*_]\s*){3,}$/.test(currentLine)) return true;
   if (currentLine.startsWith(">")) return true;
@@ -165,14 +191,15 @@ function parseMarkdownBlocks(lines: string[]): MarkdownBlock[] {
       continue;
     }
 
-    if (trimmed.startsWith("```")) {
+    if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+      const fence = trimmed.slice(0, 3);
       const language = trimmed.slice(3).trim() || null;
       const codeLines: string[] = [];
       lineIndex += 1;
 
       while (lineIndex < lines.length) {
         const codeLine = lines[lineIndex] ?? "";
-        if (codeLine.trim().startsWith("```")) {
+        if (codeLine.trim().startsWith(fence)) {
           break;
         }
         codeLines.push(codeLine);
@@ -365,7 +392,11 @@ function renderInlineNodes(nodes: InlineNode[]): ReactNode {
   });
 }
 
-function renderBlock(block: MarkdownBlock, index: number): ReactNode {
+function renderBlock(
+  block: MarkdownBlock,
+  index: number,
+  headingIdPrefix?: string,
+): ReactNode {
   const key = `${block.type}-${index}`;
 
   switch (block.type) {
@@ -382,10 +413,16 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
                 : "text-base";
 
       const headingContent = renderInlineNodes(block.inline);
+      const headingLabel = extractPlainText(block.inline);
+      const headingId =
+        headingIdPrefix && block.level >= 2
+          ? `${headingIdPrefix}-${slugifyHeading(headingLabel) || "section"}-${index}`
+          : undefined;
       if (block.level === 1) {
         return (
           <h1
             key={key}
+            id={headingId}
             className={clsx(
               "font-semibold tracking-[-0.02em] text-text-primary",
               headingClassName,
@@ -399,6 +436,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
         return (
           <h2
             key={key}
+            id={headingId}
             className={clsx(
               "font-semibold tracking-[-0.02em] text-text-primary",
               headingClassName,
@@ -412,6 +450,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
         return (
           <h3
             key={key}
+            id={headingId}
             className={clsx(
               "font-semibold tracking-[-0.02em] text-text-primary",
               headingClassName,
@@ -425,6 +464,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
         return (
           <h4
             key={key}
+            id={headingId}
             className={clsx(
               "font-semibold tracking-[-0.02em] text-text-primary",
               headingClassName,
@@ -438,6 +478,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
         return (
           <h5
             key={key}
+            id={headingId}
             className={clsx(
               "font-semibold tracking-[-0.02em] text-text-primary",
               headingClassName,
@@ -450,6 +491,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
       return (
         <h6
           key={key}
+          id={headingId}
           className={clsx(
             "font-semibold tracking-[-0.02em] text-text-primary",
             headingClassName,
@@ -472,7 +514,9 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
           className="border-l-2 border-accent-border bg-accent-subtle px-4 py-3"
         >
           <div className="grid gap-3 text-sm leading-7 text-text-secondary">
-            {block.blocks.map(renderBlock)}
+            {block.blocks.map((childBlock, childIndex) =>
+              renderBlock(childBlock, childIndex, headingIdPrefix),
+            )}
           </div>
         </blockquote>
       );
@@ -602,6 +646,7 @@ function renderBlock(block: MarkdownBlock, index: number): ReactNode {
 export function MarkdownRenderer({
   content,
   className,
+  headingIdPrefix,
 }: MarkdownRendererProps) {
   const blocks = useMemo(
     () => parseMarkdownBlocks(content.split(/\r?\n/)),
@@ -610,7 +655,7 @@ export function MarkdownRenderer({
 
   return (
     <div className={clsx("grid gap-4", className)}>
-      {blocks.map(renderBlock)}
+      {blocks.map((block, index) => renderBlock(block, index, headingIdPrefix))}
     </div>
   );
 }

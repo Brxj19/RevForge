@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -19,7 +20,9 @@ from app.core.security import (
 )
 from app.domain.enums import RepositoryRole
 from app.mercurial.authorized_keys import sync_authorized_keys
+from app.models.organization import Organization
 from app.models.personal_access_token import PersonalAccessToken
+from app.models.repository import Repository
 from app.models.ssh_public_key import SshPublicKey
 from app.models.user import User
 from app.services.audit import record_audit_event
@@ -57,6 +60,9 @@ async def create_personal_access_token(
     user: User,
     name: str,
     capability: RepositoryRole,
+    expires_at: datetime | None,
+    organization_id: UUID | None,
+    repository_id: UUID | None,
     request_id: str | None,
 ) -> PersonalAccessTokenIssueResult:
     try:
@@ -65,21 +71,44 @@ async def create_personal_access_token(
         raise ValidationFailure(str(exc)) from exc
 
     raw_token = secrets.token_urlsafe(32)
+    if capability not in {RepositoryRole.READ, RepositoryRole.WRITE}:
+        raise ValidationFailure("Transport tokens only support read or write capability.")
+    if expires_at is not None and expires_at <= utc_now():
+        raise ValidationFailure("Token expiry must be in the future.")
+    if repository_id is not None:
+        repository = await session.get(Repository, repository_id)
+        if repository is None:
+            raise ValidationFailure("Repository scope is invalid.")
+        if organization_id is not None and repository.organization_id != organization_id:
+            raise ValidationFailure("Repository scope must belong to the selected organization.")
+    elif organization_id is not None:
+        organization = await session.get(Organization, organization_id)
+        if organization is None:
+            raise ValidationFailure("Organization scope is invalid.")
     token = PersonalAccessToken(
         user_id=user.id,
         name=normalized_name,
         token_prefix=raw_token[:8],
         token_digest=digest_token(settings.transport_token_secret, raw_token),
         capability=capability,
+        expires_at=expires_at,
+        organization_id=organization_id,
+        repository_id=repository_id,
     )
     session.add(token)
     await session.flush()
     await record_audit_event(
         session,
-        event_type="transport.personal_access_token.created",
+        event_type="token.created",
         actor_user_id=user.id,
         request_id=request_id,
-        metadata_json={"token_id": str(token.id), "capability": capability.value},
+        metadata_json={
+            "token_id": str(token.id),
+            "capability": capability.value,
+            "organization_id": str(organization_id) if organization_id else None,
+            "repository_id": str(repository_id) if repository_id else None,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+        },
     )
     await session.commit()
     await session.refresh(token)
@@ -105,7 +134,7 @@ async def revoke_personal_access_token(
     token.revoked_at = utc_now()
     await record_audit_event(
         session,
-        event_type="transport.personal_access_token.revoked",
+        event_type="token.revoked",
         actor_user_id=user.id,
         request_id=request_id,
         metadata_json={"token_id": str(token.id), "capability": token.capability.value},
@@ -209,7 +238,7 @@ async def create_ssh_public_key(
     await session.flush()
     await record_audit_event(
         session,
-        event_type="transport.ssh_public_key.created",
+        event_type="ssh_key.added",
         actor_user_id=user.id,
         request_id=request_id,
         metadata_json={"key_id": str(key.id), "fingerprint_sha256": fingerprint},
@@ -238,7 +267,7 @@ async def revoke_ssh_public_key(
     key.revoked_at = utc_now()
     await record_audit_event(
         session,
-        event_type="transport.ssh_public_key.revoked",
+        event_type="ssh_key.removed",
         actor_user_id=user.id,
         request_id=request_id,
         metadata_json={"key_id": str(key.id), "fingerprint_sha256": key.fingerprint_sha256},

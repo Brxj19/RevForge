@@ -47,7 +47,7 @@ class EventService:
 
         repository_event = RepositoryEvent(
             repository_id=repository_id,
-            event_type="push.accepted",
+            event_type="repository.push.accepted",
             actor_user_id=actor_user_id,
             authentication_method=authentication_method,
             credential_id=credential_id,
@@ -60,7 +60,7 @@ class EventService:
 
         await record_audit_event(
             session,
-            event_type="push.accepted",
+            event_type="repository.push.accepted",
             actor_user_id=actor_user_id,
             repository_id=repository_id,
             request_id=request_id,

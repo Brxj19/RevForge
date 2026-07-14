@@ -7,6 +7,17 @@ export interface ApiHealth extends ServiceHealth {
   api_version: string;
 }
 
+export interface AuditEventRecord {
+  id: string;
+  actor_user_id: string | null;
+  organization_id: string | null;
+  repository_id: string | null;
+  event_type: string;
+  request_id: string | null;
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface ApiErrorDetail {
   loc?: string[];
   message?: string;
@@ -17,6 +28,16 @@ export interface ApiErrorEnvelope {
   error: {
     code: string;
     message: string;
+    request_id?: string;
+    details?: ApiErrorDetail[];
+  };
+}
+
+interface FallbackApiErrorPayload {
+  detail?: string;
+  error?: {
+    code?: string;
+    message?: string;
     request_id?: string;
     details?: ApiErrorDetail[];
   };
@@ -105,6 +126,8 @@ export interface ChangesetSummary {
   message: string;
   branch: string;
   files_changed_count_when_available: number | null;
+  insertions_when_available: number | null;
+  deletions_when_available: number | null;
 }
 
 export interface ChangesetList {
@@ -124,6 +147,16 @@ export interface ChangesetDetail {
   tags: string[];
   bookmarks: string[];
   files_changed: string[];
+  files_changed_count_when_available: number | null;
+  insertions_when_available: number | null;
+  deletions_when_available: number | null;
+  changed_files: Array<{
+    path: string;
+    status: "added" | "modified" | "deleted" | "renamed" | "copied" | "unknown";
+    insertions: number | null;
+    deletions: number | null;
+    old_path: string | null;
+  }>;
 }
 
 export interface ChangesetDiff {
@@ -231,7 +264,10 @@ export interface PersonalAccessToken {
   id: string;
   name: string;
   token_prefix: string;
-  capability: "read" | "write" | "admin";
+  capability: "read" | "write";
+  organization_id: string | null;
+  repository_id: string | null;
+  expires_at: string | null;
   created_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
@@ -249,6 +285,47 @@ export interface SshPublicKey {
   created_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
+}
+
+export interface UserSessionInfo {
+  id: string;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_seen_at: string | null;
+  is_current: boolean;
+}
+
+export interface RepositoryTransportMetadata {
+  repository: {
+    organization_slug: string;
+    repository_slug: string;
+    provisioning_state: "unprovisioned" | "provisioning" | "ready" | "failed";
+    is_browsable: boolean;
+    viewer_role: "read" | "write" | "admin" | null;
+    can_read: boolean;
+    can_write: boolean;
+  };
+  https: {
+    enabled: boolean;
+    clone_url: string;
+    clone_command: string;
+    username_hint: string;
+    password_hint: string;
+  };
+  ssh: {
+    enabled: boolean;
+    clone_url: string;
+    clone_command: string;
+    username: string;
+    port: number | null;
+    authorized_keys_path_hint: string | null;
+  };
+  setup: {
+    has_active_token: boolean;
+    has_active_ssh_key: boolean;
+    recommended_next_step: string;
+  };
 }
 
 export class ApiClientError extends Error {
@@ -288,13 +365,27 @@ async function request<T>(
 
   if (!response.ok) {
     let payload: ApiErrorEnvelope | undefined;
+    let fallbackMessage: string | undefined;
     try {
-      payload = (await response.json()) as ApiErrorEnvelope;
+      const json = (await response.json()) as
+        | ApiErrorEnvelope
+        | FallbackApiErrorPayload;
+      if (json && typeof json === "object" && "error" in json) {
+        payload = json as ApiErrorEnvelope;
+      }
+      if (
+        json &&
+        typeof json === "object" &&
+        "detail" in json &&
+        typeof json.detail === "string"
+      ) {
+        fallbackMessage = json.detail;
+      }
     } catch {
       payload = undefined;
     }
     throw new ApiClientError(
-      payload?.error.message ?? "Request failed.",
+      payload?.error?.message ?? fallbackMessage ?? `Request failed (${response.status}).`,
       response.status,
       payload,
     );
@@ -313,6 +404,13 @@ export function getServiceHealth() {
 
 export function getApiHealth() {
   return request<ApiHealth>("/api/v1/health");
+}
+
+export function listAuditEvents(eventType?: string) {
+  const search = eventType
+    ? `?${new URLSearchParams({ event_type: eventType }).toString()}`
+    : "";
+  return request<AuditEventRecord[]>(`/api/v1/audit${search}`);
 }
 
 export function registerUser(payload: {
@@ -437,7 +535,13 @@ export function listPersonalAccessTokens() {
 }
 
 export function createPersonalAccessToken(
-  payload: { name: string; capability: "read" | "write" | "admin" },
+  payload: {
+    name: string;
+    capability: "read" | "write";
+    expires_at?: string | null;
+    organization_id?: string | null;
+    repository_id?: string | null;
+  },
   csrfToken: string | null,
 ) {
   return request<PersonalAccessTokenCreateResponse>("/api/v1/me/tokens", {
@@ -479,6 +583,22 @@ export function revokeSshPublicKey(keyId: string, csrfToken: string | null) {
   });
 }
 
+export function listUserSessions(csrfToken: string | null) {
+  return request<UserSessionInfo[]>("/api/v1/sessions", {
+    csrfToken,
+  });
+}
+
+export function revokeUserSession(
+  sessionId: string,
+  csrfToken: string | null,
+) {
+  return request<void>(`/api/v1/sessions/${sessionId}`, {
+    method: "DELETE",
+    csrfToken,
+  });
+}
+
 export function listRepositories(
   organizationSlug: string,
   includeArchived = false,
@@ -515,6 +635,15 @@ export function getRepository(
 ) {
   return request<RepositoryDetail>(
     `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}`,
+  );
+}
+
+export function getRepositoryTransport(
+  organizationSlug: string,
+  repositorySlug: string,
+) {
+  return request<RepositoryTransportMetadata>(
+    `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/transport`,
   );
 }
 

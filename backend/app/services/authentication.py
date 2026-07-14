@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -188,6 +189,48 @@ async def logout_user(
         metadata_json={},
     )
     await session.commit()
+
+
+async def list_user_sessions(
+    session: AsyncSession,
+    *,
+    user: User,
+) -> list[UserSession]:
+    result = await session.execute(
+        select(UserSession)
+        .where(UserSession.user_id == user.id)
+        .order_by(UserSession.created_at.desc())
+    )
+    return list(result.scalars())
+
+
+async def revoke_user_session(
+    session: AsyncSession,
+    *,
+    user: User,
+    session_id: UUID,
+    request_id: str | None,
+) -> UserSession:
+    user_session = await session.scalar(
+        select(UserSession).where(
+            UserSession.id == session_id,
+            UserSession.user_id == user.id,
+        )
+    )
+    if user_session is None:
+        raise NotFoundError("Session not found.")
+    if user_session.revoked_at is None:
+        user_session.revoked_at = utc_now()
+        user_session.last_seen_at = utc_now()
+        await record_audit_event(
+            session,
+            event_type="user.session.revoked",
+            actor_user_id=user.id,
+            request_id=request_id,
+            metadata_json={"session_id": str(user_session.id)},
+        )
+        await session.commit()
+    return user_session
 
 
 async def get_user_by_email(session: AsyncSession, *, email: str) -> User:

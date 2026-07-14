@@ -1,3 +1,22 @@
+x-revforge-env: &revforge-env
+  REVFORGE_ENVIRONMENT: development
+  REVFORGE_LOG_LEVEL: INFO
+  REVFORGE_SESSION_SECRET_KEY: local-dev-session-secret
+  REVFORGE_DATABASE_URL: postgresql+asyncpg://revforge:revforge@postgres:5432/revforge
+  REVFORGE_REDIS_URL: redis://redis:6379/0
+  REVFORGE_REPOSITORY_ROOT: /data/repositories
+  REVFORGE_PUBLIC_BASE_URL: http://localhost:8000
+  REVFORGE_HG_HTTP_BASE_PATH: /hg
+  REVFORGE_HG_HTTP_PUBLIC_BASE_URL: http://localhost:8000/hg
+  REVFORGE_SSH_PUBLIC_HOST: localhost
+  REVFORGE_SSH_PUBLIC_PORT: 2222
+  REVFORGE_TRANSPORT_HG_USERNAME: revforge-hg
+  REVFORGE_TRANSPORT_TOKEN_SECRET: change-me-transport-secret
+  REVFORGE_SSH_AUTHORIZED_KEYS_PATH: /srv/revforge-ssh/authorized_keys
+  REVFORGE_SSH_GATEWAY_COMMAND: /usr/local/bin/revforge-ssh-gateway
+  REVFORGE_EVENT_SPOOL_DIR: /data/event-spool
+  REVFORGE_HG_EXECUTABLE: hg
+
 services:
   postgres:
     image: postgres:16.4-alpine
@@ -32,7 +51,103 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/backend/Dockerfile.dev
+    container_name: revforge-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *revforge-env
+      REVFORGE_CORS_ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    command:
+      - sh
+      - -c
+      - alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend/.local/repositories:/data/repositories
+      - ../backend/.local/event-spool:/data/event-spool
+      - ../backend/.local/ssh:/srv/revforge-ssh
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health')\" >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/backend/Dockerfile.dev
+    container_name: revforge-worker
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      <<: *revforge-env
+    command: ["python", "-m", "app.worker"]
+    volumes:
+      - ../backend/.local/repositories:/data/repositories
+      - ../backend/.local/event-spool:/data/event-spool
+      - ../backend/.local/ssh:/srv/revforge-ssh
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/frontend/Dockerfile.dev
+    container_name: revforge-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:5173').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  sshd:
+    build:
+      context: ..
+      dockerfile: infra/ssh/Dockerfile.dev
+    container_name: revforge-sshd
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      <<: *revforge-env
+    ports:
+      - "2222:2222"
+    volumes:
+      - ../backend/.local/repositories:/data/repositories
+      - ../backend/.local/event-spool:/data/event-spool
+      - ../backend/.local/ssh:/srv/revforge-ssh
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2222"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   revforge-postgres-data:
   revforge-redis-data:
-

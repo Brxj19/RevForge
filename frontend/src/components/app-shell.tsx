@@ -589,6 +589,13 @@ const primaryNav = [
   },
 ];
 
+const docsNavItem = {
+  label: "Docs",
+  to: "/developer-docs",
+  keywords: ["documentation", "developer guide", "setup"],
+  description: "Open setup, workflow, and transport documentation",
+};
+
 export function AppShell() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
@@ -602,11 +609,13 @@ export function AppShell() {
   const repositoryRevision = new URLSearchParams(location.search).get(
     "revision",
   );
+  const isStandaloneDocsRoute = location.pathname.startsWith("/developer-docs");
   const isPublicRoute =
-    !isAuthenticated &&
-    (location.pathname === "/" ||
-      location.pathname === "/login" ||
-      location.pathname === "/register");
+    isStandaloneDocsRoute ||
+    (!isAuthenticated &&
+      (location.pathname === "/" ||
+        location.pathname === "/login" ||
+        location.pathname === "/register"));
 
   useEffect(() => {
     if (isPublicRoute) {
@@ -653,7 +662,7 @@ export function AppShell() {
   }, [location.pathname]);
 
   const paletteItems = useMemo<CommandPaletteItem[]>(() => {
-    const baseItems: CommandPaletteItem[] = primaryNav.map((item) => ({
+    const baseItems: CommandPaletteItem[] = [...primaryNav, docsNavItem].map((item) => ({
       id: item.label,
       label: item.label,
       detail: item.description,
@@ -795,13 +804,24 @@ export function AppShell() {
 
           <div className="ml-auto flex items-center gap-2">
             {isAuthenticated ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => navigate("/repositories")}
-              >
-                Repositories
-              </Button>
+              <>
+                <Link
+                  rel="noreferrer"
+                  target="_blank"
+                  to="/developer-docs"
+                >
+                  <Button size="sm" variant="ghost">
+                    Docs
+                  </Button>
+                </Link>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate("/repositories")}
+                >
+                  Repositories
+                </Button>
+              </>
             ) : null}
             <UserMenu />
           </div>

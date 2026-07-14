@@ -5,6 +5,23 @@ from datetime import UTC, datetime
 
 
 @dataclass(slots=True)
+class HgChangedFile:
+    path: str
+    status: str
+    insertions: int | None
+    deletions: int | None
+    old_path: str | None = None
+
+
+@dataclass(slots=True)
+class HgChangesetStats:
+    files_changed: int | None
+    insertions: int | None
+    deletions: int | None
+    changed_files: list[HgChangedFile]
+
+
+@dataclass(slots=True)
 class HgChangeset:
     node: str
     short_node: str
@@ -18,6 +35,7 @@ class HgChangeset:
     bookmarks: list[str]
     files_changed: list[str]
     revision_number: int
+    stats: HgChangesetStats | None = None
 
 
 @dataclass(slots=True)

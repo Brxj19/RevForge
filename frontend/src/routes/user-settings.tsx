@@ -15,10 +15,14 @@ import { Surface } from "../components/ui/surface";
 import {
   createPersonalAccessToken,
   createSshPublicKey,
+  listOrganizations,
   listPersonalAccessTokens,
   listSshPublicKeys,
+  listUserSessions,
+  listRepositories,
   revokePersonalAccessToken,
   revokeSshPublicKey,
+  revokeUserSession,
 } from "../lib/api";
 
 function formatDate(value: string | null) {
@@ -64,9 +68,15 @@ export function UserSettingsPage() {
     null,
   );
   const [tokenName, setTokenName] = useState("");
-  const [tokenCapability, setTokenCapability] = useState<
-    "read" | "write" | "admin"
-  >("write");
+  const [tokenCapability, setTokenCapability] = useState<"read" | "write">(
+    "write",
+  );
+  const [tokenScope, setTokenScope] = useState<
+    "global" | "organization" | "repository"
+  >("global");
+  const [tokenOrganizationId, setTokenOrganizationId] = useState("");
+  const [tokenRepositoryId, setTokenRepositoryId] = useState("");
+  const [tokenExpiresAt, setTokenExpiresAt] = useState("");
   const [sshLabel, setSshLabel] = useState("");
   const [sshPublicKey, setSshPublicKey] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -91,16 +101,58 @@ export function UserSettingsPage() {
     enabled: isAuthenticated,
   });
 
+  const organizationsQuery = useQuery({
+    queryKey: ["organizations"],
+    queryFn: listOrganizations,
+    enabled: isAuthenticated && currentTab === "tokens",
+  });
+
+  const scopedRepositoriesQuery = useQuery({
+    queryKey: ["repositories", tokenOrganizationId],
+    queryFn: async () => {
+      if (!tokenOrganizationId) return [];
+      const organizations = await listOrganizations();
+      const organization = organizations.find((item) => item.id === tokenOrganizationId);
+      if (!organization) return [];
+      return listRepositories(organization.slug);
+    },
+    enabled:
+      isAuthenticated &&
+      currentTab === "tokens" &&
+      tokenScope === "repository" &&
+      Boolean(tokenOrganizationId),
+  });
+
+  const sessionsQuery = useQuery({
+    queryKey: ["user-sessions"],
+    queryFn: () => listUserSessions(csrfToken),
+    enabled: isAuthenticated && currentTab === "sessions" && Boolean(csrfToken),
+  });
+
   const createTokenMutation = useMutation({
     mutationFn: () =>
       createPersonalAccessToken(
-        { name: tokenName, capability: tokenCapability },
+        {
+          name: tokenName,
+          capability: tokenCapability,
+          expires_at: tokenExpiresAt
+            ? new Date(`${tokenExpiresAt}T23:59:59Z`).toISOString()
+            : null,
+          organization_id:
+            tokenScope === "global" ? null : tokenOrganizationId || null,
+          repository_id:
+            tokenScope === "repository" ? tokenRepositoryId || null : null,
+        },
         csrfToken,
       ),
     onSuccess: async (token) => {
       setNewTokenPlaintext(token.plaintext_token);
       setTokenName("");
       setTokenCapability("write");
+      setTokenScope("global");
+      setTokenOrganizationId("");
+      setTokenRepositoryId("");
+      setTokenExpiresAt("");
       setFormError(null);
       await queryClient.invalidateQueries({ queryKey: ["user-tokens"] });
     },
@@ -142,6 +194,13 @@ export function UserSettingsPage() {
     mutationFn: (keyId: string) => revokeSshPublicKey(keyId, csrfToken),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["user-ssh-keys"] });
+    },
+  });
+
+  const revokeSessionMutation = useMutation({
+    mutationFn: (sessionId: string) => revokeUserSession(sessionId, csrfToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["user-sessions"] });
     },
   });
 
@@ -361,7 +420,7 @@ export function UserSettingsPage() {
               </div>
 
               <form
-                className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px_auto]"
+                className="grid gap-4 md:grid-cols-2"
                 onSubmit={onCreateToken}
               >
                 <FormField label="Token name">
@@ -375,18 +434,75 @@ export function UserSettingsPage() {
                   <Select
                     value={tokenCapability}
                     onChange={(event) =>
-                      setTokenCapability(
-                        event.target.value as "read" | "write" | "admin",
-                      )
+                      setTokenCapability(event.target.value as "read" | "write")
                     }
                   >
                     <option value="read">read</option>
                     <option value="write">write</option>
-                    <option value="admin">admin</option>
                   </Select>
                 </FormField>
+                <FormField label="Scope">
+                  <Select
+                    value={tokenScope}
+                    onChange={(event) =>
+                      setTokenScope(
+                        event.target.value as
+                          | "global"
+                          | "organization"
+                          | "repository",
+                      )
+                    }
+                  >
+                    <option value="global">global</option>
+                    <option value="organization">organization-scoped</option>
+                    <option value="repository">repository-scoped</option>
+                  </Select>
+                </FormField>
+                <FormField label="Expires on">
+                  <Input
+                    type="date"
+                    value={tokenExpiresAt}
+                    onChange={(event) => setTokenExpiresAt(event.target.value)}
+                  />
+                </FormField>
+                {tokenScope !== "global" ? (
+                  <FormField label="Organization">
+                    <Select
+                      value={tokenOrganizationId}
+                      onChange={(event) => {
+                        setTokenOrganizationId(event.target.value);
+                        setTokenRepositoryId("");
+                      }}
+                    >
+                      <option value="">Select organization</option>
+                      {(organizationsQuery.data ?? []).map((organization) => (
+                        <option key={organization.id} value={organization.id}>
+                          {organization.display_name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                ) : null}
+                {tokenScope === "repository" ? (
+                  <FormField label="Repository">
+                    <Select
+                      value={tokenRepositoryId}
+                      onChange={(event) => setTokenRepositoryId(event.target.value)}
+                    >
+                      <option value="">Select repository</option>
+                      {(scopedRepositoriesQuery.data ?? []).map((repository) => (
+                        <option key={repository.id} value={repository.id}>
+                          {repository.display_name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                ) : null}
                 <div className="flex items-end">
-                  <Button type="submit" loading={createTokenMutation.isPending}>
+                  <Button
+                    type="submit"
+                    loading={createTokenMutation.isPending}
+                  >
                     Create token
                   </Button>
                 </div>
@@ -429,13 +545,21 @@ export function UserSettingsPage() {
                           </div>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <Badge variant="default">{token.capability}</Badge>
+                            <Badge variant="neutral">
+                              {token.repository_id
+                                ? "repository"
+                                : token.organization_id
+                                  ? "organization"
+                                  : "global"}
+                            </Badge>
                             <span className="font-mono text-xs text-text-muted">
                               Prefix {token.token_prefix}
                             </span>
                           </div>
                           <div className="mt-2 text-xs text-text-secondary">
                             Created {formatDate(token.created_at)} · Last used{" "}
-                            {formatDate(token.last_used_at)}
+                            {formatDate(token.last_used_at)} · Expires{" "}
+                            {formatDate(token.expires_at)}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -471,14 +595,74 @@ export function UserSettingsPage() {
           ) : null}
 
           {currentTab === "sessions" ? (
-            <Surface className="grid gap-3">
-              <h2 className="text-base font-semibold text-text-primary">
-                Sessions
-              </h2>
-              <p className="text-sm text-text-secondary">
-                Session inspection is not exposed yet. Your current browser
-                session remains protected by CSRF and secure cookie settings.
-              </p>
+            <Surface className="grid gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-text-primary">
+                  Sessions
+                </h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Review active browser sessions and revoke the ones you no
+                  longer trust.
+                </p>
+              </div>
+              {sessionsQuery.isLoading ? (
+                <LoadingState label="Loading sessions." />
+              ) : sessionsQuery.data && sessionsQuery.data.length > 0 ? (
+                <div className="grid gap-3">
+                  {sessionsQuery.data.map((userSession) => (
+                    <div
+                      key={userSession.id}
+                      className="rounded-md border border-border bg-surface-subtle p-4"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-semibold text-text-primary">
+                              {userSession.is_current
+                                ? "Current session"
+                                : "Browser session"}
+                            </div>
+                            <Badge
+                              variant={
+                                userSession.revoked_at ? "danger" : "success"
+                              }
+                            >
+                              {userSession.revoked_at ? "Revoked" : "Active"}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 font-mono text-xs text-text-muted">
+                            {userSession.id}
+                          </div>
+                          <div className="mt-2 text-xs text-text-secondary">
+                            Created {formatDate(userSession.created_at)} · Last
+                            seen {formatDate(userSession.last_seen_at)} ·
+                            Expires {formatDate(userSession.expires_at)}
+                          </div>
+                        </div>
+                        {!userSession.revoked_at ? (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            loading={revokeSessionMutation.isPending}
+                            onClick={() =>
+                              void revokeSessionMutation.mutateAsync(
+                                userSession.id,
+                              )
+                            }
+                          >
+                            Revoke
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No sessions found"
+                  description="Sign in from a browser to create a managed session."
+                />
+              )}
             </Surface>
           ) : null}
 

@@ -345,6 +345,11 @@ class HgHttpGatewayApplication:
             )
             if not repository_is_browsable(repository):
                 raise NotFoundError("Repository not found.")
+            if token is not None:
+                if token.organization_id is not None and token.organization_id != organization.id:
+                    raise AuthenticationError("Authentication required.")
+                if token.repository_id is not None and token.repository_id != repository.id:
+                    raise AuthenticationError("Authentication required.")
 
             repository_path = self._storage_locator.repository_path(repository)
             membership = None

@@ -11,13 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
 from app.models.ssh_public_key import SshPublicKey
 from app.models.user import User
 
-SSH_GATEWAY_MODULE = "app.mercurial.ssh_gateway"
-SSH_KEY_COMMAND_TEMPLATE = 'command="python -m {module} {key_id}"'
 SSH_KEY_COMMAND_OPTIONS = (
     "no-agent-forwarding",
     "no-port-forwarding",
@@ -27,8 +25,14 @@ SSH_KEY_COMMAND_OPTIONS = (
 )
 
 
-def render_authorized_keys_entry(key: SshPublicKey) -> str:
-    command = SSH_KEY_COMMAND_TEMPLATE.format(module=SSH_GATEWAY_MODULE, key_id=key.id)
+def _escape_authorized_keys_command(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def render_authorized_keys_entry(key: SshPublicKey, *, settings: Settings | None = None) -> str:
+    resolved_settings = settings or get_settings()
+    raw_command = f"{resolved_settings.ssh_gateway_command} {key.id}"
+    command = f'command="{_escape_authorized_keys_command(raw_command)}"'
     options = ",".join((command, *SSH_KEY_COMMAND_OPTIONS))
     comment = f"revforge key_id={key.id} user_id={key.user_id}"
     return f"{options} {key.public_key_normalized} {comment}"
@@ -37,6 +41,7 @@ def render_authorized_keys_entry(key: SshPublicKey) -> str:
 async def list_authorized_keys_entries(
     session: AsyncSession,
 ) -> list[str]:
+    settings = get_settings()
     result = await session.execute(
         select(SshPublicKey)
         .options(selectinload(SshPublicKey.user))
@@ -44,7 +49,7 @@ async def list_authorized_keys_entries(
         .where(SshPublicKey.revoked_at.is_(None), User.is_active.is_(True))
         .order_by(SshPublicKey.created_at.asc(), SshPublicKey.id.asc())
     )
-    return [render_authorized_keys_entry(key) for key in result.scalars()]
+    return [render_authorized_keys_entry(key, settings=settings) for key in result.scalars()]
 
 
 async def render_authorized_keys(

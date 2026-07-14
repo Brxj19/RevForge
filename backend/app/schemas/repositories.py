@@ -85,6 +85,8 @@ class ChangesetSummaryResponse(BaseModel):
     message: str
     branch: str
     files_changed_count_when_available: int | None
+    insertions_when_available: int | None = None
+    deletions_when_available: int | None = None
 
 
 class ChangesetListResponse(BaseModel):
@@ -104,6 +106,18 @@ class ChangesetDetailResponse(BaseModel):
     tags: list[str]
     bookmarks: list[str]
     files_changed: list[str]
+    files_changed_count_when_available: int | None = None
+    insertions_when_available: int | None = None
+    deletions_when_available: int | None = None
+    changed_files: list[ChangesetChangedFileResponse] = []
+
+
+class ChangesetChangedFileResponse(BaseModel):
+    path: str
+    status: str
+    insertions: int | None = None
+    deletions: int | None = None
+    old_path: str | None = None
 
 
 class ChangesetDiffResponse(BaseModel):
@@ -173,3 +187,43 @@ class RepositoryRefsResponse(BaseModel):
     branches: list[RepositoryRefResponse]
     tags: list[RepositoryRefResponse]
     bookmarks: list[RepositoryRefResponse]
+
+
+class RepositoryTransportInfo(BaseModel):
+    organization_slug: str
+    repository_slug: str
+    provisioning_state: RepositoryProvisioningState
+    is_browsable: bool
+    viewer_role: RepositoryRole | None
+    can_read: bool
+    can_write: bool
+
+
+class RepositoryHttpsTransportResponse(BaseModel):
+    enabled: bool
+    clone_url: str
+    clone_command: str
+    username_hint: str
+    password_hint: str
+
+
+class RepositorySshTransportResponse(BaseModel):
+    enabled: bool
+    clone_url: str
+    clone_command: str
+    username: str
+    port: int | None
+    authorized_keys_path_hint: str | None
+
+
+class RepositoryTransportSetupResponse(BaseModel):
+    has_active_token: bool
+    has_active_ssh_key: bool
+    recommended_next_step: str
+
+
+class RepositoryTransportResponse(BaseModel):
+    repository: RepositoryTransportInfo
+    https: RepositoryHttpsTransportResponse
+    ssh: RepositorySshTransportResponse
+    setup: RepositoryTransportSetupResponse

@@ -230,9 +230,27 @@ export function LandingPage() {
             <a className="hover:text-text-primary" href="#security">
               Security
             </a>
+            <Link
+              className="hover:text-text-primary"
+              rel="noreferrer"
+              target="_blank"
+              to="/developer-docs"
+            >
+              Developer docs
+            </Link>
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            <Link
+              className="md:hidden"
+              rel="noreferrer"
+              target="_blank"
+              to="/developer-docs"
+            >
+              <Button size="sm" variant="ghost">
+                Docs
+              </Button>
+            </Link>
             <Link to="/login">
               <Button size="sm" variant="ghost">
                 Sign in
