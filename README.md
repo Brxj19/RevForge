@@ -50,6 +50,8 @@ Intentionally deferred:
 
 ## Local development
 
+For the full platform-by-platform local setup guide, command reference, Docker rebuild flows, and troubleshooting, see [LOCAL_STACK_SETUP.md](LOCAL_STACK_SETUP.md).
+
 Recommended local toolchain:
 
 - Python `3.12+`
