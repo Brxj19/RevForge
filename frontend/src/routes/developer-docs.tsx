@@ -82,8 +82,10 @@ function DeveloperDocsToolbar({
           Developer docs
         </p>
         <p className="mt-2 text-sm leading-6 text-text-secondary">
-          Branch-accurate guidance for setup, transport, repository workflows,
-          and operational debugging.
+          A forge for revisions.
+          RevForge is a self-hosted Mercurial platform for repository hosting,
+          changeset browsing, code review workflows, clone access, and
+          operational visibility.
         </p>
       </div>
       <Input

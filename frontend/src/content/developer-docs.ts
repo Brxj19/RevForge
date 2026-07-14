@@ -79,7 +79,9 @@ export const developerDocPages: DeveloperDocPage[] = [
     markdown: md(`
 # Introduction
 
-RevForge is a self-hosted Mercurial repository forge for repository browsing, changeset history, code review workflows, clone and push access, and operational visibility.
+A forge for revisions.
+
+RevForge is a self-hosted Mercurial platform for repository hosting, changeset browsing, code review workflows, clone access, and operational visibility.
 
 ## What problem RevForge solves
 

@@ -161,8 +161,7 @@ const workflowRows = [
   },
 ];
 
-const landingHeadline =
-  "A focused repository forge for browsing changesets, managing access, and understanding revision history with clarity.";
+const landingHeadline = "A forge for revisions.";
 
 function TypingHeadline({ text }: { text: string }) {
   const [displayText, setDisplayText] = useState("");
@@ -280,7 +279,7 @@ export function LandingPage() {
 
             <div className="max-w-2xl space-y-4">
               <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent">
-                Mercurial hosting, code review, and repository operations.
+                RevForge
               </p>
               <h1
                 aria-label={landingHeadline}
@@ -294,9 +293,9 @@ export function LandingPage() {
                 </span>
               </h1>
               <p className="max-w-xl text-sm leading-7 text-text-secondary md:text-base">
-                RevForge keeps revision history, code browsing, and transport
-                workflows in one calm, dark interface built for teams that want
-                Mercurial to stay precise.
+                RevForge is a self-hosted Mercurial platform for repository
+                hosting, changeset browsing, code review workflows, clone
+                access, and operational visibility.
               </p>
             </div>
 
