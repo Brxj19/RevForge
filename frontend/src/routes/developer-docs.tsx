@@ -209,7 +209,7 @@ function DeveloperDocsIndex() {
   const [filter, setFilter] = useState("");
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-10 pt-4 md:px-6 md:pb-12 md:pt-6 lg:px-8">
+    <div className="rf-marketing-page mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-10 pt-4 md:px-6 md:pb-12 md:pt-6 lg:px-8">
       <DeveloperDocsToolbar filter={filter} onFilterChange={setFilter} />
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -337,20 +337,22 @@ export function DeveloperDocsPage() {
 
   if (!page) {
     return (
-      <EmptyState
-        title="Documentation page not found"
-        description="The requested developer documentation route does not exist in this branch."
-        action={
-          <Link to="/developer-docs">
-            <Button>Open docs index</Button>
-          </Link>
-        }
-      />
+      <div className="rf-marketing-page mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-10 pt-4 md:px-6 md:pb-12 md:pt-6 lg:px-8">
+        <EmptyState
+          title="Documentation page not found"
+          description="The requested developer documentation route does not exist in this branch."
+          action={
+            <Link to="/developer-docs">
+              <Button>Open docs index</Button>
+            </Link>
+          }
+        />
+      </div>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-10 pt-4 md:px-6 md:pb-12 md:pt-6 lg:px-8">
+    <div className="rf-marketing-page mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-10 pt-4 md:px-6 md:pb-12 md:pt-6 lg:px-8">
       <DeveloperDocsToolbar filter={filter} onFilterChange={setFilter} />
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">

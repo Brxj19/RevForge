@@ -342,6 +342,48 @@ def test_audit_events_are_recorded_for_control_plane_changes(client, session_fac
     assert all("token" not in str(event.metadata_json).lower() for event in events)
 
 
+def test_audit_activity_endpoint_supports_offset_pagination(client) -> None:
+    _register(client)
+    client.post(
+        "/api/v1/organizations",
+        json={"slug": "audit", "display_name": "Audit Org", "description": None},
+        headers=_csrf_headers(client),
+    )
+    client.post(
+        "/api/v1/organizations/audit/repositories",
+        json={
+            "slug": "repo-one",
+            "display_name": "Repo One",
+            "description": None,
+            "visibility": "private",
+        },
+        headers=_csrf_headers(client),
+    )
+    client.post(
+        "/api/v1/organizations/audit/repositories",
+        json={
+            "slug": "repo-two",
+            "display_name": "Repo Two",
+            "description": None,
+            "visibility": "private",
+        },
+        headers=_csrf_headers(client),
+    )
+
+    first_page = client.get("/api/v1/audit?limit=1")
+    second_page = client.get("/api/v1/audit?limit=1&offset=1")
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    first_payload = first_page.json()
+    second_payload = second_page.json()
+    assert first_payload["total_count"] >= 3
+    assert second_payload["total_count"] == first_payload["total_count"]
+    assert len(first_payload["events"]) == 1
+    assert len(second_payload["events"]) == 1
+    assert first_payload["events"][0]["id"] != second_payload["events"][0]["id"]
+
+
 def test_repository_slug_rename_and_archived_delete_flow(client, session_factory) -> None:
     _register(client)
     client.post(

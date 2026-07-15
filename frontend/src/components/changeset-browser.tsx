@@ -178,30 +178,6 @@ const LANGUAGE_KEYWORDS: Record<string, Set<string>> = {
   ]),
 };
 
-function buildDiffHeaderLines(file: {
-  path: string;
-  oldPath: string | null;
-  status: string;
-}) {
-  const sourcePath = file.oldPath ?? file.path;
-  const beforePath = file.status === "A" ? "/dev/null" : `a/${sourcePath}`;
-  const afterPath = file.status === "D" ? "/dev/null" : `b/${file.path}`;
-  const headerLines = [
-    `diff --git a/${sourcePath} b/${file.path}`,
-  ];
-
-  if (file.status === "R" && file.oldPath) {
-    headerLines.push(`rename from ${file.oldPath}`, `rename to ${file.path}`);
-  }
-
-  if (file.status === "C" && file.oldPath) {
-    headerLines.push(`copy from ${file.oldPath}`, `copy to ${file.path}`);
-  }
-
-  headerLines.push(`--- ${beforePath}`, `+++ ${afterPath}`);
-  return headerLines;
-}
-
 function detectDiffLanguage(path: string) {
   const extension = path.split(".").pop()?.toLowerCase() ?? "";
 
@@ -700,14 +676,6 @@ export function ChangesetDetail({
             {selectedFile.parsed && !isDiffCollapsed ? (
               <div className="rf-diff-shell overflow-x-auto">
                 <div className="min-w-[760px] font-mono text-[13px] leading-7 text-text-primary">
-                  {buildDiffHeaderLines(selectedFile).map((line) => (
-                    <div
-                      key={`${selectedFile.path}-${line}`}
-                      className="border-b border-border/40 px-4 py-1 whitespace-pre text-text-muted"
-                    >
-                      {line}
-                    </div>
-                  ))}
                   {selectedFile.parsed.hunks.map((hunk) => (
                     <div key={`${selectedFile.path}-${hunk.header}`}>
                       <div className="rf-diff-hunk whitespace-pre px-4 py-1">

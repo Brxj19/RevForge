@@ -13,10 +13,19 @@ const landingBackdropStyle: CSSProperties = {
   backgroundSize: "100% auto",
 };
 
-function ShellBackdrop({ children }: { children: ReactNode }) {
+function ShellBackdrop({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div
-      className="relative min-h-screen overflow-x-hidden bg-canvas text-text-primary"
+      className={clsx(
+        "relative min-h-screen overflow-x-hidden bg-canvas text-text-primary",
+        className,
+      )}
       style={landingBackdropStyle}
     >
       <div className="absolute inset-0 bg-black/12" aria-hidden="true" />
@@ -204,7 +213,7 @@ function TypingHeadline({ text }: { text: string }) {
 
 export function LandingPage() {
   return (
-    <ShellBackdrop>
+    <ShellBackdrop className="rf-marketing-page">
       <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-canvas/96 shadow-[0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4">
           <Link className="flex items-center gap-3" to="/">
@@ -283,7 +292,7 @@ export function LandingPage() {
               </p>
               <h1
                 aria-label={landingHeadline}
-                className="relative max-w-2xl text-4xl font-semibold tracking-[-0.04em] text-text-primary md:text-5xl"
+                className="font-marketing-display relative max-w-2xl text-5xl font-semibold tracking-[-0.05em] text-text-primary md:text-6xl"
               >
                 <span aria-hidden="true" className="invisible block">
                   {landingHeadline}
@@ -498,7 +507,7 @@ export function AuthPageLayout({
         ];
 
   return (
-    <ShellBackdrop>
+    <ShellBackdrop className="rf-marketing-page">
       <header className="sticky top-0 z-50 border-b border-border bg-canvas/96 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <Link
@@ -525,7 +534,7 @@ export function AuthPageLayout({
               <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-text-muted">
                 RevForge
               </p>
-              <h1 className="mt-1 text-lg font-semibold text-text-primary">
+              <h1 className="font-marketing-display mt-1 text-lg font-semibold text-text-primary">
                 {mode === "login"
                   ? "Sign in to your repository forge"
                   : "Create your RevForge account"}
@@ -533,7 +542,7 @@ export function AuthPageLayout({
             </div>
           </div>
           <div className="max-w-xl space-y-4">
-            <p className="text-2xl font-semibold tracking-[-0.03em] text-text-primary md:text-4xl">
+            <p className="font-marketing-display text-2xl font-semibold tracking-[-0.03em] text-text-primary md:text-4xl">
               {title}
             </p>
             <p className="text-sm leading-7 text-text-secondary md:text-base">

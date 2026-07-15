@@ -65,7 +65,17 @@
   --rf-font-ui:
     "IBM Plex Sans", "IBM Plex Mono", "JetBrains Mono", system-ui, sans-serif;
   --rf-font-mono:
-    "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+    "Departure Mono", "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular",
+    ui-monospace, monospace;
+  --rf-font-marketing-mono:
+    "Departure Mono", "IBM Plex Mono", "JetBrains Mono", "Space Mono",
+    "Share Tech Mono", "SFMono-Regular", ui-monospace, monospace;
+  --rf-font-marketing-display:
+    "Departure Mono", "IBM Plex Mono", "JetBrains Mono", "Space Mono",
+    "Share Tech Mono", "SFMono-Regular", ui-monospace, monospace;
+  --rf-font-marketing-body:
+    "Departure Mono", "IBM Plex Mono", "JetBrains Mono", "Space Mono",
+    "Share Tech Mono", "SFMono-Regular", ui-monospace, monospace;
 
   --color-canvas: var(--rf-canvas);
   --color-surface: var(--rf-surface);

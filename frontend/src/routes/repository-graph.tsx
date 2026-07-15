@@ -1189,7 +1189,9 @@ export function RepositoryGraphPage({
               <Badge variant="default">{totalRows} visible</Badge>
               <Badge variant="info">{visibleAuthorCount} authors</Badge>
               <Badge variant="primary">{activeBranchLabel}</Badge>
-              <Badge variant="neutral">{currentStatsLabel}</Badge>
+              {currentBranchOnly ? (
+                <Badge variant="neutral">{currentStatsLabel}</Badge>
+              ) : null}
             </div>
           </div>
 

@@ -2,6 +2,7 @@
 @import "./base.css";
 @import "./code-viewer.css";
 @import "./diff-viewer.css";
+@import "./marketing.css";
 
 @tailwind base;
 @tailwind components;

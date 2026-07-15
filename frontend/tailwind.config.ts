@@ -23,7 +23,13 @@ export default {
           "system-ui",
           "sans-serif",
         ],
-        mono: ["JetBrains Mono", "IBM Plex Mono", "ui-monospace", "monospace"],
+        mono: [
+          "Departure Mono",
+          "JetBrains Mono",
+          "IBM Plex Mono",
+          "ui-monospace",
+          "monospace",
+        ],
       },
       colors: {
         canvas: "var(--color-canvas)",

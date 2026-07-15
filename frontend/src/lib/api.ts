@@ -21,6 +21,11 @@ export interface AuditEventRecord {
   created_at: string;
 }
 
+export interface AuditEventList {
+  events: AuditEventRecord[];
+  total_count: number;
+}
+
 export interface ApiErrorDetail {
   loc?: string[];
   message?: string;
@@ -411,11 +416,15 @@ export function getApiHealth() {
   return request<ApiHealth>("/api/v1/health");
 }
 
-export function listAuditEvents(eventType?: string) {
-  const search = eventType
-    ? `?${new URLSearchParams({ event_type: eventType }).toString()}`
-    : "";
-  return request<AuditEventRecord[]>(`/api/v1/audit${search}`);
+export function listAuditEvents(
+  options: { eventType?: string; limit?: number; offset?: number } = {},
+) {
+  const search = new URLSearchParams();
+  if (options.eventType) search.set("event_type", options.eventType);
+  if (options.limit !== undefined) search.set("limit", String(options.limit));
+  if (options.offset !== undefined) search.set("offset", String(options.offset));
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  return request<AuditEventList>(`/api/v1/audit${suffix}`);
 }
 
 export function registerUser(payload: {

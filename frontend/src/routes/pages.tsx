@@ -480,7 +480,7 @@ function AuthForm({ mode }: { mode: "login" | "register" }) {
       description={
         mode === "login"
           ? "Continue to your repositories, changesets, and team workflows."
-          : "Join your team's Mercurial repository forge."
+          : "Join your team's self-hosted Mercurial forge."
       }
       mode={mode}
       panelTitle={mode === "login" ? "Sign in" : "Create account"}

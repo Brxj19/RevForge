@@ -142,37 +142,40 @@ afterEach(() => {
 
 describe("app routes", () => {
   test("renders the landing route", async () => {
-    renderWithProviders("/");
+    const view = renderWithProviders("/");
 
     expect(
       await screen.findByRole("heading", {
-        name: /focused repository forge/i,
+        name: /a forge for revisions/i,
       }),
     ).toBeInTheDocument();
+    expect(view.container.querySelector(".rf-marketing-page")).not.toBeNull();
     expect(
       screen.getByRole("link", { name: /developer docs/i }),
     ).toHaveAttribute("target", "_blank");
   });
 
   test("renders the login route", async () => {
-    renderWithProviders("/login");
+    const view = renderWithProviders("/login");
 
     expect(
       await screen.findByRole("heading", {
         name: /sign in to your repository forge/i,
       }),
     ).toBeInTheDocument();
+    expect(view.container.querySelector(".rf-marketing-page")).not.toBeNull();
     expect(screen.getByRole("link", { name: /back/i })).toBeInTheDocument();
   });
 
   test("renders the developer docs route", async () => {
-    renderWithProviders("/developer-docs");
+    const view = renderWithProviders("/developer-docs");
 
     expect(
       await screen.findByRole("heading", {
         name: /complete developer documentation for revforge/i,
       }),
     ).toBeInTheDocument();
+    expect(view.container.querySelector(".rf-marketing-page")).not.toBeNull();
     expect(
       screen.getByRole("heading", { name: /recommended reading order/i }),
     ).toBeInTheDocument();
@@ -200,24 +203,26 @@ describe("app routes", () => {
   });
 
   test("renders a developer docs detail route", async () => {
-    renderWithProviders("/developer-docs/https-clone-with-pat");
+    const view = renderWithProviders("/developer-docs/https-clone-with-pat");
 
     expect(
       await screen.findAllByRole("heading", {
         name: /https clone with pat/i,
       }),
     ).toHaveLength(2);
+    expect(view.container.querySelector(".rf-marketing-page")).not.toBeNull();
     expect(screen.getByText(/username must be the account email/i)).toBeInTheDocument();
   });
 
   test("renders the register route", async () => {
-    renderWithProviders("/register");
+    const view = renderWithProviders("/register");
 
     expect(
       await screen.findByRole("heading", {
         name: /create your revforge account/i,
       }),
     ).toBeInTheDocument();
+    expect(view.container.querySelector(".rf-marketing-page")).not.toBeNull();
     expect(screen.getByText(/password criteria/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
   });

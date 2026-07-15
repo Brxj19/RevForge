@@ -673,11 +673,6 @@ describe("repository phase 2 pages", () => {
       screen.getByText(/focused file: frontend\/src\/routes\/repository-graph\.tsx/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        /diff --git a\/frontend\/src\/routes\/repository-graph\.tsx b\/frontend\/src\/routes\/repository-graph\.tsx/i,
-      ),
-    ).toBeInTheDocument();
-    expect(
       screen.getByText((_, element) => element?.textContent === "new line"),
     ).toBeInTheDocument();
     expect(
@@ -696,11 +691,6 @@ describe("repository phase 2 pages", () => {
     expect(
       await screen.findByText(
         /focused file: frontend\/src\/components\/repo\/graph-view\.tsx/i,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /diff --git a\/frontend\/src\/components\/repo\/graph-view\.tsx b\/frontend\/src\/components\/repo\/graph-view\.tsx/i,
       ),
     ).toBeInTheDocument();
     expect(

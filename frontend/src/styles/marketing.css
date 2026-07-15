@@ -1,0 +1,63 @@
+@font-face {
+  font-family: "Departure Mono";
+  src:
+    url("/fonts/DepartureMono-Regular.woff2") format("woff2"),
+    url("/fonts/DepartureMono-Regular.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+.font-marketing,
+.font-marketing-mono {
+  font-family: var(--rf-font-marketing-mono);
+}
+
+.font-marketing-display {
+  font-family: var(--rf-font-marketing-display);
+}
+
+.rf-marketing-page {
+  font-family: var(--rf-font-marketing-body);
+  letter-spacing: 0;
+}
+
+.rf-marketing-page h1,
+.rf-marketing-page h2,
+.rf-marketing-page h3,
+.rf-marketing-page h4,
+.rf-marketing-page h5,
+.rf-marketing-page h6,
+.rf-marketing-page button,
+.rf-marketing-page input,
+.rf-marketing-page select,
+.rf-marketing-page textarea,
+.rf-marketing-page label {
+  font-family: var(--rf-font-marketing-mono);
+}
+
+.rf-marketing-page h1,
+.rf-marketing-page h2,
+.rf-marketing-page h3 {
+  letter-spacing: -0.02em;
+}
+
+.rf-marketing-page .docs-markdown {
+  font-family: var(--rf-font-marketing-body);
+  line-height: 1.65;
+}
+
+.rf-marketing-page .docs-markdown h1,
+.rf-marketing-page .docs-markdown h2,
+.rf-marketing-page .docs-markdown h3,
+.rf-marketing-page .docs-markdown h4 {
+  font-family: var(--rf-font-marketing-display);
+  line-height: 1.2;
+}
+
+.rf-marketing-page .docs-markdown code,
+.rf-marketing-page .docs-markdown kbd,
+.rf-marketing-page .docs-markdown pre,
+.rf-marketing-page .docs-markdown samp {
+  font-family: var(--rf-font-marketing-mono);
+}

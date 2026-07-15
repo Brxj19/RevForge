@@ -149,25 +149,25 @@ export function parseChangesetDiff(content: string): ParsedDiffFile[] {
     }
 
     if (line.startsWith("rename from ")) {
-      current.oldPath = line.removeprefix("rename from ").trim();
+      current.oldPath = line.slice("rename from ".length).trim();
       current.status = "R";
       continue;
     }
 
     if (line.startsWith("rename to ")) {
-      current.path = line.removeprefix("rename to ").trim();
+      current.path = line.slice("rename to ".length).trim();
       current.status = "R";
       continue;
     }
 
     if (line.startsWith("copy from ")) {
-      current.oldPath = line.removeprefix("copy from ").trim();
+      current.oldPath = line.slice("copy from ".length).trim();
       current.status = "C";
       continue;
     }
 
     if (line.startsWith("copy to ")) {
-      current.path = line.removeprefix("copy to ").trim();
+      current.path = line.slice("copy to ".length).trim();
       current.status = "C";
       continue;
     }

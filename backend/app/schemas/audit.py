@@ -23,3 +23,8 @@ class AuditEventResponse(BaseModel):
     summary: str
     details: list[AuditEventDetailResponse]
     created_at: datetime
+
+
+class AuditEventListResponse(BaseModel):
+    events: list[AuditEventResponse]
+    total_count: int
