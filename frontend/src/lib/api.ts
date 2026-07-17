@@ -26,6 +26,22 @@ export interface AuditEventList {
   total_count: number;
 }
 
+export interface ContributionDay {
+  date: string;
+  count: number;
+}
+
+export interface ContributionRange {
+  start_date: string;
+  end_date: string;
+}
+
+export interface ContributionActivity {
+  total: number;
+  range: ContributionRange;
+  days: ContributionDay[];
+}
+
 export interface ApiErrorDetail {
   loc?: string[];
   message?: string;
@@ -451,6 +467,10 @@ export function logoutUser(csrfToken: string | null) {
 
 export function getCurrentUser() {
   return request<CurrentUser>("/api/v1/auth/me");
+}
+
+export function getMyContributions(range: "last_year" = "last_year") {
+  return request<ContributionActivity>(`/api/v1/me/contributions?range=${range}`);
 }
 
 export function getCsrfToken() {

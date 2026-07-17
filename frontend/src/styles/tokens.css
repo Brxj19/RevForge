@@ -36,6 +36,22 @@
   --rf-accent-border: rgba(88, 166, 255, 0.38);
   --rf-accent-secondary: #79c0ff;
   --rf-accent-tertiary: #1f6feb;
+  --rf-contrib-cell-size: 0.6875rem;
+  --rf-contrib-cell-gap: 0.25rem;
+  --rf-contrib-grid-gap: 0.5rem;
+  --rf-contrib-weekday-width: 1.75rem;
+  --rf-contrib-empty: #101010;
+  --rf-contrib-level-0: var(--rf-contrib-empty);
+  --rf-contrib-level-1:
+    color-mix(in srgb, var(--rf-accent-tertiary) 18%, var(--rf-surface));
+  --rf-contrib-level-2:
+    color-mix(in srgb, var(--rf-accent-tertiary) 34%, var(--rf-surface));
+  --rf-contrib-level-3:
+    color-mix(in srgb, var(--rf-accent-tertiary) 52%, var(--rf-surface));
+  --rf-contrib-level-4:
+    color-mix(in srgb, var(--rf-accent-tertiary) 72%, var(--rf-surface));
+  --rf-contrib-level-5:
+    color-mix(in srgb, var(--rf-accent-tertiary) 92%, var(--rf-surface));
 
   --rf-success: #3fb950;
   --rf-success-subtle: rgba(63, 185, 80, 0.14);
@@ -101,6 +117,13 @@
   --color-accent-secondary: var(--rf-accent-secondary);
   --color-accent-tertiary: var(--rf-accent-tertiary);
   --color-accent-foreground: var(--rf-text-inverse);
+  --color-contrib-empty: var(--rf-contrib-empty);
+  --color-contrib-level-0: var(--rf-contrib-level-0);
+  --color-contrib-level-1: var(--rf-contrib-level-1);
+  --color-contrib-level-2: var(--rf-contrib-level-2);
+  --color-contrib-level-3: var(--rf-contrib-level-3);
+  --color-contrib-level-4: var(--rf-contrib-level-4);
+  --color-contrib-level-5: var(--rf-contrib-level-5);
   --color-success: var(--rf-success);
   --color-success-subtle: var(--rf-success-subtle);
   --color-success-border: var(--rf-success-border);

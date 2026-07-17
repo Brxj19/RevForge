@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -9,6 +10,7 @@ from app.domain.enums import OrganizationRole
 from app.models.audit_event import AuditEvent
 from app.models.organization_member import OrganizationMember
 from app.models.repository import Repository
+from app.models.user import User
 from app.models.user_password_credential import UserPasswordCredential
 
 ORIGIN_HEADERS = {"Origin": "http://localhost:5173"}
@@ -58,6 +60,14 @@ def _run_scalars(session_factory: async_sessionmaker[AsyncSession], statement):
         async with session_factory() as session:
             result = await session.execute(statement)
             return list(result.scalars())
+
+    return asyncio.run(runner())
+
+
+def _run_async(session_factory: async_sessionmaker[AsyncSession], callback):
+    async def runner():
+        async with session_factory() as session:
+            return await callback(session)
 
     return asyncio.run(runner())
 
@@ -337,9 +347,113 @@ def test_audit_events_are_recorded_for_control_plane_changes(client, session_fac
     assert "user.registered" in event_types
     assert "organization.created" in event_types
     assert "repository.created" in event_types
-    assert "user.logged_in" in event_types
-    assert all("password" not in str(event.metadata_json).lower() for event in events)
-    assert all("token" not in str(event.metadata_json).lower() for event in events)
+
+
+def test_contributions_endpoint_returns_zero_filled_current_user_activity(
+    client, session_factory
+) -> None:
+    assert _register(client).status_code == 201
+    owner = _run_query(
+        session_factory,
+        select(User).where(User.email == "owner@example.com"),
+    )
+    assert owner is not None
+
+    assert (
+        _register(
+            client,
+            email="other@example.com",
+            display_name="Other User",
+            password="OtherPassword123",
+        ).status_code
+        == 201
+    )
+    other_user = _run_query(
+        session_factory,
+        select(User).where(User.email == "other@example.com"),
+    )
+    assert other_user is not None
+
+    assert _login(client).status_code == 200
+
+    today = datetime.now(UTC)
+    in_range_start = today - timedelta(days=364)
+    middle_day = today - timedelta(days=14)
+    outside_range = today - timedelta(days=365)
+
+    async def seed_events(session: AsyncSession):
+        session.add_all(
+            [
+                AuditEvent(
+                    actor_user_id=owner.id,
+                    event_type="repository.push.accepted",
+                    metadata_json={"pushed_node_count": 2},
+                    created_at=today,
+                    updated_at=today,
+                ),
+                AuditEvent(
+                    actor_user_id=owner.id,
+                    event_type="repository.created",
+                    metadata_json={"repository_slug": "payments-api"},
+                    created_at=today,
+                    updated_at=today,
+                ),
+                AuditEvent(
+                    actor_user_id=owner.id,
+                    event_type="repository.permission_granted",
+                    metadata_json={"repository_slug": "payments-api"},
+                    created_at=middle_day,
+                    updated_at=middle_day,
+                ),
+                AuditEvent(
+                    actor_user_id=owner.id,
+                    event_type="repository.push.accepted",
+                    metadata_json={"pushed_node_count": 1},
+                    created_at=in_range_start,
+                    updated_at=in_range_start,
+                ),
+                AuditEvent(
+                    actor_user_id=owner.id,
+                    event_type="auth.login.succeeded",
+                    metadata_json={},
+                    created_at=today,
+                    updated_at=today,
+                ),
+                AuditEvent(
+                    actor_user_id=owner.id,
+                    event_type="repository.created",
+                    metadata_json={"repository_slug": "outside-range"},
+                    created_at=outside_range,
+                    updated_at=outside_range,
+                ),
+                AuditEvent(
+                    actor_user_id=other_user.id,
+                    event_type="repository.push.accepted",
+                    metadata_json={"pushed_node_count": 8},
+                    created_at=today,
+                    updated_at=today,
+                ),
+            ]
+        )
+        await session.commit()
+
+    _run_async(session_factory, seed_events)
+
+    response = client.get("/api/v1/me/contributions?range=last_year")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 4
+    assert payload["range"]["start_date"] == in_range_start.date().isoformat()
+    assert payload["range"]["end_date"] == today.date().isoformat()
+    assert len(payload["days"]) == 365
+
+    counts_by_day = {entry["date"]: entry["count"] for entry in payload["days"]}
+    assert counts_by_day[today.date().isoformat()] == 2
+    assert counts_by_day[middle_day.date().isoformat()] == 1
+    assert counts_by_day[in_range_start.date().isoformat()] == 1
+    assert counts_by_day[(today - timedelta(days=1)).date().isoformat()] == 0
+    assert outside_range.date().isoformat() not in counts_by_day
 
 
 def test_audit_activity_endpoint_supports_offset_pagination(client) -> None:

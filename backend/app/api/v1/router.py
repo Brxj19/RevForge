@@ -6,6 +6,7 @@ from app.api.v1.audit import router as audit_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.events import router as events_router
 from app.api.v1.health import router as health_router
+from app.api.v1.me import router as me_router
 from app.api.v1.organizations import router as organizations_router
 from app.api.v1.pull_requests import router as pull_requests_router
 from app.api.v1.repositories import router as repositories_router
@@ -20,6 +21,7 @@ router = APIRouter(prefix=settings.api_v1_prefix)
 router.include_router(health_router)
 router.include_router(auth_router)
 router.include_router(audit_router)
+router.include_router(me_router)
 router.include_router(security_router)
 router.include_router(sessions_router)
 router.include_router(organizations_router)

@@ -22,6 +22,7 @@ import {
 } from "../components/changeset-browser";
 import { CloneDialog } from "../components/clone-dialog";
 import { CodeBrowser } from "../components/code-browser";
+import { ContributionHeatmap } from "../components/dashboard/contribution-heatmap";
 import { DevHealthCard } from "../components/dev-health-card";
 import { MarkdownRenderer } from "../components/markdown";
 import { EmptyState, ErrorState, LoadingState } from "../components/states";
@@ -47,6 +48,7 @@ import {
   deleteWebhook,
   getChangeset,
   getChangesetDiff,
+  getMyContributions,
   getOrganization,
   getRepository,
   getRepositoryTransport,
@@ -638,6 +640,11 @@ export function DashboardPage() {
       enabled: isAuthenticated,
     })),
   });
+  const contributionsQuery = useQuery({
+    queryKey: ["dashboard", "contributions"],
+    queryFn: () => getMyContributions("last_year"),
+    enabled: isAuthenticated,
+  });
 
   if (!isAuthenticated) {
     return (
@@ -896,6 +903,26 @@ export function DashboardPage() {
           </Fieldset>
         </div>
       </div>
+
+      <Fieldset
+        title="Repository activity"
+        description="A last-year heatmap of real repository and administrative actions performed by your account."
+      >
+        <ContributionHeatmap
+          contributions={contributionsQuery.data}
+          error={
+            contributionsQuery.error instanceof Error
+              ? contributionsQuery.error.message
+              : contributionsQuery.isError
+                ? "Request failed."
+                : null
+          }
+          isLoading={contributionsQuery.isLoading}
+          onRetry={() => {
+            void contributionsQuery.refetch();
+          }}
+        />
+      </Fieldset>
 
       <Fieldset
         title="Repositories"

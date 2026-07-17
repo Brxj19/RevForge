@@ -27,6 +27,7 @@ import {
   statusLabel,
 } from "../lib/changeset-diff";
 import { firstLine, formatAbsoluteTime, formatRelativeTime } from "../lib/formatting";
+import { assignStableBranchLanes } from "../lib/repository-graph";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { CopyButton } from "../components/ui/copy-button";
@@ -60,6 +61,8 @@ interface ReferenceSummary {
 interface GraphRowModel {
   changeset: ChangesetSummary;
   laneIndex: number;
+  laneOwner: string;
+  laneReason: string;
   laneX: number;
   rowY: number;
   isSelected: boolean;
@@ -484,31 +487,40 @@ export function RepositoryGraphPage({
   const rowPitch = rowHeight + 1;
   const laneSpacing = compactRows ? 22 : 26;
   const lanePadding = 28;
+  const graphLaneState = useMemo(
+    () => assignStableBranchLanes(visibleChangesets),
+    [visibleChangesets],
+  );
+  const graphNodeMetaByNode = useMemo(
+    () =>
+      new Map(
+        graphLaneState.nodes.map((node) => [
+          node.node,
+          node,
+        ]),
+      ),
+    [graphLaneState.nodes],
+  );
   const canvasWidth = Math.max(
     104,
     Math.min(
       240,
-      lanePadding * 2 + Math.max(branchNames.length, 1) * laneSpacing,
+      lanePadding * 2 + Math.max(graphLaneState.laneCount, 1) * laneSpacing,
     ),
   );
   const rowCount = Math.max(visibleChangesets.length, 1);
   const canvasHeight = rowCount * rowPitch;
 
-  const laneIndexByBranch = useMemo(() => {
-    const map = new Map<string, number>();
-    branchNames.forEach((branch, index) => {
-      map.set(branch, index);
-    });
-    return map;
-  }, [branchNames]);
-
   const rowModels = useMemo<GraphRowModel[]>(() => {
     return visibleChangesets.map((changeset, index) => {
-      const laneIndex = laneIndexByBranch.get(changeset.branch) ?? 0;
+      const laneMeta = graphNodeMetaByNode.get(changeset.node);
+      const laneIndex = laneMeta?.lane ?? graphLaneState.laneByNode.get(changeset.node) ?? 0;
 
       return {
         changeset,
         laneIndex,
+        laneOwner: laneMeta?.laneOwner ?? changeset.branch,
+        laneReason: laneMeta?.reason ?? "unclassified",
         laneX: graphNodeX(laneIndex, laneSpacing, lanePadding),
         rowY: index * rowPitch + rowHeight / 2,
         isSelected: changeset.node === effectiveSelectedNode,
@@ -519,8 +531,9 @@ export function RepositoryGraphPage({
     });
   }, [
     effectiveSelectedNode,
+    graphNodeMetaByNode,
+    graphLaneState.laneByNode,
     hoveredNode,
-    laneIndexByBranch,
     lanePadding,
     laneSpacing,
     referenceByNode,
@@ -768,7 +781,7 @@ export function RepositoryGraphPage({
     const selectedChildren =
       childNodesByParent.get(selectedChangeset.node) ?? [];
     const selectedBranchColor = getBranchColor(
-      laneIndexByBranch.get(selectedChangeset.branch) ?? 0,
+      graphLaneState.laneByNode.get(selectedChangeset.node) ?? 0,
     );
     const totalInsertions =
       selectedChangeset.insertions_when_available ??
@@ -1066,10 +1079,9 @@ export function RepositoryGraphPage({
 
   const graphRows = rowModels.map((row, index) => {
     const rowTop = index * rowPitch;
-    const selectedBranch =
-      currentBranchName || visibleChangesets[0]?.branch || "";
     const baseColor =
-      row.changeset.branch === selectedBranch
+      row.laneIndex === 0 &&
+      row.changeset.branch === graphLaneState.primaryBranchName
         ? "var(--color-accent)"
         : getBranchColor(row.laneIndex);
 
@@ -1316,15 +1328,15 @@ export function RepositoryGraphPage({
               aria-hidden="true"
             >
               <svg width={canvasWidth} height={canvasHeight} className="block">
-                {branchNames.map((branch, laneIndex) => {
+                {Array.from(
+                  { length: graphLaneState.laneCount },
+                  (_, laneIndex) => {
                   const x = graphNodeX(laneIndex, laneSpacing, lanePadding);
-                  const isActiveLane =
-                    branch === currentBranchName ||
-                    (!branchFilter && laneIndex === 0);
+                  const isActiveLane = laneIndex === 0;
 
                   return (
                     <path
-                      key={branch}
+                      key={`lane-${laneIndex}`}
                       d={`M ${x} 0 V ${canvasHeight}`}
                       stroke={
                         isActiveLane
@@ -1449,6 +1461,11 @@ export function RepositoryGraphPage({
                     aria-label={`${row.changeset.short_node} ${firstLine(
                       row.changeset.message,
                     )}`}
+                    data-graph-node={row.changeset.node}
+                    data-graph-branch={row.changeset.branch}
+                    data-graph-lane={row.laneIndex}
+                    data-graph-lane-owner={row.laneOwner}
+                    data-graph-lane-reason={row.laneReason}
                   >
                     <div className="relative border-r border-border-muted" />
 

@@ -1,6 +1,7 @@
 @import "./tokens.css";
 @import "./base.css";
 @import "./code-viewer.css";
+@import "./contribution-heatmap.css";
 @import "./diff-viewer.css";
 @import "./marketing.css";
 
