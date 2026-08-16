@@ -168,7 +168,8 @@ function startsNewBlock(lines: string[], index: number) {
   const nextLine = lines[index + 1]?.trim() ?? "";
 
   if (!currentLine) return true;
-  if (currentLine.startsWith("```") || currentLine.startsWith("~~~")) return true;
+  if (currentLine.startsWith("```") || currentLine.startsWith("~~~"))
+    return true;
   if (/^(#{1,6})\s+/.test(currentLine)) return true;
   if (/^(?:[-*_]\s*){3,}$/.test(currentLine)) return true;
   if (currentLine.startsWith(">")) return true;

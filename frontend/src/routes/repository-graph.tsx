@@ -26,7 +26,11 @@ import {
   renderLineDelta,
   statusLabel,
 } from "../lib/changeset-diff";
-import { firstLine, formatAbsoluteTime, formatRelativeTime } from "../lib/formatting";
+import {
+  firstLine,
+  formatAbsoluteTime,
+  formatRelativeTime,
+} from "../lib/formatting";
 import { assignStableBranchLanes } from "../lib/repository-graph";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -492,13 +496,7 @@ export function RepositoryGraphPage({
     [visibleChangesets],
   );
   const graphNodeMetaByNode = useMemo(
-    () =>
-      new Map(
-        graphLaneState.nodes.map((node) => [
-          node.node,
-          node,
-        ]),
-      ),
+    () => new Map(graphLaneState.nodes.map((node) => [node.node, node])),
     [graphLaneState.nodes],
   );
   const canvasWidth = Math.max(
@@ -514,7 +512,8 @@ export function RepositoryGraphPage({
   const rowModels = useMemo<GraphRowModel[]>(() => {
     return visibleChangesets.map((changeset, index) => {
       const laneMeta = graphNodeMetaByNode.get(changeset.node);
-      const laneIndex = laneMeta?.lane ?? graphLaneState.laneByNode.get(changeset.node) ?? 0;
+      const laneIndex =
+        laneMeta?.lane ?? graphLaneState.laneByNode.get(changeset.node) ?? 0;
 
       return {
         changeset,
@@ -1010,7 +1009,10 @@ export function RepositoryGraphPage({
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
               <div className="grid gap-2">
                 {diffFileViewModels.map((file) => {
-                  const lineDelta = renderLineDelta(file.additions, file.deletions);
+                  const lineDelta = renderLineDelta(
+                    file.additions,
+                    file.deletions,
+                  );
 
                   return (
                     <button
@@ -1331,23 +1333,24 @@ export function RepositoryGraphPage({
                 {Array.from(
                   { length: graphLaneState.laneCount },
                   (_, laneIndex) => {
-                  const x = graphNodeX(laneIndex, laneSpacing, lanePadding);
-                  const isActiveLane = laneIndex === 0;
+                    const x = graphNodeX(laneIndex, laneSpacing, lanePadding);
+                    const isActiveLane = laneIndex === 0;
 
-                  return (
-                    <path
-                      key={`lane-${laneIndex}`}
-                      d={`M ${x} 0 V ${canvasHeight}`}
-                      stroke={
-                        isActiveLane
-                          ? "var(--color-accent-border)"
-                          : "var(--color-border-strong)"
-                      }
-                      strokeOpacity={isActiveLane ? 0.45 : 0.18}
-                      strokeWidth={1}
-                    />
-                  );
-                })}
+                    return (
+                      <path
+                        key={`lane-${laneIndex}`}
+                        d={`M ${x} 0 V ${canvasHeight}`}
+                        stroke={
+                          isActiveLane
+                            ? "var(--color-accent-border)"
+                            : "var(--color-border-strong)"
+                        }
+                        strokeOpacity={isActiveLane ? 0.45 : 0.18}
+                        strokeWidth={1}
+                      />
+                    );
+                  },
+                )}
 
                 {edgeModels.map((edge) => (
                   <path
@@ -1583,9 +1586,7 @@ export function RepositoryGraphPage({
         ) : null}
       </div>
 
-      <div className="min-w-0 xl:min-h-0">
-        {renderDetailsPanel()}
-      </div>
+      <div className="min-w-0 xl:min-h-0">{renderDetailsPanel()}</div>
     </div>
   );
 }

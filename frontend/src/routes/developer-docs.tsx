@@ -82,10 +82,9 @@ function DeveloperDocsToolbar({
           Developer docs
         </p>
         <p className="mt-2 text-sm leading-6 text-text-secondary">
-          A forge for revisions.
-          RevForge is a self-hosted Mercurial platform for repository hosting,
-          changeset browsing, code review workflows, clone access, and
-          operational visibility.
+          A forge for revisions. RevForge is a self-hosted Mercurial platform
+          for repository hosting, changeset browsing, code review workflows,
+          clone access, and operational visibility.
         </p>
       </div>
       <Input
@@ -296,7 +295,10 @@ function DeveloperDocsIndex() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {pages.map((page) => (
-                        <Link key={page.slug} to={`/developer-docs/${page.slug}`}>
+                        <Link
+                          key={page.slug}
+                          to={`/developer-docs/${page.slug}`}
+                        >
                           <Badge variant="neutral">{page.title}</Badge>
                         </Link>
                       ))}
@@ -322,7 +324,9 @@ export function DeveloperDocsPage() {
   );
 
   const currentIndex = page
-    ? developerDocPagesInOrder.findIndex((candidate) => candidate.slug === page.slug)
+    ? developerDocPagesInOrder.findIndex(
+        (candidate) => candidate.slug === page.slug,
+      )
     : -1;
   const previousPage =
     currentIndex > 0 ? developerDocPagesInOrder[currentIndex - 1] : null;
@@ -372,8 +376,9 @@ export function DeveloperDocsPage() {
               <div className="flex flex-wrap gap-2">
                 <Badge variant="neutral">
                   {
-                    developerDocGroups.find((group) => group.id === page.groupId)
-                      ?.title
+                    developerDocGroups.find(
+                      (group) => group.id === page.groupId,
+                    )?.title
                   }
                 </Badge>
                 <Badge variant="default">{page.slug}</Badge>

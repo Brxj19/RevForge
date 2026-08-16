@@ -20,7 +20,10 @@ interface HeatmapCell {
 type HeatmapWeek = Array<HeatmapCell | null>;
 
 const weekdayLabels = ["Mon", "", "Wed", "", "Fri", "", ""];
-const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" });
+const monthFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  timeZone: "UTC",
+});
 const longDateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -74,7 +77,11 @@ function buildWeeks(days: ContributionDay[]): HeatmapWeek[] {
   const gridEnd = shiftUtcDate(lastDay, 6 - weekdayIndex(lastDay));
   const weeks: HeatmapWeek[] = [];
 
-  for (let cursor = new Date(gridStart); cursor <= gridEnd; cursor = shiftUtcDate(cursor, 7)) {
+  for (
+    let cursor = new Date(gridStart);
+    cursor <= gridEnd;
+    cursor = shiftUtcDate(cursor, 7)
+  ) {
     const week: HeatmapWeek = [];
     for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
       const currentDate = shiftUtcDate(cursor, dayOffset);
@@ -126,7 +133,10 @@ function gridTemplateColumns(columnCount: number): CSSProperties {
 function renderSkeletonWeeks(columnCount: number) {
   return (
     <div className="rf-contribution-grid" data-testid="contribution-skeleton">
-      <div className="rf-contribution-months" style={gridTemplateColumns(columnCount)}>
+      <div
+        className="rf-contribution-months"
+        style={gridTemplateColumns(columnCount)}
+      >
         {Array.from({ length: columnCount }, (_, index) => (
           <div
             key={`month-skeleton-${index}`}
@@ -193,7 +203,8 @@ export function ContributionHeatmap({
             Could not load contribution activity.
           </p>
           <p className="mt-1 text-sm text-text-muted">
-            RevForge could not read your last-year repository activity right now.
+            RevForge could not read your last-year repository activity right
+            now.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -210,13 +221,16 @@ export function ContributionHeatmap({
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-base font-medium text-text-primary" data-testid="contribution-total">
+          <p
+            className="text-base font-medium text-text-primary"
+            data-testid="contribution-total"
+          >
             {formatContributionTotal(total)}
           </p>
           <p className="mt-1 text-sm text-text-muted">
-            Real control-plane and repository actions performed by your account from{" "}
-            {contributions?.range.start_date ?? "the start of the range"} to{" "}
-            {contributions?.range.end_date ?? "today"}.
+            Real control-plane and repository actions performed by your account
+            from {contributions?.range.start_date ?? "the start of the range"}{" "}
+            to {contributions?.range.end_date ?? "today"}.
           </p>
         </div>
       </div>
@@ -228,9 +242,7 @@ export function ContributionHeatmap({
             style={gridTemplateColumns(visibleWeekCount)}
           >
             {monthLabels.map((label, index) => (
-              <span key={`${label}-${index}`}>
-                {label}
-              </span>
+              <span key={`${label}-${index}`}>{label}</span>
             ))}
           </div>
 

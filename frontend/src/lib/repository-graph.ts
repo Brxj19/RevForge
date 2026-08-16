@@ -61,7 +61,9 @@ function findPrimaryBranch(changesets: ChangesetSummary[]) {
     changeset.parents.every((parentNode) => !nodeIds.has(parentNode)),
   );
 
-  return root?.branch ?? oldestFirst[0]?.branch ?? changesets[0]?.branch ?? "default";
+  return (
+    root?.branch ?? oldestFirst[0]?.branch ?? changesets[0]?.branch ?? "default"
+  );
 }
 
 function colorKeyForLane(lane: number) {
@@ -115,12 +117,16 @@ function sortChildNodes(
     }
 
     const byTopology =
-      (oldestIndexByNode.get(leftNode) ?? 0) - (oldestIndexByNode.get(rightNode) ?? 0);
+      (oldestIndexByNode.get(leftNode) ?? 0) -
+      (oldestIndexByNode.get(rightNode) ?? 0);
     if (byTopology !== 0) {
       return byTopology;
     }
 
-    return left.branch.localeCompare(right.branch) || left.node.localeCompare(right.node);
+    return (
+      left.branch.localeCompare(right.branch) ||
+      left.node.localeCompare(right.node)
+    );
   });
 }
 
@@ -131,7 +137,11 @@ function findPreferredContinuationChild(
   changesetByNode: Map<string, ChangesetSummary>,
   oldestIndexByNode: Map<string, number>,
 ) {
-  const sortedChildren = sortChildNodes(childNodes, changesetByNode, oldestIndexByNode)
+  const sortedChildren = sortChildNodes(
+    childNodes,
+    changesetByNode,
+    oldestIndexByNode,
+  )
     .map((childNode) => changesetByNode.get(childNode))
     .filter((child): child is ChangesetSummary => Boolean(child));
 
@@ -144,7 +154,9 @@ function findPreferredContinuationChild(
     }
   }
 
-  const sameBranchChild = sortedChildren.find((child) => child.branch === parent.branch);
+  const sameBranchChild = sortedChildren.find(
+    (child) => child.branch === parent.branch,
+  );
   if (sameBranchChild) {
     return sameBranchChild.node;
   }
@@ -159,7 +171,9 @@ function pickAnchorParent(
   laneByNode: Map<string, number>,
 ) {
   const orderedParents = changeset.parents
-    .map((parentNode) => visibleParents.find((parent) => parent.node === parentNode))
+    .map((parentNode) =>
+      visibleParents.find((parent) => parent.node === parentNode),
+    )
     .filter((parent): parent is ChangesetSummary => Boolean(parent));
 
   if (changeset.branch === primaryBranchName) {
@@ -189,10 +203,7 @@ function pickAnchorParent(
   )[0];
 }
 
-function allocateLane(
-  usedLanes: Set<number>,
-  desiredLane: number,
-) {
+function allocateLane(usedLanes: Set<number>, desiredLane: number) {
   let candidate = Math.max(desiredLane, 1);
   while (usedLanes.has(candidate)) {
     candidate += 1;
@@ -253,8 +264,12 @@ function inferVirtualLane(
 ) {
   if (visibleParents.length === 0) {
     return {
-      lane: changeset.branch === primaryBranchName ? 0 : allocateLane(usedLanes, 1),
-      reason: changeset.branch === primaryBranchName ? "primary-root" : "virtual-root",
+      lane:
+        changeset.branch === primaryBranchName ? 0 : allocateLane(usedLanes, 1),
+      reason:
+        changeset.branch === primaryBranchName
+          ? "primary-root"
+          : "virtual-root",
     };
   }
 
@@ -265,7 +280,9 @@ function inferVirtualLane(
     laneByNode,
   );
   const anchorLane = laneByNode.get(anchorParent.node) ?? 0;
-  const preferredChild = preferredContinuationChildByParent.get(anchorParent.node);
+  const preferredChild = preferredContinuationChildByParent.get(
+    anchorParent.node,
+  );
   const isPreferredContinuation = preferredChild === changeset.node;
 
   if (changeset.branch === primaryBranchName) {
@@ -304,7 +321,8 @@ export function assignStableBranchLanes(
 
   const primaryBranchName = findPrimaryBranch(changesets);
   const oldestFirst = [...changesets].reverse();
-  const { changesetByNode, childrenByNode, oldestIndexByNode } = buildGraphRelations(changesets);
+  const { changesetByNode, childrenByNode, oldestIndexByNode } =
+    buildGraphRelations(changesets);
   const preferredContinuationChildByParent = new Map<string, string>();
 
   childrenByNode.forEach((childNodes, parentNode) => {
@@ -388,10 +406,7 @@ export function assignStableBranchLanes(
       usedLanes,
     );
     laneByNode.set(changeset.node, virtualAssignment.lane);
-    colorKeyByNode.set(
-      changeset.node,
-      colorKeyForLane(virtualAssignment.lane),
-    );
+    colorKeyByNode.set(changeset.node, colorKeyForLane(virtualAssignment.lane));
     laneOwnerByNode.set(changeset.node, `virtual:${changeset.node}`);
     reasonByNode.set(changeset.node, virtualAssignment.reason);
   });
@@ -423,7 +438,8 @@ export function assignStableBranchLanes(
       parents: changeset.parents,
       branch: changeset.branch,
       lane: nodeLane,
-      laneOwner: laneOwnerByNode.get(changeset.node) ?? changeset.branch ?? "virtual",
+      laneOwner:
+        laneOwnerByNode.get(changeset.node) ?? changeset.branch ?? "virtual",
       colorKey: colorKeyByNode.get(changeset.node) ?? colorKeyForLane(nodeLane),
       reason: reasonByNode.get(changeset.node) ?? "unclassified",
       graphEdges,

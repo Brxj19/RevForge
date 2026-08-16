@@ -23,10 +23,7 @@ function renderWithProviders(route: string) {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/developer-docs" element={<DeveloperDocsPage />} />
-          <Route
-            path="/developer-docs/:slug"
-            element={<DeveloperDocsPage />}
-          />
+          <Route path="/developer-docs/:slug" element={<DeveloperDocsPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/organizations" element={<OrganizationsPage />} />
@@ -211,7 +208,9 @@ describe("app routes", () => {
       }),
     ).toHaveLength(2);
     expect(view.container.querySelector(".rf-marketing-page")).not.toBeNull();
-    expect(screen.getByText(/username must be the account email/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/username must be the account email/i),
+    ).toBeInTheDocument();
   });
 
   test("renders the register route", async () => {

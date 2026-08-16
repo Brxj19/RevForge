@@ -103,7 +103,11 @@ async def create_personal_access_token(
         actor_user_id=user.id,
         request_id=request_id,
         metadata_json={
-            "token_scope": "repository" if repository_id else "organization" if organization_id else "personal",
+            "token_scope": "repository"
+            if repository_id
+            else "organization"
+            if organization_id
+            else "personal",
             "capability": capability.value,
             "expires_at": expires_at.isoformat() if expires_at else None,
         },

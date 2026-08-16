@@ -59,13 +59,13 @@ describe("assignStableBranchLanes", () => {
     expect(result.laneByNode.get("e")).toBe(1);
     const mergeNode = result.nodes.find((node) => node.node === "m");
     expect(mergeNode?.lane).toBe(0);
-    expect(
-      mergeNode?.graphEdges.find((edge) => edge.to === "e"),
-    ).toMatchObject({
-      fromLane: 0,
-      toLane: 1,
-      type: "merge",
-    });
+    expect(mergeNode?.graphEdges.find((edge) => edge.to === "e")).toMatchObject(
+      {
+        fromLane: 0,
+        toLane: 1,
+        type: "merge",
+      },
+    );
   });
 
   test("assigns nested branches to deeper lanes", () => {
@@ -127,7 +127,9 @@ describe("assignStableBranchLanes", () => {
 
     ["a", "b", "c", "d", "e"].forEach((node) => {
       expect(after.laneByNode.get(node)).toBe(before.laneByNode.get(node));
-      expect(after.colorKeyByNode.get(node)).toBe(before.colorKeyByNode.get(node));
+      expect(after.colorKeyByNode.get(node)).toBe(
+        before.colorKeyByNode.get(node),
+      );
     });
     expect(after.laneByNode.get("m")).toBe(0);
   });
@@ -202,8 +204,8 @@ describe("assignStableBranchLanes", () => {
 
     expect(featureHead?.lane).toBe(1);
     expect(mergeNode?.lane).toBe(0);
-    expect(
-      mergeNode?.graphEdges.find((edge) => edge.to === "e")?.type,
-    ).toBe("merge");
+    expect(mergeNode?.graphEdges.find((edge) => edge.to === "e")?.type).toBe(
+      "merge",
+    );
   });
 });

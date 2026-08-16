@@ -51,8 +51,7 @@ async def list_audit_events(
                 request_id=event.request_id,
                 summary=presented.summary,
                 details=[
-                    {"label": detail.label, "value": detail.value}
-                    for detail in presented.details
+                    {"label": detail.label, "value": detail.value} for detail in presented.details
                 ],
                 created_at=event.created_at,
             )
