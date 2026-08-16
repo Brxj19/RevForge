@@ -81,9 +81,7 @@ def test_authorized_keys_render_and_sync(client, session_factory, tmp_path) -> N
     import asyncio
 
     content = asyncio.run(render())
-    expected_command = (
-        f'command="{get_settings().ssh_gateway_command} {created_key.id}"'
-    )
+    expected_command = f'command="{get_settings().ssh_gateway_command} {created_key.id}"'
     assert expected_command in content
     assert "no-agent-forwarding" in content
     assert "no-port-forwarding" in content

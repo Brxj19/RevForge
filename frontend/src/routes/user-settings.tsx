@@ -112,7 +112,9 @@ export function UserSettingsPage() {
     queryFn: async () => {
       if (!tokenOrganizationId) return [];
       const organizations = await listOrganizations();
-      const organization = organizations.find((item) => item.id === tokenOrganizationId);
+      const organization = organizations.find(
+        (item) => item.id === tokenOrganizationId,
+      );
       if (!organization) return [];
       return listRepositories(organization.slug);
     },
@@ -447,9 +449,7 @@ export function UserSettingsPage() {
                     onChange={(event) =>
                       setTokenScope(
                         event.target.value as
-                          | "global"
-                          | "organization"
-                          | "repository",
+                          "global" | "organization" | "repository",
                       )
                     }
                   >
@@ -487,22 +487,23 @@ export function UserSettingsPage() {
                   <FormField label="Repository">
                     <Select
                       value={tokenRepositoryId}
-                      onChange={(event) => setTokenRepositoryId(event.target.value)}
+                      onChange={(event) =>
+                        setTokenRepositoryId(event.target.value)
+                      }
                     >
                       <option value="">Select repository</option>
-                      {(scopedRepositoriesQuery.data ?? []).map((repository) => (
-                        <option key={repository.id} value={repository.id}>
-                          {repository.display_name}
-                        </option>
-                      ))}
+                      {(scopedRepositoriesQuery.data ?? []).map(
+                        (repository) => (
+                          <option key={repository.id} value={repository.id}>
+                            {repository.display_name}
+                          </option>
+                        ),
+                      )}
                     </Select>
                   </FormField>
                 ) : null}
                 <div className="flex items-end">
-                  <Button
-                    type="submit"
-                    loading={createTokenMutation.isPending}
-                  >
+                  <Button type="submit" loading={createTokenMutation.isPending}>
                     Create token
                   </Button>
                 </div>

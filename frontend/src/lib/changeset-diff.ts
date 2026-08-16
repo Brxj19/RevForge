@@ -191,7 +191,10 @@ export function parseChangesetDiff(content: string): ParsedDiffFile[] {
       continue;
     }
 
-    if (line.startsWith("Binary file ") || line.startsWith("GIT binary patch")) {
+    if (
+      line.startsWith("Binary file ") ||
+      line.startsWith("GIT binary patch")
+    ) {
       sawBinaryMarker = true;
       continue;
     }

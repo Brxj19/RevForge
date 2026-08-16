@@ -385,10 +385,7 @@ beforeEach(() => {
             id: "webhook-1",
             repository_id: "repo-3",
             url: "https://example.com/hooks/revforge",
-            event_types: [
-              "repository.push.accepted",
-              "repository.provisioned",
-            ],
+            event_types: ["repository.push.accepted", "repository.provisioned"],
             is_active: true,
             created_by_user_id: "user-1",
             created_at: "2026-07-08T08:00:00Z",
@@ -538,9 +535,7 @@ describe("repository phase 2 pages", () => {
         name: /latest changeset and repository health/i,
       }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Repository root"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Repository root")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /readme preview/i }),
     ).toBeInTheDocument();
@@ -556,9 +551,7 @@ describe("repository phase 2 pages", () => {
     expect(
       screen.queryByRole("heading", { name: /quick links/i }),
     ).not.toBeInTheDocument();
-    expect(
-      await screen.findByText(/repository handbook/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/repository handbook/i)).toBeInTheDocument();
     expect(screen.getByText(/first item/i)).toBeInTheDocument();
     expect(screen.getByText(/const total = 42;/i)).toBeInTheDocument();
 
@@ -606,7 +599,9 @@ describe("repository phase 2 pages", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/owner user/i)).toBeInTheDocument();
     expect(screen.getByText(/req-123/i)).toBeInTheDocument();
-    expect(screen.getByText(/push accepted: 1 changeset over ssh/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/push accepted: 1 changeset over ssh/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/changesets received/i)).toBeInTheDocument();
   });
 
@@ -633,9 +628,7 @@ describe("repository phase 2 pages", () => {
         name: /changeset graph/i,
       }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /hash/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /hash/i })).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: featureNode.slice(0, 12) }),
     ).toBeInTheDocument();
@@ -645,7 +638,8 @@ describe("repository phase 2 pages", () => {
     expect(screen.getByText("+4")).toBeInTheDocument();
     expect(screen.getByText("Removed")).toBeInTheDocument();
     expect(
-      screen.getAllByText(/frontend\/src\/routes\/repository-graph\.tsx/i).length,
+      screen.getAllByText(/frontend\/src\/routes\/repository-graph\.tsx/i)
+        .length,
     ).toBeGreaterThan(0);
     expect(screen.getAllByText("+2").length).toBeGreaterThan(0);
     expect(screen.getAllByText("-1").length).toBeGreaterThan(0);
@@ -670,7 +664,9 @@ describe("repository phase 2 pages", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("+2 -1").length).toBeGreaterThan(0);
     expect(
-      screen.getByText(/focused file: frontend\/src\/routes\/repository-graph\.tsx/i),
+      screen.getByText(
+        /focused file: frontend\/src\/routes\/repository-graph\.tsx/i,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText((_, element) => element?.textContent === "new line"),

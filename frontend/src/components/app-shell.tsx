@@ -662,17 +662,19 @@ export function AppShell() {
   }, [location.pathname]);
 
   const paletteItems = useMemo<CommandPaletteItem[]>(() => {
-    const baseItems: CommandPaletteItem[] = [...primaryNav, docsNavItem].map((item) => ({
-      id: item.label,
-      label: item.label,
-      detail: item.description,
-      keywords: item.keywords,
-      to: item.to,
-      group:
-        item.label === "Repositories" || item.label === "Organization"
-          ? "projects"
-          : "actions",
-    }));
+    const baseItems: CommandPaletteItem[] = [...primaryNav, docsNavItem].map(
+      (item) => ({
+        id: item.label,
+        label: item.label,
+        detail: item.description,
+        keywords: item.keywords,
+        to: item.to,
+        group:
+          item.label === "Repositories" || item.label === "Organization"
+            ? "projects"
+            : "actions",
+      }),
+    );
 
     if (!organizationSlug || !repositorySlug) {
       return baseItems;
@@ -805,11 +807,7 @@ export function AppShell() {
           <div className="ml-auto flex items-center gap-2">
             {isAuthenticated ? (
               <>
-                <Link
-                  rel="noreferrer"
-                  target="_blank"
-                  to="/developer-docs"
-                >
+                <Link rel="noreferrer" target="_blank" to="/developer-docs">
                   <Button size="sm" variant="ghost">
                     Docs
                   </Button>

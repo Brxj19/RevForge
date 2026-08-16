@@ -21,11 +21,19 @@
 }
 
 .rf-diff-row-add {
-  background: color-mix(in srgb, var(--color-diff-add-bg) 88%, var(--rf-editor-canvas));
+  background: color-mix(
+    in srgb,
+    var(--color-diff-add-bg) 88%,
+    var(--rf-editor-canvas)
+  );
 }
 
 .rf-diff-row-del {
-  background: color-mix(in srgb, var(--color-diff-del-bg) 88%, var(--rf-editor-canvas));
+  background: color-mix(
+    in srgb,
+    var(--color-diff-del-bg) 88%,
+    var(--rf-editor-canvas)
+  );
 }
 
 .rf-diff-row-context {

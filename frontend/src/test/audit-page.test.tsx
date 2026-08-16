@@ -107,7 +107,9 @@ describe("AuditPage", () => {
     renderAuditPage("/activity");
 
     expect(
-      await screen.findByRole("heading", { name: /audit and operational activity/i }),
+      await screen.findByRole("heading", {
+        name: /audit and operational activity/i,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText(/page 1 of 2/i)).toBeInTheDocument();
     expect(screen.getByText("req-1")).toBeInTheDocument();

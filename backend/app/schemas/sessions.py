@@ -13,4 +13,3 @@ class UserSessionResponse(BaseModel):
     revoked_at: datetime | None
     last_seen_at: datetime | None
     is_current: bool
-

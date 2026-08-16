@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 SENSITIVE_KEYS = {
     "credential_id",
     "fingerprint_sha256",
@@ -129,7 +128,9 @@ def _sanitize_mapping(data: dict[str, object] | None) -> list[ActivityDetail]:
 def _build_summary(event_type: str, details: list[ActivityDetail]) -> str:
     base = EVENT_TITLES.get(event_type, event_type.replace(".", " "))
     if event_type == "repository.push.accepted":
-        pushed = next((detail.value for detail in details if detail.label == "Changesets received"), None)
+        pushed = next(
+            (detail.value for detail in details if detail.label == "Changesets received"), None
+        )
         auth = next((detail.value for detail in details if detail.label == "Authentication"), None)
         if pushed and auth:
             return f"{base}: {pushed} changeset{'s' if pushed != '1' else ''} over {auth}"

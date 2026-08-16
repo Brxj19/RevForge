@@ -2471,8 +2471,8 @@ function OverviewTreePanel({
           Top-level files and folders
         </h3>
         <p className="mt-2 text-sm leading-6 text-text-secondary">
-          Open a file or folder in the code tab. Folder clicks preserve the
-          path and expand the tree there.
+          Open a file or folder in the code tab. Folder clicks preserve the path
+          and expand the tree there.
         </p>
       </div>
       <div className="grid gap-1 p-2">
@@ -2480,8 +2480,7 @@ function OverviewTreePanel({
           <LoadingState label="Loading repository root." />
         ) : entries.length > 0 ? (
           entries.map((entry) => {
-            const entryLabel =
-              entry.kind === "directory" ? "folder" : "file";
+            const entryLabel = entry.kind === "directory" ? "folder" : "file";
             return (
               <Link
                 key={entry.path}
@@ -3296,9 +3295,7 @@ function RepositorySettingsContent() {
     "repository.push.accepted",
   );
   const [webhookSecret, setWebhookSecret] = useState("");
-  const [webhookFormError, setWebhookFormError] = useState<string | null>(
-    null,
-  );
+  const [webhookFormError, setWebhookFormError] = useState<string | null>(null);
   const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(
     null,
   );
@@ -3393,7 +3390,8 @@ function RepositorySettingsContent() {
   });
 
   const deleteRepositoryMutation = useMutation({
-    mutationFn: () => deleteRepository(organizationSlug, repositorySlug, csrfToken),
+    mutationFn: () =>
+      deleteRepository(organizationSlug, repositorySlug, csrfToken),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ["organization-repositories", organizationSlug],
@@ -3422,8 +3420,7 @@ function RepositorySettingsContent() {
       url: string;
       event_types: string[];
       secret?: string | null;
-    }) =>
-      createWebhook(organizationSlug, repositorySlug, payload, csrfToken),
+    }) => createWebhook(organizationSlug, repositorySlug, payload, csrfToken),
     onSuccess: async (webhook) => {
       setWebhookUrl("");
       setWebhookEventTypes("repository.push.accepted");
@@ -4146,7 +4143,9 @@ function RepositorySettingsContent() {
                     className="grid min-w-[280px] gap-2"
                     onSubmit={(event) => {
                       event.preventDefault();
-                      void updateMutation.mutateAsync({ slug: renameSlug.trim() });
+                      void updateMutation.mutateAsync({
+                        slug: renameSlug.trim(),
+                      });
                     }}
                   >
                     <Input
@@ -4157,7 +4156,8 @@ function RepositorySettingsContent() {
                     />
                     <Button
                       disabled={
-                        !renameSlug.trim() || renameSlug.trim() === repository.slug
+                        !renameSlug.trim() ||
+                        renameSlug.trim() === repository.slug
                       }
                       loading={updateMutation.isPending}
                       type="submit"

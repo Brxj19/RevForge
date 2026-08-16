@@ -131,11 +131,13 @@ export function AuditPage() {
           onChange={(event) => setFilter("action", event.target.value)}
         >
           <option value="">All actions</option>
-          {[...new Set(pageEvents.map((event) => event.event_type))].map((eventType) => (
-            <option key={eventType} value={eventType}>
-              {eventType}
-            </option>
-          ))}
+          {[...new Set(pageEvents.map((event) => event.event_type))].map(
+            (eventType) => (
+              <option key={eventType} value={eventType}>
+                {eventType}
+              </option>
+            ),
+          )}
         </Select>
       </Surface>
 
@@ -148,7 +150,9 @@ export function AuditPage() {
               {" - "}
               <span className="font-medium text-text-primary">{pageEnd}</span>
               {" of "}
-              <span className="font-medium text-text-primary">{totalCount}</span>
+              <span className="font-medium text-text-primary">
+                {totalCount}
+              </span>
               {" events"}
             </div>
             <div className="flex items-center gap-2">
@@ -194,7 +198,9 @@ export function AuditPage() {
                         <td className="px-4 py-3 text-text-secondary">
                           {formatAbsoluteTime(event.created_at)}
                         </td>
-                        <td className="px-4 py-3 text-text-primary">{renderActor(event)}</td>
+                        <td className="px-4 py-3 text-text-primary">
+                          {renderActor(event)}
+                        </td>
                         <td className="px-4 py-3">
                           <Badge variant="default">{event.event_type}</Badge>
                         </td>
@@ -219,7 +225,9 @@ export function AuditPage() {
                         <tr key={`${event.id}-details`} className="bg-canvas">
                           <td colSpan={5} className="px-4 py-4">
                             <div className="grid gap-2 text-sm text-text-secondary">
-                              <div className="text-text-primary">{event.summary}</div>
+                              <div className="text-text-primary">
+                                {event.summary}
+                              </div>
                               {event.details.length > 0 ? (
                                 <div className="grid gap-2 rounded-sm border border-border bg-surface px-3 py-3">
                                   {event.details.map((detail) => (
@@ -230,13 +238,16 @@ export function AuditPage() {
                                       <span className="font-mono uppercase tracking-[0.12em] text-text-muted">
                                         {detail.label}
                                       </span>
-                                      <span className="text-text-primary">{detail.value}</span>
+                                      <span className="text-text-primary">
+                                        {detail.value}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
                               ) : (
                                 <div className="text-xs text-text-muted">
-                                  No additional safe details were recorded for this event.
+                                  No additional safe details were recorded for
+                                  this event.
                                 </div>
                               )}
                             </div>

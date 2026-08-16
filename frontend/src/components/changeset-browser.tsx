@@ -405,7 +405,10 @@ export function ChangesetDetail({
   selectedFilePath,
   onSelectFile,
 }: ChangesetDetailProps) {
-  const diffFiles = useMemo(() => parseChangesetDiff(diff.content), [diff.content]);
+  const diffFiles = useMemo(
+    () => parseChangesetDiff(diff.content),
+    [diff.content],
+  );
   const fileViewModels = useMemo(
     () => buildDiffFileViewModels(changeset, diffFiles),
     [changeset, diffFiles],
@@ -413,7 +416,10 @@ export function ChangesetDetail({
   const selectedFileRef = useRef<HTMLDivElement | null>(null);
   const [isDiffCollapsed, setIsDiffCollapsed] = useState(false);
   const effectiveSelectedFilePath = useMemo(() => {
-    if (selectedFilePath && fileViewModels.some((file) => file.path === selectedFilePath)) {
+    if (
+      selectedFilePath &&
+      fileViewModels.some((file) => file.path === selectedFilePath)
+    ) {
       return selectedFilePath;
     }
     return fileViewModels[0]?.path ?? null;
@@ -421,7 +427,9 @@ export function ChangesetDetail({
   const selectedFile = useMemo(
     () =>
       effectiveSelectedFilePath
-        ? fileViewModels.find((file) => file.path === effectiveSelectedFilePath) ?? null
+        ? (fileViewModels.find(
+            (file) => file.path === effectiveSelectedFilePath,
+          ) ?? null)
         : null,
     [effectiveSelectedFilePath, fileViewModels],
   );
@@ -446,7 +454,10 @@ export function ChangesetDetail({
   useEffect(() => {
     if (selectedFile) {
       const selectedElement = selectedFileRef.current;
-      if (selectedElement && typeof selectedElement.scrollIntoView === "function") {
+      if (
+        selectedElement &&
+        typeof selectedElement.scrollIntoView === "function"
+      ) {
         selectedElement.scrollIntoView({
           behavior: "smooth",
           block: "start",
@@ -644,10 +655,15 @@ export function ChangesetDetail({
                       {statusLabel(selectedFile.status)}
                     </Badge>
                     <span className="font-mono text-text-muted">
-                      {formatLineDelta(selectedFile.additions, selectedFile.deletions)}
+                      {formatLineDelta(
+                        selectedFile.additions,
+                        selectedFile.deletions,
+                      )}
                     </span>
                     {selectedFile.oldPath ? (
-                      <span className="text-text-muted">from {selectedFile.oldPath}</span>
+                      <span className="text-text-muted">
+                        from {selectedFile.oldPath}
+                      </span>
                     ) : null}
                   </div>
                 </div>
@@ -705,7 +721,8 @@ export function ChangesetDetail({
                             )}`}
                             className={clsx(
                               "rf-diff-line-number rf-diff-line-number-old",
-                              line.type === "remove" && "rf-diff-line-number-del",
+                              line.type === "remove" &&
+                                "rf-diff-line-number-del",
                             )}
                           >
                             {line.oldLineNumber ?? ""}

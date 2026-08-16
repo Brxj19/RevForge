@@ -394,8 +394,7 @@ async function request<T>(
     let fallbackMessage: string | undefined;
     try {
       const json = (await response.json()) as
-        | ApiErrorEnvelope
-        | FallbackApiErrorPayload;
+        ApiErrorEnvelope | FallbackApiErrorPayload;
       if (json && typeof json === "object" && "error" in json) {
         payload = json as ApiErrorEnvelope;
       }
@@ -411,7 +410,9 @@ async function request<T>(
       payload = undefined;
     }
     throw new ApiClientError(
-      payload?.error?.message ?? fallbackMessage ?? `Request failed (${response.status}).`,
+      payload?.error?.message ??
+        fallbackMessage ??
+        `Request failed (${response.status}).`,
       response.status,
       payload,
     );
@@ -438,7 +439,8 @@ export function listAuditEvents(
   const search = new URLSearchParams();
   if (options.eventType) search.set("event_type", options.eventType);
   if (options.limit !== undefined) search.set("limit", String(options.limit));
-  if (options.offset !== undefined) search.set("offset", String(options.offset));
+  if (options.offset !== undefined)
+    search.set("offset", String(options.offset));
   const suffix = search.size > 0 ? `?${search.toString()}` : "";
   return request<AuditEventList>(`/api/v1/audit${suffix}`);
 }
@@ -470,7 +472,9 @@ export function getCurrentUser() {
 }
 
 export function getMyContributions(range: "last_year" = "last_year") {
-  return request<ContributionActivity>(`/api/v1/me/contributions?range=${range}`);
+  return request<ContributionActivity>(
+    `/api/v1/me/contributions?range=${range}`,
+  );
 }
 
 export function getCsrfToken() {
@@ -623,10 +627,7 @@ export function listUserSessions(csrfToken: string | null) {
   });
 }
 
-export function revokeUserSession(
-  sessionId: string,
-  csrfToken: string | null,
-) {
+export function revokeUserSession(sessionId: string, csrfToken: string | null) {
   return request<void>(`/api/v1/sessions/${sessionId}`, {
     method: "DELETE",
     csrfToken,
@@ -1158,10 +1159,7 @@ export interface WebhookDelivery {
   completed_at: string | null;
 }
 
-export function listWebhooks(
-  organizationSlug: string,
-  repositorySlug: string,
-) {
+export function listWebhooks(organizationSlug: string, repositorySlug: string) {
   return request<Webhook[]>(
     `/api/v1/organizations/${organizationSlug}/repositories/${repositorySlug}/webhooks`,
   );
