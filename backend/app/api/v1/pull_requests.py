@@ -223,7 +223,7 @@ async def create_pull_request_route(
             author=identity.user,
         )
         await session.commit()
-        pr = await get_pull_request(session, pull_request_id=pr.id)
+        pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pr.id)
     except ForbiddenError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
@@ -248,13 +248,13 @@ async def get_pull_request_route(
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestDetailResponse:
     try:
-        await _get_repo_for_read(
+        repo = await _get_repo_for_read(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
             identity=identity,
         )
-        pr = await get_pull_request(session, pull_request_id=pull_request_id)
+        pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pull_request_id)
     except ForbiddenError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
@@ -275,7 +275,7 @@ async def update_pull_request_route(
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestDetailResponse:
     try:
-        await _get_repo_for_write(
+        repo = await _get_repo_for_write(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
@@ -283,6 +283,7 @@ async def update_pull_request_route(
         )
         pr = await update_pull_request(
             session,
+            repository_id=repo.id,
             pull_request_id=pull_request_id,
             title=payload.title,
             description=payload.description,
@@ -290,7 +291,7 @@ async def update_pull_request_route(
             actor=identity.user,
         )
         await session.commit()
-        pr = await get_pull_request(session, pull_request_id=pr.id)
+        pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pr.id)
     except ForbiddenError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
@@ -315,15 +316,20 @@ async def close_pull_request_route(
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestDetailResponse:
     try:
-        await _get_repo_for_write(
+        repo = await _get_repo_for_write(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
             identity=identity,
         )
-        pr = await close_pull_request(session, pull_request_id=pull_request_id, actor=identity.user)
+        pr = await close_pull_request(
+            session,
+            repository_id=repo.id,
+            pull_request_id=pull_request_id,
+            actor=identity.user,
+        )
         await session.commit()
-        pr = await get_pull_request(session, pull_request_id=pr.id)
+        pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pr.id)
     except ForbiddenError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
@@ -350,7 +356,7 @@ async def add_comment_route(
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestCommentResponse:
     try:
-        await _get_repo_for_write(
+        repo = await _get_repo_for_write(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
@@ -358,6 +364,7 @@ async def add_comment_route(
         )
         comment = await add_comment(
             session,
+            repository_id=repo.id,
             pull_request_id=pull_request_id,
             author=identity.user,
             body=payload.body,
@@ -394,7 +401,7 @@ async def add_review_route(
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestReviewResponse:
     try:
-        await _get_repo_for_write(
+        repo = await _get_repo_for_write(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
@@ -402,6 +409,7 @@ async def add_review_route(
         )
         review = await add_review(
             session,
+            repository_id=repo.id,
             pull_request_id=pull_request_id,
             reviewer=identity.user,
             decision=payload.decision,
@@ -434,7 +442,7 @@ async def add_reviewer_route(
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestReviewerResponse:
     try:
-        await _get_repo_for_write(
+        repo = await _get_repo_for_write(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
@@ -442,6 +450,7 @@ async def add_reviewer_route(
         )
         reviewer = await add_reviewer(
             session,
+            repository_id=repo.id,
             pull_request_id=pull_request_id,
             reviewer_id=payload.reviewer_id,
             required=payload.required,
@@ -473,7 +482,7 @@ async def remove_reviewer_route(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     try:
-        await _get_repo_for_write(
+        repo = await _get_repo_for_write(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
@@ -481,6 +490,7 @@ async def remove_reviewer_route(
         )
         await remove_reviewer(
             session,
+            repository_id=repo.id,
             pull_request_id=pull_request_id,
             reviewer_id=reviewer_id,
         )
@@ -516,7 +526,7 @@ async def get_pull_request_diff_route(
             repository_slug=repository_slug,
             identity=identity,
         )
-        pr = await get_pull_request(session, pull_request_id=pull_request_id)
+        pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pull_request_id)
         files, adds, dels, total = await compute_diff(
             command_runner,
             repository_path=storage_locator.repository_path(repo),
@@ -570,7 +580,7 @@ async def merge_pull_request_route(
             repository_slug=repository_slug,
             identity=identity,
         )
-        pr = await get_pull_request(session, pull_request_id=pull_request_id)
+        pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pull_request_id)
         head_result = await command_runner.run(
             ["identify", "--rev", pr.source_revision, "--id"],
             repository_path=storage_locator.repository_path(repo),
@@ -579,12 +589,13 @@ async def merge_pull_request_route(
 
         pr = await merge_pull_request(
             session,
+            repository_id=repo.id,
             pull_request_id=pull_request_id,
             merged_revision=merged_revision,
             merger=identity.user,
         )
         await session.commit()
-        pr = await get_pull_request(session, pull_request_id=pr.id)
+        pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pr.id)
     except ForbiddenError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc

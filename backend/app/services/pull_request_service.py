@@ -31,6 +31,7 @@ async def _next_pr_number(session: AsyncSession, *, repository_id: UUID) -> int:
 async def _load_pr_with_relations(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
 ) -> PullRequest:
     result = await session.scalar(
@@ -40,7 +41,9 @@ async def _load_pr_with_relations(
             selectinload(PullRequest.reviews),
             selectinload(PullRequest.reviewers),
         )
-        .where(PullRequest.id == pull_request_id)
+        # Scoping by repository is the authorization boundary: callers authorize the
+        # repository in the URL, so a PR id from another repository must not resolve.
+        .where(PullRequest.id == pull_request_id, PullRequest.repository_id == repository_id)
         .with_for_update()
     )
     if result is None:
@@ -87,13 +90,16 @@ async def create_pull_request(
 async def update_pull_request(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
     title: str | None,
     description: str | None,
     state: PullRequestState | None,
     actor: User,
 ) -> PullRequest:
-    pr = await _load_pr_with_relations(session, pull_request_id=pull_request_id)
+    pr = await _load_pr_with_relations(
+        session, repository_id=repository_id, pull_request_id=pull_request_id
+    )
     if pr.state in (PullRequestState.MERGED, PullRequestState.CLOSED):
         raise ConflictError("Cannot modify a merged or closed pull request.")
     if title is not None:
@@ -115,11 +121,13 @@ async def update_pull_request(
 async def close_pull_request(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
     actor: User,
 ) -> PullRequest:
     return await update_pull_request(
         session,
+        repository_id=repository_id,
         pull_request_id=pull_request_id,
         title=None,
         description=None,
@@ -131,11 +139,14 @@ async def close_pull_request(
 async def merge_pull_request(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
     merged_revision: str,
     merger: User,
 ) -> PullRequest:
-    pr = await _load_pr_with_relations(session, pull_request_id=pull_request_id)
+    pr = await _load_pr_with_relations(
+        session, repository_id=repository_id, pull_request_id=pull_request_id
+    )
     if pr.state != PullRequestState.OPEN:
         raise ConflictError("Only open pull requests can be merged.")
     pr.state = PullRequestState.MERGED
@@ -177,14 +188,18 @@ async def list_pull_requests(
 async def get_pull_request(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
 ) -> PullRequest:
-    return await _load_pr_with_relations(session, pull_request_id=pull_request_id)
+    return await _load_pr_with_relations(
+        session, repository_id=repository_id, pull_request_id=pull_request_id
+    )
 
 
 async def add_comment(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
     author: User,
     body: str,
@@ -194,7 +209,9 @@ async def add_comment(
     base_revision: str | None,
     head_revision: str | None,
 ) -> PullRequestComment:
-    pr = await _load_pr_with_relations(session, pull_request_id=pull_request_id)
+    pr = await _load_pr_with_relations(
+        session, repository_id=repository_id, pull_request_id=pull_request_id
+    )
     if pr.state in (PullRequestState.MERGED, PullRequestState.CLOSED):
         raise ConflictError("Cannot comment on a merged or closed pull request.")
 
@@ -226,14 +243,18 @@ async def add_comment(
 async def update_comment_outdated_flag(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
     comment_id: UUID,
     outdated: bool,
 ) -> PullRequestComment:
     comment = await session.scalar(
-        select(PullRequestComment).where(
+        select(PullRequestComment)
+        .join(PullRequest, PullRequest.id == PullRequestComment.pull_request_id)
+        .where(
             PullRequestComment.id == comment_id,
             PullRequestComment.pull_request_id == pull_request_id,
+            PullRequest.repository_id == repository_id,
         )
     )
     if comment is None:
@@ -246,12 +267,15 @@ async def update_comment_outdated_flag(
 async def add_review(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
     reviewer: User,
     decision: ReviewDecision,
     body: str | None,
 ) -> PullRequestReview:
-    pr = await _load_pr_with_relations(session, pull_request_id=pull_request_id)
+    pr = await _load_pr_with_relations(
+        session, repository_id=repository_id, pull_request_id=pull_request_id
+    )
     if pr.state != PullRequestState.OPEN:
         raise ConflictError("Only open pull requests can be reviewed.")
 
@@ -269,11 +293,14 @@ async def add_review(
 async def add_reviewer(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
     reviewer_id: UUID,
     required: bool,
 ) -> PullRequestReviewer:
-    pr = await _load_pr_with_relations(session, pull_request_id=pull_request_id)
+    pr = await _load_pr_with_relations(
+        session, repository_id=repository_id, pull_request_id=pull_request_id
+    )
     if pr.state != PullRequestState.OPEN:
         raise ConflictError("Cannot modify reviewers on a closed or merged PR.")
     existing = await session.scalar(
@@ -297,10 +324,13 @@ async def add_reviewer(
 async def remove_reviewer(
     session: AsyncSession,
     *,
+    repository_id: UUID,
     pull_request_id: UUID,
     reviewer_id: UUID,
 ) -> None:
-    pr = await _load_pr_with_relations(session, pull_request_id=pull_request_id)
+    pr = await _load_pr_with_relations(
+        session, repository_id=repository_id, pull_request_id=pull_request_id
+    )
     if pr.state != PullRequestState.OPEN:
         raise ConflictError("Cannot remove reviewers on a closed or merged PR.")
     existing = await session.scalar(
