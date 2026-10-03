@@ -5,14 +5,15 @@ import base64
 import json
 import os
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from enum import StrEnum
 from threading import Lock
 from time import monotonic
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs
 from uuid import uuid4
+from wsgiref.types import StartResponse
 
 from anyio import from_thread
 from mercurial import initialization
@@ -23,18 +24,24 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.domain.enums import RepositoryRole
 from app.mercurial.storage_locator import RepositoryStorageLocator
+from app.models.organization import Organization
+from app.models.organization_member import OrganizationMember
 from app.models.repository import Repository
 from app.models.user import User
 from app.repositories.organizations import get_membership
 from app.services.audit import record_audit_event
-from app.services.authentication import AuthenticationError
-from app.services.errors import ForbiddenError, NotFoundError
+from app.services.errors import AuthenticationError, ForbiddenError, NotFoundError
 from app.services.repository_service import (
     get_organization_by_slug_for_repo_routes,
     get_repository_for_actor,
     repository_is_browsable,
 )
 from app.services.transport_credentials import authenticate_personal_access_token
+
+if TYPE_CHECKING:
+    from _typeshed import OptExcInfo
+
+    from app.services.authorization import RepositoryAccess
 
 initialization.init()
 
@@ -136,7 +143,7 @@ class HgHttpGatewayApplication:
             window_seconds=settings.transport_rate_limit_window_seconds,
         )
 
-    def __call__(self, environ: dict[str, Any], start_response) -> list[bytes]:
+    def __call__(self, environ: dict[str, Any], start_response: StartResponse) -> list[bytes]:
         request_id = environ.get("HTTP_X_REQUEST_ID") or str(uuid4())
         path_info = environ.get("PATH_INFO", "")
         path_segments = [segment for segment in path_info.split("/") if segment]
@@ -258,7 +265,11 @@ class HgHttpGatewayApplication:
         )
         status_headers: dict[str, Any] = {}
 
-        def capture_start_response(status: str, headers: list[tuple[str, str]], exc_info=None):
+        def capture_start_response(
+            status: str,
+            headers: list[tuple[str, str]],
+            exc_info: OptExcInfo | None = None,
+        ) -> Callable[[bytes], object]:
             status_headers["status"] = status
             status_headers["headers"] = headers
             return start_response(status, headers, exc_info)
@@ -289,14 +300,14 @@ class HgHttpGatewayApplication:
         )
         return payload
 
-    def _run_coroutine(self, coroutine):
+    def _run_coroutine[T](self, coroutine: Coroutine[Any, Any, T]) -> T:
         try:
             return from_thread.run(self._await_coroutine, coroutine)
         except RuntimeError:
             return asyncio.run(coroutine)
 
     @staticmethod
-    async def _await_coroutine(coroutine):
+    async def _await_coroutine[T](coroutine: Coroutine[Any, Any, T]) -> T:
         return await coroutine
 
     async def _authorize(
@@ -395,10 +406,10 @@ class HgHttpGatewayApplication:
         *,
         session: AsyncSession,
         actor: User | None,
-        organization,
+        organization: Organization,
         repository: Repository,
-        membership,
-    ):
+        membership: OrganizationMember | None,
+    ) -> RepositoryAccess:
         from app.repositories.repositories import get_permission
         from app.services.authorization import repository_access_for_actor
 
@@ -438,7 +449,7 @@ class HgHttpGatewayApplication:
 
     def _respond(
         self,
-        start_response,
+        start_response: StartResponse,
         *,
         status: str,
         body: dict[str, Any],
@@ -457,7 +468,9 @@ class HgHttpGatewayApplication:
         return [payload]
 
 
-async def get_organization_by_repo_slug(session: AsyncSession, *, organization_slug: str):
+async def get_organization_by_repo_slug(
+    session: AsyncSession, *, organization_slug: str
+) -> Organization:
     return await get_organization_by_slug_for_repo_routes(
         session, organization_slug=organization_slug
     )

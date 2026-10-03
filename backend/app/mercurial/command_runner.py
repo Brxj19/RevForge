@@ -8,6 +8,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from app.core.config import Settings
 
@@ -113,7 +114,7 @@ class HgCommandRunner:
         repository_path: Path | None = None,
         stdout_limit: int | None = None,
         cwd: Path | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         result = await self.run(
             args,
             repository_path=repository_path,

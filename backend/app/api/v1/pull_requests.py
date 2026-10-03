@@ -22,6 +22,12 @@ from app.mercurial.errors import (
     HgCommandTimeoutError,
 )
 from app.mercurial.storage_locator import RepositoryStorageLocator
+from app.models.pull_request import (
+    PullRequest,
+    PullRequestComment,
+    PullRequestReview,
+    PullRequestReviewer,
+)
 from app.models.repository import Repository
 from app.schemas.pull_requests import (
     PullRequestCommentCreateRequest,
@@ -104,11 +110,11 @@ async def _get_repo_for_read(
 
 
 def _serialize_pr(
-    pr,
+    pr: PullRequest,
     *,
-    comments: list | None = None,
-    reviews: list | None = None,
-    reviewers: list | None = None,
+    comments: list[PullRequestComment] | None = None,
+    reviews: list[PullRequestReview] | None = None,
+    reviewers: list[PullRequestReviewer] | None = None,
 ) -> PullRequestResponse:
     pr_comments = comments if comments is not None else getattr(pr, "comments", [])
     pr_reviews = reviews if reviews is not None else getattr(pr, "reviews", [])
@@ -140,7 +146,7 @@ def _serialize_pr(
     )
 
 
-def _serialize_detail(pr) -> PullRequestDetailResponse:
+def _serialize_detail(pr: PullRequest) -> PullRequestDetailResponse:
     comments = [PullRequestCommentResponse.model_validate(c) for c in pr.comments]
     reviews = [PullRequestReviewResponse.model_validate(r) for r in pr.reviews]
     reviewers = [PullRequestReviewerResponse.model_validate(r) for r in pr.reviewers]
@@ -315,7 +321,7 @@ async def close_pull_request_route(
             repository_slug=repository_slug,
             identity=identity,
         )
-        pr = await close_pull_request(session, pull_request_id=pull_request_id)
+        pr = await close_pull_request(session, pull_request_id=pull_request_id, actor=identity.user)
         await session.commit()
         pr = await get_pull_request(session, pull_request_id=pr.id)
     except ForbiddenError as exc:

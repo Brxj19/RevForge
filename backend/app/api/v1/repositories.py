@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -33,8 +34,12 @@ from app.mercurial.errors import (
 )
 from app.mercurial.provisioning_service import provision_repository
 from app.mercurial.read_service import MercurialReadService
-from app.mercurial.schemas import HgDirectoryBrowse, HgFileBrowse
+from app.mercurial.schemas import HgBlame, HgChangeset, HgDirectoryBrowse, HgFileBrowse
 from app.mercurial.storage_locator import RepositoryStorageLocator
+from app.models.organization import Organization
+from app.models.repository import Repository
+from app.models.repository_permission import RepositoryPermission
+from app.models.user import User
 from app.repositories.organizations import get_membership
 from app.repositories.repositories import get_permission
 from app.schemas.repositories import (
@@ -105,8 +110,8 @@ router = APIRouter(prefix="/organizations/{organization_slug}/repositories", tag
 
 def _serialize_repository_summary(
     *,
-    repository,
-    viewer_role,
+    repository: Repository,
+    viewer_role: RepositoryRole | None,
     can_manage: bool,
     inherited_access: bool,
 ) -> RepositorySummary:
@@ -132,9 +137,9 @@ def _serialize_repository_summary(
 
 def _serialize_repository_detail(
     *,
-    repository,
+    repository: Repository,
     organization_slug: str,
-    viewer_role,
+    viewer_role: RepositoryRole | None,
     can_manage: bool,
     inherited_access: bool,
 ) -> RepositoryDetailResponse:
@@ -162,7 +167,7 @@ def _serialize_repository_detail(
 
 def _serialize_provision_response(
     *,
-    repository,
+    repository: Repository,
     organization_slug: str,
 ) -> RepositoryProvisionResponse:
     return RepositoryProvisionResponse(
@@ -175,7 +180,7 @@ def _serialize_provision_response(
     )
 
 
-def _serialize_permission(permission) -> RepositoryPermissionResponse:
+def _serialize_permission(permission: RepositoryPermission) -> RepositoryPermissionResponse:
     return RepositoryPermissionResponse(
         id=permission.id,
         repository_id=permission.repository_id,
@@ -189,7 +194,7 @@ def _serialize_permission(permission) -> RepositoryPermissionResponse:
     )
 
 
-def _serialize_changeset_summary(changeset) -> ChangesetSummaryResponse:
+def _serialize_changeset_summary(changeset: HgChangeset) -> ChangesetSummaryResponse:
     return ChangesetSummaryResponse(
         node=changeset.node,
         short_node=changeset.short_node,
@@ -207,7 +212,7 @@ def _serialize_changeset_summary(changeset) -> ChangesetSummaryResponse:
     )
 
 
-def _serialize_changeset_detail(changeset) -> ChangesetDetailResponse:
+def _serialize_changeset_detail(changeset: HgChangeset) -> ChangesetDetailResponse:
     return ChangesetDetailResponse(
         node=changeset.node,
         short_node=changeset.short_node,
@@ -261,7 +266,7 @@ def _serialize_browse_response(
     )
 
 
-def _serialize_blame_response(blame_result) -> RepositoryBlameResponse:
+def _serialize_blame_response(blame_result: HgBlame) -> RepositoryBlameResponse:
     return RepositoryBlameResponse(
         revision=blame_result.revision,
         path=blame_result.path,
@@ -336,9 +341,9 @@ async def _get_repository_with_access(
     session: AsyncSession,
     organization_slug: str,
     repository_slug: str,
-    actor,
+    actor: User | None,
     allow_archived: bool = True,
-):
+) -> tuple[Organization, Repository, RepositoryRole | None, bool, bool]:
     organization = await get_organization_by_slug_for_repo_routes(
         session, organization_slug=organization_slug
     )
@@ -357,9 +362,9 @@ async def _ensure_browsable_repository(
     session: AsyncSession,
     organization_slug: str,
     repository_slug: str,
-    actor,
+    actor: User | None,
     storage_locator: RepositoryStorageLocator,
-):
+) -> tuple[Organization, Repository, Path, RepositoryRole | None, bool, bool]:
     (
         organization,
         repository,

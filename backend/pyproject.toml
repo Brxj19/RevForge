@@ -59,3 +59,8 @@ strict = true
 warn_unused_configs = true
 ignore_missing_imports = false
 plugins = []
+
+# Mercurial ships neither stubs nor a py.typed marker; its objects are treated as Any.
+[[tool.mypy.overrides]]
+module = ["mercurial", "mercurial.*"]
+ignore_missing_imports = true

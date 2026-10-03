@@ -19,13 +19,12 @@ from app.schemas.auth import (
     UserSummary,
 )
 from app.services.authentication import (
-    AuthenticationError,
     login_user,
     logout_user,
     refresh_csrf_token,
     register_user,
 )
-from app.services.errors import ConflictError, ValidationFailure
+from app.services.errors import AuthenticationError, ConflictError, ValidationFailure
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

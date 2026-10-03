@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from app.mercurial.command_runner import HgCommandRunner
 
@@ -11,7 +12,7 @@ async def compute_diff(
     repository_path: Path,
     source_revision: str,
     target_revision: str,
-) -> tuple[list[dict], int, int, int]:
+) -> tuple[list[dict[str, Any]], int, int, int]:
     full_diff_output = await command_runner.run(
         [
             "diff",
@@ -28,7 +29,7 @@ async def compute_diff(
     total_additions = 0
     total_deletions = 0
     total_files = 0
-    changed_files: list[dict] = []
+    changed_files: list[dict[str, Any]] = []
 
     for line in diff_text.splitlines():
         if line.startswith("--- a/") or line.startswith("+++ b/"):

@@ -3,7 +3,8 @@ from __future__ import annotations
 import mimetypes
 import re
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
+from typing import Any
 
 from mercurial import error as hgerror
 from mercurial import hg, initialization
@@ -53,7 +54,9 @@ class MercurialReadService:
         self._settings = settings
         self._command_runner = command_runner
 
-    async def list_changesets(self, repository_path, *, cursor: str | None) -> HgChangesetPage:
+    async def list_changesets(
+        self, repository_path: Path, *, cursor: str | None
+    ) -> HgChangesetPage:
         page_size = self._settings.max_history_page_size
         repo = self._open_repository(repository_path)
         if len(repo) == 0:
@@ -75,7 +78,7 @@ class MercurialReadService:
         next_cursor = changesets[page_size - 1].node if len(changesets) > page_size else None
         return HgChangesetPage(changesets=changesets[:page_size], next_cursor=next_cursor)
 
-    async def get_changeset(self, repository_path, revision: str) -> HgChangeset:
+    async def get_changeset(self, repository_path: Path, revision: str) -> HgChangeset:
         repo = self._open_repository(repository_path)
         return await self._build_changeset(
             repository_path,
@@ -83,7 +86,7 @@ class MercurialReadService:
             include_files=True,
         )
 
-    async def get_diff(self, repository_path, revision: str) -> HgDiff:
+    async def get_diff(self, repository_path: Path, revision: str) -> HgDiff:
         node = await self.resolve_revision(repository_path, revision)
         try:
             result = await self._command_runner.run(
@@ -103,7 +106,9 @@ class MercurialReadService:
                 truncation_reason="diff_too_large",
             )
 
-    async def browse(self, repository_path, *, revision: str | None, path: str | None):
+    async def browse(
+        self, repository_path: Path, *, revision: str | None, path: str | None
+    ) -> HgDirectoryBrowse | HgFileBrowse:
         normalized_path = validate_repository_relative_path(path)
         repo = self._open_repository(repository_path)
         ctx = self._default_or_requested_context(repo, revision)
@@ -130,7 +135,7 @@ class MercurialReadService:
             )
         raise MercurialNotFoundError()
 
-    async def get_blame(self, repository_path, *, revision: str | None, path: str) -> HgBlame:
+    async def get_blame(self, repository_path: Path, *, revision: str | None, path: str) -> HgBlame:
         normalized_path = validate_repository_relative_path(path)
         repo = self._open_repository(repository_path)
         node = await self.resolve_revision(repository_path, revision)
@@ -174,7 +179,7 @@ class MercurialReadService:
 
     async def search_files(
         self,
-        repository_path,
+        repository_path: Path,
         *,
         revision: str | None,
         query: str,
@@ -197,7 +202,7 @@ class MercurialReadService:
             HgFileSearchMatch(path=path, language_hint=_language_hint(path)) for path in ranked
         ]
 
-    async def list_refs(self, repository_path) -> HgReferences:
+    async def list_refs(self, repository_path: Path) -> HgReferences:
         branches_payload = await self._command_runner.run_json(
             ["branches", "-Tjson"],
             repository_path=repository_path,
@@ -236,14 +241,14 @@ class MercurialReadService:
         ]
         return HgReferences(branches=branches, tags=tags, bookmarks=bookmarks)
 
-    async def resolve_revision(self, repository_path, revision: str | None) -> str:
+    async def resolve_revision(self, repository_path: Path, revision: str | None) -> str:
         repo = self._open_repository(repository_path)
         ctx = self._default_or_requested_context(repo, revision)
         if ctx is None:
             raise MercurialNotFoundError()
         return _decode_ascii_bytes(ctx.hex())
 
-    async def _read_file(self, repository_path, *, node: str, path: str) -> HgFileBrowse:
+    async def _read_file(self, repository_path: Path, *, node: str, path: str) -> HgFileBrowse:
         try:
             result = await self._command_runner.run(
                 ["cat", "-r", node, "--", path],
@@ -320,7 +325,7 @@ class MercurialReadService:
                 seen.setdefault(head, HgTreeEntry(name=head, path=child_path, kind="file"))
         return sorted(seen.values(), key=lambda entry: (entry.kind != "directory", entry.name))
 
-    def _open_repository(self, repository_path):
+    def _open_repository(self, repository_path: Path) -> Any:
         base_ui = uimod.ui.load()
         base_ui.setconfig(b"ui", b"nontty", b"true", b"revforge")
         try:
@@ -328,14 +333,14 @@ class MercurialReadService:
         except (hgerror.RepoError, FileNotFoundError) as exc:
             raise MercurialNotFoundError() from exc
 
-    def _default_or_requested_context(self, repo, revision: str | None):
+    def _default_or_requested_context(self, repo: Any, revision: str | None) -> Any:
         if len(repo) == 0:
             return None
         if revision is None or revision == "":
             return repo[len(repo) - 1]
         return self._resolve_context(repo, revision)
 
-    def _resolve_context(self, repo, revision: str):
+    def _resolve_context(self, repo: Any, revision: str) -> Any:
         normalized_revision = revision.strip()
         if FULL_NODE_RE.fullmatch(normalized_revision):
             try:
@@ -361,10 +366,10 @@ class MercurialReadService:
 
         raise MercurialNotFoundError()
 
-    def _manifest_paths(self, ctx) -> list[str]:
+    def _manifest_paths(self, ctx: Any) -> list[str]:
         return [_decode_utf8_bytes(path) for path in ctx.manifest().keys()]
 
-    def _parse_changeset_context(self, ctx, *, include_files: bool) -> HgChangeset:
+    def _parse_changeset_context(self, ctx: Any, *, include_files: bool) -> HgChangeset:
         node = _decode_ascii_bytes(ctx.hex())
         author_name, author_email = _parse_author(_decode_utf8_bytes(ctx.user()))
         return HgChangeset(
@@ -388,14 +393,16 @@ class MercurialReadService:
             revision_number=int(ctx.rev()),
         )
 
-    async def _build_changeset(self, repository_path, ctx, *, include_files: bool) -> HgChangeset:
+    async def _build_changeset(
+        self, repository_path: Path, ctx: Any, *, include_files: bool
+    ) -> HgChangeset:
         changeset = self._parse_changeset_context(ctx, include_files=include_files)
         changeset.stats = await self._load_changeset_stats(repository_path, changeset.node)
         return changeset
 
     async def _load_changeset_stats(
         self,
-        repository_path,
+        repository_path: Path,
         node: str,
     ) -> HgChangesetStats | None:
         try:
@@ -493,7 +500,7 @@ class MercurialReadService:
 
     async def _load_per_file_diffstats(
         self,
-        repository_path,
+        repository_path: Path,
         *,
         node: str,
         paths: list[str],

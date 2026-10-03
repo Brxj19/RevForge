@@ -46,7 +46,7 @@ class FileEventSpoolReader:
             if not repo_id_str:
                 continue
             try:
-                repo_id = UUID(repo_id_str)
+                repo_id = UUID(str(repo_id_str))
             except ValueError:
                 continue
             idempotency_key = f"file:{data.get('request_id', os.urandom(8).hex())}"
@@ -73,13 +73,13 @@ class FileEventSpoolReader:
                 RepositoryEvent(
                     repository_id=repo_id,
                     event_type=event_type,
-                    actor_user_id=UUID(data["actor_user_id"])
+                    actor_user_id=UUID(str(data["actor_user_id"]))
                     if data.get("actor_user_id")
                     else None,
                     authentication_method=str(data.get("authentication_method"))
                     if data.get("authentication_method")
                     else None,
-                    credential_id=UUID(data["credential_id"])
+                    credential_id=UUID(str(data["credential_id"]))
                     if data.get("credential_id")
                     else None,
                     source_ip=str(data.get("source_ip")) if data.get("source_ip") else None,

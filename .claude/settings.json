@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make help)",
+      "Bash(make test)",
+      "Bash(make lint)",
+      "Bash(make typecheck)",
+      "Bash(make format)",
+      "Bash(make ps)",
+      "Bash(git status *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git diff)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr checks *)",
+      "Bash(npm run lint)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run test)",
+      "Bash(npx vitest run *)",
+      "Bash(.venv/bin/python -m pytest *)",
+      "Bash(.venv/bin/python -m ruff *)",
+      "Bash(.venv/bin/python -m mypy *)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge *)",
+      "Bash(make up)",
+      "Bash(make down)",
+      "Bash(make migrate)",
+      "Bash(make clean)",
+      "Bash(docker *)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./backend/.env)",
+      "Read(./frontend/.env)",
+      "Read(./backend/.local/ssh/**)",
+      "Read(~/.ssh/**)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push origin main)",
+      "Bash(git push origin main *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -fd *)",
+      "Bash(git clean -fdx *)",
+      "Bash(rm -rf /*)",
+      "Bash(docker system prune *)",
+      "Bash(docker volume rm *)",
+      "Bash(docker compose * down -v *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format-edited-file.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
