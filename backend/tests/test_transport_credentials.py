@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
 import contextlib
 import os
 import shutil
 import subprocess
 import tempfile
 import threading
+import urllib.error
+import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import quote
@@ -354,3 +357,149 @@ def test_http_and_ssh_transport_parsers() -> None:
     request = parse_ssh_original_command("hg -R /acme/public-repo serve --stdio")
     assert request.organization_slug == "acme"
     assert request.repository_slug == "public-repo"
+
+
+def _hg_status(
+    url: str, authorization: str | None = None, command: str = "capabilities"
+) -> tuple[int, str | None, bytes]:
+    request = urllib.request.Request(f"{url}?cmd={command}")
+    if authorization is not None:
+        request.add_header("Authorization", authorization)
+    try:
+        with urllib.request.urlopen(request) as response:
+            return response.status, response.headers.get("WWW-Authenticate"), b""
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers.get("WWW-Authenticate"), exc.read()
+
+
+def _basic(email: str, token: str) -> str:
+    return "Basic " + base64.b64encode(f"{email}:{token}".encode()).decode()
+
+
+def test_http_gateway_clones_private_repository_with_token(
+    client, session_factory, tmp_path
+) -> None:
+    """A stock hg client only sends credentials after a 401 challenge."""
+    _register(client)
+    _create_org_and_repo(client, "acme", "private")
+
+    from app.mercurial.storage_locator import RepositoryStorageLocator
+    from app.models.repository import Repository
+
+    repo = _run_query(session_factory, select(Repository).where(Repository.slug == "public-repo"))
+    assert repo is not None
+    _seed_repository(RepositoryStorageLocator(get_settings()).repository_path(repo))
+
+    token_create = client.post(
+        "/api/v1/me/tokens",
+        json={"name": "Read Token", "capability": "read"},
+        headers=_csrf_headers(client),
+    )
+    assert token_create.status_code == 201
+    token = token_create.json()["plaintext_token"]
+
+    gateway = create_http_gateway_application(
+        settings=get_settings(),
+        session_factory_getter=lambda: session_factory,
+    )
+    with _serve_wsgi_app(gateway) as (host, port):
+        hgrc = tmp_path / "auth.hgrc"
+        hgrc.write_text(
+            "[auth]\n"
+            f"revforge.prefix = http://{host}:{port}/\n"
+            "revforge.username = owner@example.com\n"
+            f"revforge.password = {token}\n",
+            encoding="utf-8",
+        )
+        clone_dir = tmp_path / "private-clone"
+        clone = subprocess.run(
+            ["hg", "clone", f"http://{host}:{port}/acme/public-repo", str(clone_dir)],
+            env={**_hg_env(), "HGRCPATH": str(hgrc)},
+            capture_output=True,
+            text=True,
+        )
+        assert clone.returncode == 0, clone.stderr
+        assert (clone_dir / "src" / "hello.py").is_file()
+
+
+def test_http_gateway_challenges_anonymous_requests_without_revealing_repositories(
+    client, session_factory
+) -> None:
+    _register(client)
+    _create_org_and_repo(client, "acme", "private")
+    _create_org_and_repo(client, "open", "public")
+
+    gateway = create_http_gateway_application(
+        settings=get_settings(),
+        session_factory_getter=lambda: session_factory,
+    )
+    with _serve_wsgi_app(gateway) as (host, port):
+        base = f"http://{host}:{port}"
+        private = _hg_status(f"{base}/acme/public-repo")
+        others = [
+            _hg_status(f"{base}/acme/no-such-repo"),
+            _hg_status(f"{base}/no-such-org/no-such-repo"),
+            _hg_status(f"{base}/acme/-invalid-slug"),
+            _hg_status(f"{base}/acme/public-repo", command="unbundle"),
+            _hg_status(f"{base}/acme/no-such-repo", command="unbundle"),
+            # A malformed Authorization header is treated as anonymous.
+            _hg_status(f"{base}/acme/public-repo", authorization="Bearer not-basic"),
+        ]
+        public = _hg_status(f"{base}/open/public-repo")
+
+    assert private[0] == 401
+    assert private[1] == 'Basic realm="RevForge Mercurial"'
+    # Anonymous callers must not be able to tell a private repository from a missing one.
+    assert all(other == private for other in others), others
+    # Public repositories stay readable without a credential prompt.
+    assert public[:2] == (200, None)
+
+
+def test_http_gateway_hides_private_repository_from_authenticated_outsider(
+    client, session_factory
+) -> None:
+    _register(client)
+    _create_org_and_repo(client, "acme", "private")
+    client.post("/api/v1/auth/logout", headers=_csrf_headers(client))
+
+    _register(client, email="outsider@example.com", display_name="Outsider")
+    token_create = client.post(
+        "/api/v1/me/tokens",
+        json={"name": "Outsider Token", "capability": "read"},
+        headers=_csrf_headers(client),
+    )
+    assert token_create.status_code == 201
+    authorization = _basic("outsider@example.com", token_create.json()["plaintext_token"])
+
+    gateway = create_http_gateway_application(
+        settings=get_settings(),
+        session_factory_getter=lambda: session_factory,
+    )
+    with _serve_wsgi_app(gateway) as (host, port):
+        base = f"http://{host}:{port}"
+        private = _hg_status(f"{base}/acme/public-repo", authorization)
+        missing = _hg_status(f"{base}/acme/no-such-repo", authorization)
+
+    assert private[0] == 404
+    assert private[1] is None
+    assert private == missing
+
+
+def test_http_gateway_rejects_invalid_token_before_repository_lookup(
+    client, session_factory
+) -> None:
+    _register(client)
+    _create_org_and_repo(client, "acme", "private")
+    authorization = _basic("owner@example.com", "not-a-real-token")
+
+    gateway = create_http_gateway_application(
+        settings=get_settings(),
+        session_factory_getter=lambda: session_factory,
+    )
+    with _serve_wsgi_app(gateway) as (host, port):
+        base = f"http://{host}:{port}"
+        private = _hg_status(f"{base}/acme/public-repo", authorization)
+        missing = _hg_status(f"{base}/acme/no-such-repo", authorization)
+
+    assert private[0] == 401
+    assert private == missing

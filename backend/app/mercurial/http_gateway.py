@@ -171,22 +171,14 @@ class HgHttpGatewayApplication:
                     remote_addr=remote_addr,
                 )
             )
-        except ValueError:
-            return self._respond(
-                start_response,
-                status="404 Not Found",
-                body={"error": "Repository not found."},
-                request_id=request_id,
-            )
         except AuthenticationError:
-            return self._respond(
-                start_response,
-                status="401 Unauthorized",
-                body={"error": "Authentication required."},
-                request_id=request_id,
-                headers=[("WWW-Authenticate", 'Basic realm="RevForge Mercurial"')],
-            )
-        except NotFoundError:
+            return self._challenge(start_response, request_id=request_id)
+        except (ValueError, NotFoundError):
+            # Stock hg clients send credentials only after a 401 challenge, so an
+            # anonymous miss must challenge rather than 404. Private and missing
+            # repositories get the same challenge, so this reveals nothing.
+            if basic_auth is None:
+                return self._challenge(start_response, request_id=request_id)
             return self._respond(
                 start_response,
                 status="404 Not Found",
@@ -446,6 +438,15 @@ class HgHttpGatewayApplication:
                 },
             )
             await session.commit()
+
+    def _challenge(self, start_response: StartResponse, *, request_id: str) -> list[bytes]:
+        return self._respond(
+            start_response,
+            status="401 Unauthorized",
+            body={"error": "Authentication required."},
+            request_id=request_id,
+            headers=[("WWW-Authenticate", 'Basic realm="RevForge Mercurial"')],
+        )
 
     def _respond(
         self,
