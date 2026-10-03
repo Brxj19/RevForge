@@ -44,3 +44,12 @@ repository-storage/
 .vscode/
 graphify-out/
 backend/.local/
+
+# Claude Code (personal/local)
+.claude/settings.local.json
+CLAUDE.local.md
+.claude/agent-memory-local/
+.claude/worktrees/
+
+# Security audit notes: may describe unfixed vulnerabilities; keep out of the public repo
+docs/audit/
