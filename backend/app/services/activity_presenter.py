@@ -94,7 +94,7 @@ def _format_value(key: str, value: object) -> str | None:
         return "Yes" if value else "No"
     if isinstance(value, bool):
         return "true" if value else "false"
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return str(value)
     if isinstance(value, str):
         return value
@@ -115,7 +115,7 @@ def _sanitize_mapping(data: dict[str, object] | None) -> list[ActivityDetail]:
     for key, value in data.items():
         if key in SENSITIVE_KEYS:
             continue
-        if key == "pushed_nodes":
+        if key == "pushed_nodes" and isinstance(value, list):
             details.append(ActivityDetail(label="Changesets received", value=str(len(value))))
             continue
         rendered = _format_value(key, value)

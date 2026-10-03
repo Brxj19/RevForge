@@ -7,7 +7,11 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import SessionIdentity, get_current_identity, get_session
 from app.models.audit_event import AuditEvent
-from app.schemas.audit import AuditEventListResponse, AuditEventResponse
+from app.schemas.audit import (
+    AuditEventDetailResponse,
+    AuditEventListResponse,
+    AuditEventResponse,
+)
 from app.services.activity_presenter import present_activity
 
 router = APIRouter(prefix="/audit", tags=["audit"])
@@ -51,7 +55,8 @@ async def list_audit_events(
                 request_id=event.request_id,
                 summary=presented.summary,
                 details=[
-                    {"label": detail.label, "value": detail.value} for detail in presented.details
+                    AuditEventDetailResponse(label=detail.label, value=detail.value)
+                    for detail in presented.details
                 ],
                 created_at=event.created_at,
             )

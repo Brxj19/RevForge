@@ -108,7 +108,7 @@ class RevForgeWorker:
 
         for row in webhook_rows:
             webhook_id = row[0]
-            payload = {
+            payload: dict[str, object] = {
                 "event_type": entry.event_type,
                 "repository_id": str(entry.repository_id),
                 "payload": entry.payload_json,

@@ -3,19 +3,29 @@ from __future__ import annotations
 import json
 import os
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from mercurial import error
 
 
-def deny_read_only_write(*, ui, repo, hooktype, **kwargs) -> bool:
+def deny_read_only_write(*, ui: Any, repo: Any, hooktype: bytes, **kwargs: Any) -> bool:
     permission = ui.config(b"revforge", b"transport_permission", b"read")
     if permission != b"write":
         raise error.Abort(b"write access required")
     return False
 
 
-def spool_push_event(*, ui, repo, hooktype, node=None, source=None, url=None, **kwargs) -> bool:
+def spool_push_event(
+    *,
+    ui: Any,
+    repo: Any,
+    hooktype: bytes,
+    node: bytes | str | None = None,
+    source: bytes | None = None,
+    url: bytes | None = None,
+    **kwargs: Any,
+) -> bool:
     spool_dir = ui.config(b"revforge", b"event_spool_dir")
     if not spool_dir:
         return False
@@ -32,7 +42,7 @@ def spool_push_event(*, ui, repo, hooktype, node=None, source=None, url=None, **
         source_ip = ui.config(b"revforge", b"source_ip", b"unknown").decode("utf-8")
         request_id = ui.config(b"revforge", b"request_id", str(uuid4()).encode()).decode("utf-8")
 
-        pushed_nodes = []
+        pushed_nodes: list[str] = []
         if node:
             pushed_nodes.append(node.decode("utf-8") if isinstance(node, bytes) else node)
 

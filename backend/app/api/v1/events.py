@@ -8,8 +8,10 @@ from app.api.deps import (
     get_current_identity,
     get_session,
 )
+from app.models.repository_event import RepositoryEvent
 from app.repositories.organizations import get_organization_by_slug
 from app.schemas.events import (
+    RepositoryEventDetailResponse,
     RepositoryEventListResponse,
     RepositoryEventResponse,
 )
@@ -28,7 +30,7 @@ def _get_event_service() -> EventService:
     return EventService()
 
 
-def _serialize_event(event) -> RepositoryEventResponse:
+def _serialize_event(event: RepositoryEvent) -> RepositoryEventResponse:
     presented = present_activity(
         event.event_type,
         {
@@ -46,7 +48,10 @@ def _serialize_event(event) -> RepositoryEventResponse:
         authentication_method=event.authentication_method,
         request_id=event.request_id,
         summary=presented.summary,
-        details=[{"label": detail.label, "value": detail.value} for detail in presented.details],
+        details=[
+            RepositoryEventDetailResponse(label=detail.label, value=detail.value)
+            for detail in presented.details
+        ],
         occurred_at=event.occurred_at,
     )
 

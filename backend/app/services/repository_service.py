@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import select
@@ -326,14 +327,14 @@ async def upsert_repository_permission(
         },
     )
     await session.commit()
-    permission = await session.scalar(
+    reloaded_permission = await session.scalar(
         select(RepositoryPermission)
         .options(selectinload(RepositoryPermission.user))
         .where(RepositoryPermission.id == permission.id)
     )
-    if permission is None:
+    if reloaded_permission is None:
         raise RuntimeError("Failed to reload created permission.")
-    return permission
+    return reloaded_permission
 
 
 async def delete_repository_permission(
@@ -381,7 +382,7 @@ async def delete_repository(
     actor_membership: OrganizationMember | None,
     actor_permission: RepositoryPermission | None,
     request_id: str | None,
-    repository_path,
+    repository_path: Path,
 ) -> None:
     access = repository_access_for_actor(actor, actor_membership, repository, actor_permission)
     if not access.can_manage:

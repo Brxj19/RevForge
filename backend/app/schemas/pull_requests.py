@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -114,7 +115,7 @@ class PullRequestDetailResponse(PullRequestResponse):
 
 
 class PullRequestDiffResponse(BaseModel):
-    changed_files: list[dict] = []
+    changed_files: list[dict[str, Any]] = []
     total_additions: int = 0
     total_deletions: int = 0
     total_files: int = 0

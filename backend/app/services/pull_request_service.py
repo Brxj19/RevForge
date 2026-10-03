@@ -102,7 +102,7 @@ async def update_pull_request(
         pr.description = description
     if state is not None:
         if state == PullRequestState.CLOSED:
-            pr.closed_at = func.now()  # type: ignore[name-defined]
+            pr.closed_at = func.now()
         elif state == PullRequestState.OPEN and pr.state == PullRequestState.DRAFT:
             pass
         else:
@@ -116,6 +116,7 @@ async def close_pull_request(
     session: AsyncSession,
     *,
     pull_request_id: UUID,
+    actor: User,
 ) -> PullRequest:
     return await update_pull_request(
         session,
@@ -123,6 +124,7 @@ async def close_pull_request(
         title=None,
         description=None,
         state=PullRequestState.CLOSED,
+        actor=actor,
     )
 
 
@@ -139,7 +141,7 @@ async def merge_pull_request(
     pr.state = PullRequestState.MERGED
     pr.merger_id = merger.id
     pr.merged_revision = merged_revision
-    pr.merged_at = func.now()  # type: ignore[name-defined]
+    pr.merged_at = func.now()
     await session.flush()
     return pr
 
@@ -157,7 +159,7 @@ async def list_pull_requests(
     if state is not None:
         base = base.where(PullRequest.state == state)
 
-    count_q = select(func.count()).select_from(base.subquery())  # type: ignore[name-defined]
+    count_q = select(func.count()).select_from(base.subquery())
     total = await session.scalar(count_q) or 0
     rows = await session.scalars(
         base.options(

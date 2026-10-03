@@ -251,14 +251,14 @@ async def update_member_role(
         },
     )
     await session.commit()
-    membership = await session.scalar(
+    reloaded_membership = await session.scalar(
         select(OrganizationMember)
         .options(selectinload(OrganizationMember.user))
         .where(OrganizationMember.id == membership.id)
     )
-    if membership is None:
+    if reloaded_membership is None:
         raise RuntimeError("Failed to reload updated membership.")
-    return membership
+    return reloaded_membership
 
 
 async def remove_member(

@@ -5,21 +5,26 @@ import os
 import shlex
 import sys
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from threading import Lock
 from time import monotonic
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from mercurial import hg, initialization
 from mercurial import ui as uimod
 from mercurial.wireprotoserver import sshserver
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.security import validate_slug
 from app.mercurial.errors import RepositoryStorageError
 from app.mercurial.storage_locator import RepositoryStorageLocator
+from app.models.organization import Organization
+from app.models.organization_member import OrganizationMember
+from app.models.repository import Repository
+from app.models.user import User
 from app.repositories.organizations import get_membership
 from app.services.audit import record_audit_event
 from app.services.errors import ForbiddenError, NotFoundError
@@ -29,6 +34,9 @@ from app.services.repository_service import (
     repository_is_browsable,
 )
 from app.services.transport_credentials import authenticate_ssh_public_key
+
+if TYPE_CHECKING:
+    from app.services.authorization import RepositoryAccess
 
 initialization.init()
 
@@ -90,7 +98,7 @@ class MercurialSshGateway:
         self,
         *,
         settings: Settings,
-        session_factory_getter,
+        session_factory_getter: Callable[[], async_sessionmaker[AsyncSession]],
         key_id: UUID,
     ) -> None:
         self._settings = settings
@@ -211,10 +219,10 @@ class MercurialSshGateway:
         self,
         *,
         session: AsyncSession,
-        actor,
-        repository,
-        membership,
-    ):
+        actor: User,
+        repository: Repository,
+        membership: OrganizationMember | None,
+    ) -> RepositoryAccess:
         from app.repositories.repositories import get_permission
         from app.services.authorization import repository_access_for_actor
 
@@ -222,7 +230,9 @@ class MercurialSshGateway:
         return repository_access_for_actor(actor, membership, repository, permission)
 
 
-async def get_organization_by_repo_slug(session: AsyncSession, *, organization_slug: str):
+async def get_organization_by_repo_slug(
+    session: AsyncSession, *, organization_slug: str
+) -> Organization:
     return await get_organization_by_slug_for_repo_routes(
         session, organization_slug=organization_slug
     )

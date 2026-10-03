@@ -13,6 +13,8 @@ from app.api.deps import (
     require_csrf,
 )
 from app.domain.enums import OrganizationRole
+from app.models.organization import Organization
+from app.models.organization_member import OrganizationMember
 from app.schemas.organizations import (
     OrganizationCreateRequest,
     OrganizationDetailResponse,
@@ -37,7 +39,9 @@ from app.services.organization_service import (
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 
-def _serialize_organization_summary(*, organization, membership) -> OrganizationSummary:
+def _serialize_organization_summary(
+    *, organization: Organization, membership: OrganizationMember
+) -> OrganizationSummary:
     return OrganizationSummary(
         id=organization.id,
         slug=organization.slug,
@@ -52,8 +56,8 @@ def _serialize_organization_summary(*, organization, membership) -> Organization
 
 def _serialize_organization_detail(
     *,
-    organization,
-    membership,
+    organization: Organization,
+    membership: OrganizationMember,
     member_count: int,
 ) -> OrganizationDetailResponse:
     return OrganizationDetailResponse(
@@ -69,7 +73,7 @@ def _serialize_organization_detail(
     )
 
 
-def _serialize_member(member) -> OrganizationMemberResponse:
+def _serialize_member(member: OrganizationMember) -> OrganizationMemberResponse:
     return OrganizationMemberResponse(
         id=member.id,
         organization_id=member.organization_id,

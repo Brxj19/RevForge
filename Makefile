@@ -1,4 +1,5 @@
-DEFAULT_GOAL := help
+# The leading dot is required; without it this is an ordinary variable.
+.DEFAULT_GOAL := help
 
 COMPOSE_FILE=infra/docker-compose.yml
 NPM_CONFIG_CACHE=$(CURDIR)/.cache/npm
@@ -8,7 +9,6 @@ PYTHON_BIN=$(VENV_BIN)/python
 BACKEND_BOOTSTRAP_STAMP=$(VENV_DIR)/.bootstrap-stamp
 BACKEND_DEPS_STAMP=$(VENV_DIR)/.deps-stamp
 FRONTEND_DEPS_STAMP=$(CURDIR)/frontend/node_modules/.install-stamp
-BACKEND_DEV_DEPS=pytest pytest-asyncio ruff mypy
 BACKEND_PORT=8000
 FRONTEND_PORT=5173
 FRONTEND_NODE_BIN=$(if $(wildcard /opt/homebrew/opt/node@22/bin/node),/opt/homebrew/opt/node@22/bin:,$(if $(wildcard /opt/homebrew/opt/node@23/bin/node),/opt/homebrew/opt/node@23/bin:,$(if $(wildcard /opt/homebrew/opt/node@20/bin/node),/opt/homebrew/opt/node@20/bin:,)))
@@ -44,9 +44,14 @@ $(BACKEND_BOOTSTRAP_STAMP): Makefile
 
 backend-venv: $(BACKEND_BOOTSTRAP_STAMP) ## Create the backend virtualenv
 
-$(BACKEND_DEPS_STAMP): backend/pyproject.toml Makefile | $(BACKEND_BOOTSTRAP_STAMP)
-	cd backend && .venv/bin/python -m pip install -e .
-	cd backend && .venv/bin/python -m pip install $(BACKEND_DEV_DEPS)
+# Dev tooling comes from [dependency-groups].dev in pyproject.toml, never a list kept here,
+# so local installs cannot drift from CI (`uv sync --group dev`).
+$(BACKEND_DEPS_STAMP): backend/pyproject.toml backend/uv.lock Makefile | $(BACKEND_BOOTSTRAP_STAMP)
+	cd backend && if command -v uv >/dev/null 2>&1; then \
+		uv sync --group dev; \
+	else \
+		.venv/bin/python -m pip install -e . --group dev; \
+	fi
 	touch $(BACKEND_DEPS_STAMP)
 
 backend-sync: $(BACKEND_DEPS_STAMP) ## Install backend dependencies into the virtualenv

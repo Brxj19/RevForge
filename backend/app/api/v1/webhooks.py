@@ -12,6 +12,7 @@ from app.api.deps import (
     require_csrf,
 )
 from app.models.repository import Repository
+from app.models.webhook import Webhook, WebhookDelivery
 from app.schemas.events import (
     WebhookCreateRequest,
     WebhookDeliveryResponse,
@@ -59,7 +60,7 @@ def _get_webhook_service() -> WebhookService:
     return WebhookService(get_settings())
 
 
-def _serialize_webhook(webhook) -> WebhookResponse:
+def _serialize_webhook(webhook: Webhook) -> WebhookResponse:
     return WebhookResponse(
         id=webhook.id,
         repository_id=webhook.repository_id,
@@ -72,7 +73,7 @@ def _serialize_webhook(webhook) -> WebhookResponse:
     )
 
 
-def _serialize_delivery(delivery) -> WebhookDeliveryResponse:
+def _serialize_delivery(delivery: WebhookDelivery) -> WebhookDeliveryResponse:
     return WebhookDeliveryResponse(
         id=delivery.id,
         webhook_id=delivery.webhook_id,

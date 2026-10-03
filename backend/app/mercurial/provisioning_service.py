@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +36,7 @@ def safe_provisioning_error_code(exc: Exception) -> str:
 async def provision_repository(
     session: AsyncSession,
     *,
-    repository_id,
+    repository_id: UUID,
     actor: User,
     request_id: str | None,
     storage_locator: RepositoryStorageLocator,
@@ -85,9 +86,10 @@ async def provision_repository(
             shutil.rmtree(repository_path, ignore_errors=True)
         raise ProvisioningFailedError(safe_provisioning_error_code(exc)) from exc
 
-    repository = await session.scalar(select(Repository).where(Repository.id == repository.id))
-    if repository is None:
+    reloaded = await session.scalar(select(Repository).where(Repository.id == repository.id))
+    if reloaded is None:
         raise ProvisioningFailedError("repository_not_found_after_provision")
+    repository = reloaded
     repository.provisioning_state = RepositoryProvisioningState.READY
     repository.provisioned_at = utc_now()
     repository.provisioning_error_code = None
@@ -108,7 +110,7 @@ async def provision_repository(
 async def _mark_failed(
     session: AsyncSession,
     *,
-    repository_id,
+    repository_id: UUID,
     actor: User,
     request_id: str | None,
     error_code: str,
