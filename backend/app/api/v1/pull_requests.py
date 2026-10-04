@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     SessionIdentity,
-    get_current_identity,
     get_hg_command_runner,
     get_optional_identity,
     get_repository_storage_locator,
@@ -58,6 +57,7 @@ from app.services.pull_request_service import (
 )
 from app.services.repository_service import (
     get_organization_by_slug_for_repo_routes,
+    get_repository_access_for_actor,
     get_repository_for_actor,
 )
 
@@ -77,14 +77,14 @@ async def _get_repo_for_write(
     organization = await get_organization_by_slug_for_repo_routes(
         session, organization_slug=organization_slug
     )
-    repository, _vr, can_write, _ia = await get_repository_for_actor(
+    repository, access = await get_repository_access_for_actor(
         session,
         organization=organization,
         repository_slug=repository_slug,
         actor=identity.user,
         allow_archived=False,
     )
-    if not can_write:
+    if not access.can_write:
         raise ForbiddenError("Repository write access required.")
     return repository
 
@@ -244,7 +244,7 @@ async def get_pull_request_route(
     organization_slug: str,
     repository_slug: str,
     pull_request_id: UUID,
-    identity: SessionIdentity | None = Depends(get_current_identity),
+    identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
 ) -> PullRequestDetailResponse:
     try:
@@ -514,7 +514,7 @@ async def get_pull_request_diff_route(
     organization_slug: str,
     repository_slug: str,
     pull_request_id: UUID,
-    identity: SessionIdentity | None = Depends(get_current_identity),
+    identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     command_runner: HgCommandRunner = Depends(get_hg_command_runner),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),

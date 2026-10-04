@@ -26,7 +26,11 @@ from app.repositories.repositories import (
     list_permissions_for_repository,
 )
 from app.services.audit import record_audit_event
-from app.services.authorization import organization_can_manage, repository_access_for_actor
+from app.services.authorization import (
+    RepositoryAccess,
+    organization_can_manage,
+    repository_access_for_actor,
+)
 from app.services.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailure
 from app.services.user_resolution import resolve_active_user_by_identifier
 
@@ -140,14 +144,14 @@ async def create_repository(
     return repository
 
 
-async def get_repository_for_actor(
+async def get_repository_access_for_actor(
     session: AsyncSession,
     *,
     organization: Organization,
     repository_slug: str,
     actor: User | None,
     allow_archived: bool = False,
-) -> tuple[Repository, RepositoryRole | None, bool, bool]:
+) -> tuple[Repository, RepositoryAccess]:
     repository = await get_repository_by_slug(
         session,
         organization_id=organization.id,
@@ -172,6 +176,24 @@ async def get_repository_for_actor(
     if repository.archived_at is not None and not allow_archived:
         raise NotFoundError("Repository not found.")
 
+    return repository, access
+
+
+async def get_repository_for_actor(
+    session: AsyncSession,
+    *,
+    organization: Organization,
+    repository_slug: str,
+    actor: User | None,
+    allow_archived: bool = False,
+) -> tuple[Repository, RepositoryRole | None, bool, bool]:
+    repository, access = await get_repository_access_for_actor(
+        session,
+        organization=organization,
+        repository_slug=repository_slug,
+        actor=actor,
+        allow_archived=allow_archived,
+    )
     return repository, access.viewer_role, access.can_manage, access.inherited_access
 
 

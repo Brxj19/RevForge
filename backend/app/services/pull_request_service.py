@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.security import utc_now
 from app.domain.enums import PullRequestState, ReviewDecision
 from app.models.pull_request import (
     PullRequest,
@@ -108,7 +109,7 @@ async def update_pull_request(
         pr.description = description
     if state is not None:
         if state == PullRequestState.CLOSED:
-            pr.closed_at = func.now()
+            pr.closed_at = utc_now()
         elif state == PullRequestState.OPEN and pr.state == PullRequestState.DRAFT:
             pass
         else:
@@ -152,7 +153,7 @@ async def merge_pull_request(
     pr.state = PullRequestState.MERGED
     pr.merger_id = merger.id
     pr.merged_revision = merged_revision
-    pr.merged_at = func.now()
+    pr.merged_at = utc_now()
     await session.flush()
     return pr
 
