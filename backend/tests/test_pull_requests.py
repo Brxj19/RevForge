@@ -109,15 +109,16 @@ def victim_pull_request(client) -> dict[str, str]:
     Owner A: admin of alpha/app in a different organization, no access to review/*.
     Leaves the client logged in as Owner A.
     """
+    reviewer_b_id = _register(client, "reviewer-b@example.com")
     owner_b_id = _register(client, "owner-b@example.com")
     _create_organization(client, "review")
     _create_repository(client, "review", "project")
     _create_repository(client, "review", "other")
     pull_request_id = _create_pull_request(client, _pr_base("review", "project"))
-    # Seed a reviewer so an unscoped remove-reviewer would have something to delete.
+    # Seed a (non-author) reviewer so an unscoped remove-reviewer has something to delete.
     reviewer = client.post(
         f"{_pr_base('review', 'project')}/{pull_request_id}/reviewers",
-        json={"reviewer_id": owner_b_id},
+        json={"reviewer_id": reviewer_b_id},
         headers=_csrf_headers(client),
     )
     assert reviewer.status_code == 201
@@ -129,10 +130,11 @@ def victim_pull_request(client) -> dict[str, str]:
         "pull_request_id": pull_request_id,
         "owner_a_id": owner_a_id,
         "owner_b_id": owner_b_id,
+        "reviewer_b_id": reviewer_b_id,
     }
 
 
-def _assert_victim_pull_request_untouched(client, pull_request_id: str, owner_b_id: str) -> None:
+def _assert_victim_pull_request_untouched(client, pull_request_id: str, reviewer_b_id: str) -> None:
     _login(client, "owner-b@example.com")
     detail = client.get(f"{_pr_base('review', 'project')}/{pull_request_id}")
     assert detail.status_code == 200
@@ -141,7 +143,7 @@ def _assert_victim_pull_request_untouched(client, pull_request_id: str, owner_b_
     assert body["title"] == "Add feature"
     assert body["comments"] == []
     assert body["reviews"] == []
-    assert [reviewer["reviewer_id"] for reviewer in body["reviewers"]] == [owner_b_id]
+    assert [reviewer["reviewer_id"] for reviewer in body["reviewers"]] == [reviewer_b_id]
 
 
 def _error_without_request_id(response) -> tuple[int, dict[str, object]]:
@@ -173,7 +175,9 @@ def test_pull_request_from_another_organization_is_not_reachable(
         client, _pr_base("alpha", "app"), pull_request_id, owner_b_id
     )
 
-    _assert_victim_pull_request_untouched(client, pull_request_id, owner_b_id)
+    _assert_victim_pull_request_untouched(
+        client, pull_request_id, victim_pull_request["reviewer_b_id"]
+    )
 
 
 def test_pull_request_from_another_repository_in_same_organization_is_not_reachable(
@@ -187,7 +191,9 @@ def test_pull_request_from_another_repository_in_same_organization_is_not_reacha
         client, _pr_base("review", "other"), pull_request_id, owner_b_id
     )
 
-    _assert_victim_pull_request_untouched(client, pull_request_id, owner_b_id)
+    _assert_victim_pull_request_untouched(
+        client, pull_request_id, victim_pull_request["reviewer_b_id"]
+    )
 
 
 def test_pull_request_is_still_reachable_through_its_own_repository(

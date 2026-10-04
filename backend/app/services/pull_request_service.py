@@ -137,6 +137,22 @@ async def close_pull_request(
     )
 
 
+def _enforce_merge_gate(pr: PullRequest, *, merger: User) -> None:
+    """Block a merge unless the review workflow has been satisfied."""
+    if merger.id == pr.author_id:
+        raise ConflictError("The pull request author cannot merge their own pull request.")
+    # With one review row per reviewer, any CHANGES_REQUESTED is the reviewer's
+    # current position.
+    if any(review.decision == ReviewDecision.CHANGES_REQUESTED for review in pr.reviews):
+        raise ConflictError("Pull request has unresolved change requests.")
+    approved = {
+        review.reviewer_id for review in pr.reviews if review.decision == ReviewDecision.APPROVED
+    }
+    required = {reviewer.reviewer_id for reviewer in pr.reviewers if reviewer.required}
+    if not required.issubset(approved):
+        raise ConflictError("All required reviewers must approve before merging.")
+
+
 async def merge_pull_request(
     session: AsyncSession,
     *,
@@ -150,6 +166,7 @@ async def merge_pull_request(
     )
     if pr.state != PullRequestState.OPEN:
         raise ConflictError("Only open pull requests can be merged.")
+    _enforce_merge_gate(pr, merger=merger)
     pr.state = PullRequestState.MERGED
     pr.merger_id = merger.id
     pr.merged_revision = merged_revision
@@ -279,14 +296,30 @@ async def add_review(
     )
     if pr.state != PullRequestState.OPEN:
         raise ConflictError("Only open pull requests can be reviewed.")
+    if decision == ReviewDecision.APPROVED and reviewer.id == pr.author_id:
+        raise ConflictError("Authors cannot approve their own pull request.")
 
-    review = PullRequestReview(
-        pull_request_id=pull_request_id,
-        reviewer_id=reviewer.id,
-        decision=decision,
-        body=body,
+    # One review row per reviewer (latest decision wins) so approvals cannot be
+    # inflated by repeated submissions. _load_pr_with_relations held FOR UPDATE on the
+    # parent PR, so concurrent reviews for the same PR are serialized (no INSERT race).
+    existing = await session.scalar(
+        select(PullRequestReview).where(
+            PullRequestReview.pull_request_id == pull_request_id,
+            PullRequestReview.reviewer_id == reviewer.id,
+        )
     )
-    session.add(review)
+    if existing is not None:
+        existing.decision = decision
+        existing.body = body
+        review = existing
+    else:
+        review = PullRequestReview(
+            pull_request_id=pull_request_id,
+            reviewer_id=reviewer.id,
+            decision=decision,
+            body=body,
+        )
+        session.add(review)
     await session.flush()
     return review
 
@@ -304,6 +337,8 @@ async def add_reviewer(
     )
     if pr.state != PullRequestState.OPEN:
         raise ConflictError("Cannot modify reviewers on a closed or merged PR.")
+    if reviewer_id == pr.author_id:
+        raise ConflictError("The pull request author cannot be a reviewer.")
     existing = await session.scalar(
         select(PullRequestReviewer).where(
             PullRequestReviewer.pull_request_id == pull_request_id,
