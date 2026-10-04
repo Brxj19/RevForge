@@ -43,7 +43,10 @@ if TYPE_CHECKING:
 
     from app.services.authorization import RepositoryAccess
 
+from app.mercurial.transport_security import harden_bundle2_part_handlers
+
 initialization.init()
+harden_bundle2_part_handlers()
 
 
 class TransportCommandKind(StrEnum):
@@ -102,7 +105,13 @@ class TransportRateLimiter:
 
 def classify_hg_http_command(query_string: str) -> TransportCommandKind:
     params = parse_qs(query_string, keep_blank_values=True)
-    command = params.get("cmd", [""])[0].strip().lower()
+    cmd_values = params.get("cmd", [""])
+    # hgweb dispatches the LAST cmd value; a request carrying more than one is a
+    # classification-bypass attempt (audit C12). Treat it as a write so it needs
+    # write authorization.
+    if len(cmd_values) > 1:
+        return TransportCommandKind.WRITE
+    command = cmd_values[0].strip().lower()
     if not command:
         return TransportCommandKind.WRITE
     if command == "batch":
@@ -195,7 +204,13 @@ class HgHttpGatewayApplication:
 
         baseui = uimod.ui.load()
         baseui.setconfig(b"ui", b"nontty", b"true", b"revforge")
-        baseui.setconfig(b"web", b"allow_push", b"*", b"revforge")
+        # Fail push closed in hgweb itself: only writers get allow_push. Read/anon
+        # callers get deny_push=*, so hgweb's own checkperm("push") rejects
+        # unbundle/pushkey even if the cmd classification is bypassed (audit C12).
+        if auth_result.can_write:
+            baseui.setconfig(b"web", b"allow_push", b"*", b"revforge")
+        else:
+            baseui.setconfig(b"web", b"deny_push", b"*", b"revforge")
         request_is_secure = (
             environ.get("wsgi.url_scheme") == "https"
             or environ.get("HTTP_X_FORWARDED_PROTO") == "https"
@@ -213,6 +228,7 @@ class HgHttpGatewayApplication:
             b"revforge",
         )
         for hook_name in (
+            b"pretxnopen.revforge",
             b"prechangegroup.revforge",
             b"pretxnchangegroup.revforge",
             b"prepushkey.revforge",

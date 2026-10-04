@@ -38,7 +38,10 @@ from app.services.transport_credentials import authenticate_ssh_public_key
 if TYPE_CHECKING:
     from app.services.authorization import RepositoryAccess
 
+from app.mercurial.transport_security import harden_bundle2_part_handlers
+
 initialization.init()
+harden_bundle2_part_handlers()
 
 
 @dataclass(slots=True)
@@ -164,6 +167,7 @@ class MercurialSshGateway:
                 b"revforge",
             )
             for hook_name in (
+                b"pretxnopen.revforge",
                 b"prechangegroup.revforge",
                 b"pretxnchangegroup.revforge",
                 b"prepushkey.revforge",

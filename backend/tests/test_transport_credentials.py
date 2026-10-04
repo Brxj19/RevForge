@@ -503,3 +503,139 @@ def test_http_gateway_rejects_invalid_token_before_repository_lookup(
 
     assert private[0] == 401
     assert private == missing
+
+
+def _make_stream_bundle(tmp_path: Path) -> bytes:
+    """Build a bundle carrying a mandatory stream2 part (the C12 vector)."""
+    source = tmp_path / "evil-src"
+    subprocess.run(["hg", "init", str(source)], check=True, env=_hg_env())
+    (source / "planted.txt").write_text("planted history\n", encoding="utf-8")
+    _hg(source, "commit", "-u", "Attacker <a@x>", "-Am", "planted")
+    bundle = tmp_path / "stream.hg"
+    _hg(source, "bundle", "-a", "-t", "none-v2;stream=v2", str(bundle))
+    return bundle.read_bytes()
+
+
+def _post_hg(url: str, body: bytes, *, authorization: str | None, heads_hex: str = "666f726365"):
+    request = urllib.request.Request(url, data=body, method="POST")
+    request.add_header("Content-Type", "application/mercurial-0.1")
+    request.add_header("X-HgArg-1", f"heads={heads_hex}")
+    if authorization is not None:
+        request.add_header("Authorization", authorization)
+    try:
+        with urllib.request.urlopen(request) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+
+
+def _empty_private_repo_with_read_token(client, session_factory):
+    _register(client)
+    _create_org_and_repo(client, "acme", "private")
+    token = client.post(
+        "/api/v1/me/tokens",
+        json={"name": "Read Token", "capability": "read"},
+        headers=_csrf_headers(client),
+    )
+    assert token.status_code == 201
+    return token.json()["plaintext_token"]
+
+
+def _server_changeset_count(client, org: str = "acme", repo: str = "public-repo") -> int:
+    response = client.get(f"/api/v1/organizations/{org}/repositories/{repo}/changesets")
+    assert response.status_code == 200
+    return len(response.json()["changesets"])
+
+
+def test_dangerous_bundle2_parthandlers_removed() -> None:
+    from mercurial import bundle2
+
+    import app.mercurial.http_gateway  # noqa: F401  (import hardens the process)
+
+    for part in (b"remote-changegroup", b"stream2", b"stream3-exp"):
+        assert part not in bundle2.parthandlermapping, part
+    # Normal push still works through the changegroup handler.
+    assert b"changegroup" in bundle2.parthandlermapping
+
+
+def test_read_token_cannot_stream_push_into_empty_repo(client, session_factory, tmp_path) -> None:
+    token = _empty_private_repo_with_read_token(client, session_factory)
+    bundle = _make_stream_bundle(tmp_path)
+    gateway = create_http_gateway_application(
+        settings=get_settings(), session_factory_getter=lambda: session_factory
+    )
+    with _serve_wsgi_app(gateway) as (host, port):
+        base = f"http://{host}:{port}/acme/public-repo"
+        auth = _basic("owner@example.com", token)
+        # Direct unbundle, duplicate-cmd bypass, and batch-wrapped unbundle.
+        # Direct unbundle (blocked by the write pre-check) and the duplicate-cmd
+        # classification bypass (blocked because >1 cmd => write, and by deny_push).
+        for url in (
+            f"{base}?cmd=unbundle",
+            f"{base}?cmd=capabilities&cmd=unbundle",
+        ):
+            status, _body = _post_hg(url, bundle, authorization=auth)
+            assert status in (401, 403), (url, status)
+    assert _server_changeset_count(client) == 0
+
+
+def test_anonymous_cannot_stream_push_into_empty_repo(client, session_factory, tmp_path) -> None:
+    _register(client)
+    _create_org_and_repo(client, "acme", "public")
+    bundle = _make_stream_bundle(tmp_path)
+    gateway = create_http_gateway_application(
+        settings=get_settings(), session_factory_getter=lambda: session_factory
+    )
+    with _serve_wsgi_app(gateway) as (host, port):
+        base = f"http://{host}:{port}/acme/public-repo"
+        for url in (f"{base}?cmd=unbundle", f"{base}?cmd=capabilities&cmd=unbundle"):
+            status, _body = _post_hg(url, bundle, authorization=None)
+            assert status in (401, 403), (url, status)
+    assert _server_changeset_count(client) == 0
+
+
+def test_stream_clone_serving_still_works(client, session_factory, tmp_path) -> None:
+    """Removing the stream2 unbundle handler must not break serving stream clones."""
+    _register(client)
+    _create_org_and_repo(client, "acme", "public")
+    from app.mercurial.storage_locator import RepositoryStorageLocator
+    from app.models.repository import Repository
+
+    repo = _run_query(session_factory, select(Repository).where(Repository.slug == "public-repo"))
+    assert repo is not None
+
+    _seed_repository(RepositoryStorageLocator(get_settings()).repository_path(repo))
+    gateway = create_http_gateway_application(
+        settings=get_settings(), session_factory_getter=lambda: session_factory
+    )
+    with _serve_wsgi_app(gateway) as (host, port):
+        dest = tmp_path / "streamed"
+        clone = subprocess.run(
+            ["hg", "clone", "--stream", f"http://{host}:{port}/acme/public-repo", str(dest)],
+            env=_hg_env(),
+            capture_output=True,
+            text=True,
+        )
+        assert clone.returncode == 0, clone.stderr
+        assert (dest / "src" / "hello.py").is_file()
+
+
+def test_deny_read_only_write_hook_blocks_read_sessions() -> None:
+    """The deny hook guarding write on both transports (the only SSH gate)."""
+    from mercurial import error as hgerror
+    from mercurial import ui as uimod
+
+    from app.mercurial.transport_hooks import deny_read_only_write
+
+    read_ui = uimod.ui.load()
+    read_ui.setconfig(b"revforge", b"transport_permission", b"read", b"revforge")
+    try:
+        deny_read_only_write(ui=read_ui, repo=None, hooktype=b"pretxnopen", txnname=b"push")
+        raise AssertionError("read session should have been denied")
+    except hgerror.Abort:
+        pass
+
+    write_ui = uimod.ui.load()
+    write_ui.setconfig(b"revforge", b"transport_permission", b"write", b"revforge")
+    # Write session: hook returns falsy (does not abort).
+    assert not deny_read_only_write(ui=write_ui, repo=None, hooktype=b"pretxnopen", txnname=b"push")
