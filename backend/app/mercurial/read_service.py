@@ -139,9 +139,21 @@ class MercurialReadService:
         normalized_path = validate_repository_relative_path(path)
         repo = self._open_repository(repository_path)
         node = await self.resolve_revision(repository_path, revision)
+        if normalized_path == "" or normalized_path not in self._manifest_paths(
+            repo[node.encode("ascii")]
+        ):
+            raise MercurialNotFoundError()
         try:
             payload = await self._command_runner.run_json(
-                ["annotate", "-Tjson", "-unf", "-r", node, "--", normalized_path],
+                [
+                    "annotate",
+                    "-Tjson",
+                    "-unf",
+                    "-r",
+                    node,
+                    "--",
+                    _literal_pathspec(normalized_path),
+                ],
                 repository_path=repository_path,
                 stdout_limit=max(
                     self._settings.max_file_content_bytes * 4,
@@ -251,7 +263,7 @@ class MercurialReadService:
     async def _read_file(self, repository_path: Path, *, node: str, path: str) -> HgFileBrowse:
         try:
             result = await self._command_runner.run(
-                ["cat", "-r", node, "--", path],
+                ["cat", "-r", node, "--", _literal_pathspec(path)],
                 repository_path=repository_path,
                 stdout_limit=self._settings.max_file_content_bytes,
             )
@@ -510,7 +522,7 @@ class MercurialReadService:
         for path in paths:
             try:
                 result = await self._command_runner.run(
-                    ["diff", "--stat", "-c", node, "--", path],
+                    ["diff", "--stat", "-c", node, "--", _literal_pathspec(path)],
                     repository_path=repository_path,
                     stdout_limit=self._settings.hg_max_stdout_bytes,
                 )
@@ -524,6 +536,17 @@ class MercurialReadService:
             stats_by_path[path] = (diffstat.insertions, diffstat.deletions)
 
         return stats_by_path
+
+
+def _literal_pathspec(normalized_path: str) -> str:
+    """Return an hg pattern that matches exactly this path.
+
+    hg treats bare file arguments as patterns even after ``--`` (``listfile:``,
+    ``set:``, ``re:``, ``glob:`` prefixes), so a validated relative path must be
+    passed with an explicit ``path:`` prefix to be interpreted literally
+    (audit C4; see .claude/rules/mercurial.md).
+    """
+    return f"path:{normalized_path}"
 
 
 def validate_repository_relative_path(value: str | None) -> str:
