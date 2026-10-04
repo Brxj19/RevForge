@@ -10,6 +10,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.db.session import SessionLocal
+from app.mercurial.body_limit import BodySizeLimitMiddleware
 from app.mercurial.http_gateway_service import create_http_gateway_application
 
 
@@ -36,11 +37,14 @@ def create_application() -> FastAPI:
     application.state.transport_session_factory_holder = session_factory_holder
     application.mount(
         settings.hg_http_base_path,
-        WSGIMiddleware(
-            create_http_gateway_application(
-                settings=settings,
-                session_factory_getter=lambda: session_factory_holder["factory"],
-            )
+        BodySizeLimitMiddleware(
+            WSGIMiddleware(
+                create_http_gateway_application(
+                    settings=settings,
+                    session_factory_getter=lambda: session_factory_holder["factory"],
+                )
+            ),
+            max_bytes=settings.transport_max_body_bytes,
         ),
     )
 

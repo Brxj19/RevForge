@@ -55,6 +55,9 @@ class Settings(BaseSettings):
         default=15,
         alias="REVFORGE_HG_COMMAND_TIMEOUT_SECONDS",
     )
+    transport_max_body_bytes: int = Field(
+        default=268435456, alias="REVFORGE_TRANSPORT_MAX_BODY_BYTES"
+    )
     hg_max_stdout_bytes: int = Field(default=524288, alias="REVFORGE_HG_MAX_STDOUT_BYTES")
     hg_max_stderr_bytes: int = Field(default=65536, alias="REVFORGE_HG_MAX_STDERR_BYTES")
     max_diff_bytes: int = Field(default=262144, alias="REVFORGE_MAX_DIFF_BYTES")
@@ -157,6 +160,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "hg_command_timeout_seconds",
+        "transport_max_body_bytes",
         "hg_max_stdout_bytes",
         "hg_max_stderr_bytes",
         "max_diff_bytes",
