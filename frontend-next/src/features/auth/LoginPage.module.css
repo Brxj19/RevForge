@@ -1,0 +1,31 @@
+.auth {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 20px;
+  padding: 24px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 15px var(--display);
+  letter-spacing: 0.04em;
+}
+.mark {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-2);
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+}
+.card {
+  width: 380px;
+  max-width: 100%;
+}
+.body {
+  display: grid;
+  gap: 14px;
+}
