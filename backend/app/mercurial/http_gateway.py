@@ -5,7 +5,7 @@ import base64
 import json
 import os
 from collections import defaultdict
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Iterable, Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 from threading import Lock
@@ -54,6 +54,10 @@ class TransportCommandKind(StrEnum):
     WRITE = "write"
 
 
+class RateLimitExceeded(Exception):
+    """Too many failed transport authentication attempts for a key."""
+
+
 READ_ONLY_COMMANDS = {
     "batch",
     "bookmarks",
@@ -91,16 +95,21 @@ class TransportRateLimiter:
         self._attempts: dict[str, list[float]] = defaultdict(list)
         self._lock = Lock()
 
-    def allow(self, key: str) -> bool:
+    def is_blocked(self, key: str) -> bool:
         now = monotonic()
         window_start = now - self._window_seconds
         with self._lock:
             attempts = [attempt for attempt in self._attempts[key] if attempt >= window_start]
             self._attempts[key] = attempts
-            if len(attempts) >= self._max_attempts:
-                return False
+            return len(attempts) >= self._max_attempts
+
+    def register_failure(self, key: str) -> None:
+        now = monotonic()
+        window_start = now - self._window_seconds
+        with self._lock:
+            attempts = [attempt for attempt in self._attempts[key] if attempt >= window_start]
             attempts.append(now)
-            return True
+            self._attempts[key] = attempts
 
 
 def classify_hg_http_command(query_string: str) -> TransportCommandKind:
@@ -152,7 +161,7 @@ class HgHttpGatewayApplication:
             window_seconds=settings.transport_rate_limit_window_seconds,
         )
 
-    def __call__(self, environ: dict[str, Any], start_response: StartResponse) -> list[bytes]:
+    def __call__(self, environ: dict[str, Any], start_response: StartResponse) -> Iterable[bytes]:
         request_id = environ.get("HTTP_X_REQUEST_ID") or str(uuid4())
         path_info = environ.get("PATH_INFO", "")
         path_segments = [segment for segment in path_info.split("/") if segment]
@@ -199,6 +208,13 @@ class HgHttpGatewayApplication:
                 start_response,
                 status="403 Forbidden",
                 body={"error": "Access denied."},
+                request_id=request_id,
+            )
+        except RateLimitExceeded:
+            return self._respond(
+                start_response,
+                status="429 Too Many Requests",
+                body={"error": "Too many failed authentication attempts."},
                 request_id=request_id,
             )
 
@@ -291,22 +307,27 @@ class HgHttpGatewayApplication:
         if "SERVER_PORT" in hg_environ:
             hg_environ["SERVER_PORT"] = str(hg_environ["SERVER_PORT"])
         result = hg_app(hg_environ, capture_start_response)
-        try:
-            payload = list(result)
-        finally:
-            close = getattr(result, "close", None)
-            if callable(close):
-                close()
-        self._run_coroutine(
-            self._record_access(
-                request_id=request_id,
-                organization_slug=organization_slug,
-                repository_slug=repository_slug,
-                auth_result=auth_result,
-                status=status_headers.get("status", "200 OK"),
-            )
-        )
-        return payload
+
+        def _stream() -> Iterator[bytes]:
+            # Stream hg output chunk by chunk instead of buffering the whole
+            # response in memory (audit C9: large clones must not exhaust RAM).
+            try:
+                yield from result
+            finally:
+                close = getattr(result, "close", None)
+                if callable(close):
+                    close()
+                self._run_coroutine(
+                    self._record_access(
+                        request_id=request_id,
+                        organization_slug=organization_slug,
+                        repository_slug=repository_slug,
+                        auth_result=auth_result,
+                        status=status_headers.get("status", "200 OK"),
+                    )
+                )
+
+        return _stream()
 
     def _run_coroutine[T](self, coroutine: Coroutine[Any, Any, T]) -> T:
         try:
@@ -337,15 +358,21 @@ class HgHttpGatewayApplication:
             if basic_auth is not None:
                 username, password = basic_auth
                 limiter_key = f"http:{remote_addr}:{username}"
-                if not self._rate_limiter.allow(limiter_key):
-                    raise ForbiddenError("Rate limit exceeded.")
-                actor, token = await authenticate_personal_access_token(
-                    session,
-                    settings=self._settings,
-                    username=username,
-                    raw_token=password,
-                    request_id=request_id,
-                )
+                if self._rate_limiter.is_blocked(limiter_key):
+                    raise RateLimitExceeded("Too many failed authentication attempts.")
+                try:
+                    actor, token = await authenticate_personal_access_token(
+                        session,
+                        settings=self._settings,
+                        username=username,
+                        raw_token=password,
+                        request_id=request_id,
+                    )
+                except AuthenticationError:
+                    # Count only failures so legitimate multi-request clones/pulls
+                    # and CI are never throttled (audit C9).
+                    self._rate_limiter.register_failure(limiter_key)
+                    raise
 
             organization = await get_organization_by_repo_slug(
                 session, organization_slug=organization_slug

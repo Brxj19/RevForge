@@ -639,3 +639,79 @@ def test_deny_read_only_write_hook_blocks_read_sessions() -> None:
     write_ui.setconfig(b"revforge", b"transport_permission", b"write", b"revforge")
     # Write session: hook returns falsy (does not abort).
     assert not deny_read_only_write(ui=write_ui, repo=None, hooktype=b"pretxnopen", txnname=b"push")
+
+
+def _small_limit_settings(monkeypatch, max_attempts: int):
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("REVFORGE_TRANSPORT_RATE_LIMIT_MAX_ATTEMPTS", str(max_attempts))
+    get_settings.cache_clear()
+    return get_settings()
+
+
+def test_successful_token_requests_are_not_rate_limited(
+    client, session_factory, monkeypatch, tmp_path
+) -> None:
+    # C9: many successful authenticated reads must not trip the limiter.
+    from app.mercurial.storage_locator import RepositoryStorageLocator
+    from app.models.repository import Repository
+
+    _register(client)
+    _create_org_and_repo(client, "acme", "private")
+    repo = _run_query(session_factory, select(Repository).where(Repository.slug == "public-repo"))
+    _seed_repository(RepositoryStorageLocator(get_settings()).repository_path(repo))
+    token = client.post(
+        "/api/v1/me/tokens",
+        json={"name": "Read Token", "capability": "read"},
+        headers=_csrf_headers(client),
+    ).json()["plaintext_token"]
+
+    settings = _small_limit_settings(monkeypatch, 3)
+    gateway = create_http_gateway_application(
+        settings=settings, session_factory_getter=lambda: session_factory
+    )
+    auth = _basic("owner@example.com", token)
+    with _serve_wsgi_app(gateway) as (host, port):
+        url = f"http://{host}:{port}/acme/public-repo"
+        for _ in range(6):  # well over max_attempts=3
+            status, _hdr, _body = _hg_status(url, auth)
+            assert status == 200, status
+
+
+def test_repeated_bad_tokens_are_rate_limited_429(client, session_factory, monkeypatch) -> None:
+    _register(client)
+    _create_org_and_repo(client, "acme", "private")
+    settings = _small_limit_settings(monkeypatch, 3)
+    gateway = create_http_gateway_application(
+        settings=settings, session_factory_getter=lambda: session_factory
+    )
+    bad = _basic("owner@example.com", "wrong-token")
+    with _serve_wsgi_app(gateway) as (host, port):
+        url = f"http://{host}:{port}/acme/public-repo"
+        statuses = [_hg_status(url, bad)[0] for _ in range(6)]
+    assert 429 in statuses, statuses
+
+
+def test_valid_token_blocked_once_key_is_rate_limited(client, session_factory, monkeypatch) -> None:
+    # Proves the limiter blocks BEFORE auth: once the (ip, username) key is
+    # blocked by failures, even the correct token is refused with 429.
+    _register(client)
+    _create_org_and_repo(client, "acme", "public")
+    token = client.post(
+        "/api/v1/me/tokens",
+        json={"name": "Read Token", "capability": "read"},
+        headers=_csrf_headers(client),
+    ).json()["plaintext_token"]
+
+    settings = _small_limit_settings(monkeypatch, 3)
+    gateway = create_http_gateway_application(
+        settings=settings, session_factory_getter=lambda: session_factory
+    )
+    bad = _basic("owner@example.com", "wrong-token")
+    good = _basic("owner@example.com", token)
+    with _serve_wsgi_app(gateway) as (host, port):
+        url = f"http://{host}:{port}/acme/public-repo"
+        for _ in range(4):  # exhaust the failure budget (max=3)
+            _hg_status(url, bad)
+        blocked_status, _hdr, _body = _hg_status(url, good)
+    assert blocked_status == 429, blocked_status
