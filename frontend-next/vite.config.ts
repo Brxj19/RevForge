@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 
 // Where the dev server proxies /api. Compose sets it to the backend service.
-const apiTarget = process.env.REVFORGE_API_PROXY_TARGET ?? "http://localhost:8000";
+const apiTarget =
+  process.env.REVFORGE_API_PROXY_TARGET ?? "http://localhost:8000";
 
 const pkg = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),

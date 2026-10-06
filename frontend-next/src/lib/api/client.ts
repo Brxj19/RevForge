@@ -42,11 +42,21 @@ export function path(
 ): string {
   return strings.reduce(
     (acc, s, i) =>
-      acc +
-      s +
-      (i < values.length ? encodeURIComponent(String(values[i])) : ""),
+      acc + s + (i < values.length ? encodeSegment(values[i]) : ""),
     "",
   );
+}
+
+/**
+ * encodeURIComponent leaves "." and ".." alone, and URL resolution treats them (and %2E%2E) as dot
+ * segments: …/repositories/.. would call …/organizations/sigma/. No valid slug is a dot segment,
+ * so refuse to build the request at all.
+ */
+function encodeSegment(value: string | number | undefined): string {
+  const s = String(value ?? "");
+  if (s === "." || s === "..")
+    throw new ApiError("Invalid path segment.", 400, { code: "invalid_path" });
+  return encodeURIComponent(s);
 }
 
 /** Appends a query string, dropping undefined/null/empty values. */
@@ -156,9 +166,9 @@ export async function request<T>(
   return (await response.json()) as T;
 }
 
-/** True for errors worth retrying: network failures and 5xx (F3). */
+/** True for errors worth retrying: network failures and 5xx (F3). Bugs and bad JSON are not. */
 export function isRetryable(error: unknown): boolean {
   return (
-    !(error instanceof ApiError) || error.status === 0 || error.status >= 500
+    error instanceof ApiError && (error.status === 0 || error.status >= 500)
   );
 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import traceback
 from collections.abc import Mapping
 from typing import Any
 
@@ -78,13 +79,15 @@ def register_exception_handlers(application: FastAPI) -> None:
 
     @application.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        # Path only: query strings can carry tokens and must stay out of logs.
-        logger.exception(
+        # Path only: query strings can carry tokens. The exception message is left out too
+        # (it can embed bound parameters or user input); type and stack are enough to debug.
+        logger.error(
             "request.unhandled_exception",
             request_id=_request_id(request),
             method=request.method,
             path=request.url.path,
-            exc_info=exc,
+            error_type=type(exc).__name__,
+            stack="".join(traceback.format_tb(exc.__traceback__)),
         )
         return _error_response(
             request,

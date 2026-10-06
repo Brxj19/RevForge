@@ -9,6 +9,15 @@ describe("path (F7)", () => {
       "/organizations/a%2Fb/repositories/..%2Fx%3Fy%23z",
     );
   });
+  it("refuses dot segments that would change the endpoint", () => {
+    expect(() => path`/organizations/${"sigma"}/repositories/${".."}`).toThrow(
+      ApiError,
+    );
+    expect(() => path`/r/${"."}`).toThrow("Invalid path segment.");
+    expect(path`/r/${"..."}`).toBe("/r/...");
+    expect(path`/r/${".hgignore"}`).toBe("/r/.hgignore");
+  });
+
   it("builds query strings without empty values", () => {
     expect(
       withQuery("/browse", {
@@ -116,5 +125,7 @@ describe("isRetryable (F3)", () => {
     expect(isRetryable(new ApiError("x", 401))).toBe(false);
     expect(isRetryable(new ApiError("x", 404))).toBe(false);
     expect(isRetryable(new ApiError("x", 429))).toBe(false);
+    expect(isRetryable(new SyntaxError("Unexpected token"))).toBe(false);
+    expect(isRetryable(new TypeError("bug in queryFn"))).toBe(false);
   });
 });

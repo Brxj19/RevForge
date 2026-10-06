@@ -30,16 +30,16 @@ npx vitest run src/features/<area>   # one area
 
 ## Layout
 
-| Path | What |
-|---|---|
-| `src/styles/` | Global CSS: reset, tokens (DESIGN.md §3), base, code colours, fonts (self-hosted) |
-| `src/ui/` | Design-system primitives; the UI kit at `/dev/ui` shows every one. No API calls. |
-| `src/ui/icons`, `src/ui/illustrations` | UI icons, file/folder icons and the 31 illustrations, ported from the prototype |
-| `src/lib/api/` | `request()`, `ApiError` (error envelope + `request_id`), `path` encoder, endpoint modules, types |
-| `src/lib/` | Query keys, `useUrlState`, keyboard shortcuts, formatting, safe-href, graph lanes |
-| `src/app/` | Providers, query-client policy, auth (session restore, expiry dialog, guards), shell, routes |
-| `src/features/` | One folder per area. Phase 0 ships `palette`, `dev-ui`, `errors`, an interim `auth/LoginPage` and placeholders |
-| `src/mocks/` | MSW handlers and fixtures (prototype demo data) |
+| Path                                   | What                                                                                                           |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `src/styles/`                          | Global CSS: reset, tokens (DESIGN.md §3), base, code colours, fonts (self-hosted)                              |
+| `src/ui/`                              | Design-system primitives; the UI kit at `/dev/ui` shows every one. No API calls.                               |
+| `src/ui/icons`, `src/ui/illustrations` | UI icons, file/folder icons and the 31 illustrations, ported from the prototype                                |
+| `src/lib/api/`                         | `request()`, `ApiError` (error envelope + `request_id`), `path` encoder, endpoint modules, types               |
+| `src/lib/`                             | Query keys, `useUrlState`, keyboard shortcuts, formatting, safe-href, graph lanes                              |
+| `src/app/`                             | Providers, query-client policy, auth (session restore, expiry dialog, guards), shell, routes                   |
+| `src/features/`                        | One folder per area. Phase 0 ships `palette`, `dev-ui`, `errors`, an interim `auth/LoginPage` and placeholders |
+| `src/mocks/`                           | MSW handlers and fixtures (prototype demo data)                                                                |
 
 Every route in the screen map resolves today; screens not built yet show a "Not built yet" placeholder
 naming their phase.

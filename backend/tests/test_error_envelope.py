@@ -43,7 +43,8 @@ def test_http_exception_headers_are_preserved(client: TestClient) -> None:
 def test_unhandled_exception_is_logged_with_request_id(client: TestClient) -> None:
     @client.app.get("/__test__/boom")
     async def boom() -> None:
-        raise RuntimeError("kaboom")
+        value = "hunter2" + "-pw"  # built at runtime, like real request data
+        raise RuntimeError(f"kaboom password={value}")
 
     quiet = TestClient(client.app, raise_server_exceptions=False)
     with capture_logs() as logs:
@@ -59,4 +60,7 @@ def test_unhandled_exception_is_logged_with_request_id(client: TestClient) -> No
     assert events[0]["request_id"] == "req-500"
     assert events[0]["path"] == "/__test__/boom"
     assert events[0]["log_level"] == "error"
+    assert events[0]["error_type"] == "RuntimeError"
+    assert "boom" in events[0]["stack"]
     assert "secret" not in repr(events[0])
+    assert "hunter2" not in repr(events[0])
