@@ -8,7 +8,7 @@ RevForge is not a Kallithea fork and not a custom version-control system. Use Ka
 
 ## Product and architecture baseline
 
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS, TanStack Query, React Router.
+- **Frontend:** SolidJS 1.9, TypeScript, Vite, `@solidjs/router`, TanStack Solid Query, Kobalte, CSS Modules over design tokens, CodeMirror 6 (ADR-007). New work goes in `frontend-next/`; the React app in `frontend/` is frozen (security fixes only) until cutover.
 - **Control plane:** Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, Pydantic.
 - **Protocol layer:** a dedicated WSGI-compatible Mercurial HTTP gateway; do not funnel native Mercurial wire-protocol requests through ad hoc FastAPI endpoints.
 - **SSH:** OpenSSH plus a constrained forced-command gateway; never use a general interactive shell account for repository access.
@@ -34,7 +34,7 @@ RevForge is not a Kallithea fork and not a custom version-control system. Use Ka
 ```text
 revforge/
 ├── apps/
-│   ├── web/                       # React application
+│   ├── web/                       # web application (today: frontend-next/, SolidJS)
 │   ├── api/                       # FastAPI control plane
 │   ├── hg_http_gateway/           # WSGI-compatible Mercurial protocol gateway
 │   ├── ssh_gateway/               # OpenSSH forced-command executable
@@ -71,7 +71,7 @@ Before declaring a task complete:
 4. Verify authorization separately for `read`, `write`, `admin`, unauthenticated, wrong-organization, suspended-user, and archived-repository cases when relevant.
 5. For protocol work, test with real `hg` client commands against a disposable repository. Never treat mocked protocol tests as sufficient.
 6. For data migrations, test forward migration and document rollback or recovery behaviour.
-7. For frontend changes, verify keyboard flow, narrow viewport behaviour, empty/loading/error states, and dark/light visual consistency.
+7. For frontend changes, verify keyboard flow, narrow viewport behaviour, empty/loading/error/denied/anonymous states, and match the prototype (`docs/design/revforge-prototype.html`). The UI is dark-only.
 8. Summarize changed files, validation commands, known limitations, and any follow-up work.
 
 ## Definition of permissions
@@ -93,7 +93,7 @@ Do not overload “owner” as a role without defining exactly which permissions
 
 Work directly when the change is isolated, has one clear owner area, and can be validated locally. Read the relevant skill first when one matches the task.
 
-Examples: a React table state fix, a repository-slug validation bug, one migration, a focused unit test, documentation correction.
+Examples: a frontend table state fix, a repository-slug validation bug, one migration, a focused unit test, documentation correction.
 
 ### For medium or high-risk tasks
 
@@ -142,7 +142,7 @@ For large work, record the decision in `docs/adr/` before implementation.
 Spawn no more than two write-capable agents in parallel unless their file ownership is completely disjoint.
 
 - **`backend-platform-engineer`** owns API, domain, migrations, policy code, and worker changes.
-- **`frontend-product-engineer`** owns React, design-system components, interactions, accessibility, and frontend tests.
+- **`frontend-product-engineer`** owns `frontend-next/` (SolidJS), design-system components, interactions, accessibility, MSW mocks, and frontend tests.
 - **`mercurial-protocol-expert`** owns `mercurial_adapter`, HTTP gateway, SSH gateway, hook, and native-client integration changes.
 - **`platform-operations-engineer`** owns Docker Compose, proxy configuration, runbooks, backups, observability, and deployment scripts.
 
@@ -195,7 +195,9 @@ Spawn the codebase explorer, mercurial protocol expert, and security reviewer in
 
 ## Frontend rules
 
-- Follow `DESIGN.md` and use the shared UI package rather than duplicating primitives.
+- Follow `DESIGN.md` (v3) and the prototype `docs/design/revforge-prototype.html`; never follow `docs/design/archive/`.
+- Use the `revforge-frontend` skill for how to build UI and the `revforge-ui-migration` skill for what to build next and which audit items pair with it.
+- Build from primitives in `frontend-next/src/ui/` rather than duplicating them.
 - Optimize for dense code/history information, not marketing-dashboard aesthetics.
 - Keep primary actions obvious: Clone, Browse, Compare, Create review, Push guidance, Settings.
 - Provide an accessible non-colour indicator for state; status colour alone is insufficient.

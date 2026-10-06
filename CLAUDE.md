@@ -8,12 +8,13 @@ AGENTS.md wins on product/security rules; this file wins on tooling mechanics.
 
 ## Commands (run from repo root)
 
-- Backend deps: `make backend-sync` · Frontend deps: `make frontend-install`
+- Backend deps: `make backend-sync` · Frontend deps: `make next-install` (SolidJS app in `frontend-next/`; `make frontend-install` is the frozen React app)
 - Full gates: `make format`, `make lint`, `make typecheck`, `make test`
 - Targeted backend test: `cd backend && .venv/bin/python -m pytest tests/<file>.py -k <name>`
-- Targeted frontend test: `cd frontend && npx vitest run src/test/<file>`
+- Targeted frontend test: `cd frontend-next && npx vitest run src/features/<area>`
+- Frontend dev: `make next-dev` (real API) · `make next-dev-mock` (MSW mocks, no backend needed)
 - Stack: `make up` / `make down` / `make logs` · Migrations: `make migrate`, `make migration name="..."`
-- Slash commands in this repo: `/check`, `/audit <area>`, `/fix-bug <description>`, `/ship`
+- Slash commands in this repo: `/check`, `/audit <area>`, `/fix-bug <description>`, `/port-screen <screen>`, `/ship`
 
 ## Subagents (replaces the Codex "spawn" workflow)
 
@@ -41,6 +42,13 @@ Codex agent names map to Claude subagents in `.claude/agents/`:
 - A PostToolUse hook auto-formats edited files (ruff / prettier); don't fight it.
 - Skills live in `.claude/skills/` and are synced from `.agents/skills/` by
   `scripts/sync-agent-skills.sh`. Edit skills in `.agents/skills/`, then re-run the script.
+
+## Frontend migration (SolidJS)
+
+- Design contract: `DESIGN.md` + `docs/design/revforge-prototype.html` (open it; its *Screens & API map* page lists every route).
+- Skills: `revforge-frontend` (how to build), `revforge-ui-migration` (phase order, screen ↔ endpoint ↔ audit map, cutover).
+- Pair each screen with its backend endpoints and I/F/U audit items in one phase; frontend may start on MSW mocks marked `API-GAP`.
+- Never edit `frontend/` except for security fixes.
 
 ## Git delivery
 
