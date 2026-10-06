@@ -245,6 +245,25 @@ async def create_ssh_public_key(
         select(SshPublicKey).where(SshPublicKey.fingerprint_sha256 == fingerprint)
     )
     if existing is not None:
+        # A revoked key owned by the same user can be reactivated (the fingerprint
+        # is globally unique, so it cannot be re-inserted otherwise). A key owned by
+        # anyone else, or an active key, still conflicts — without revealing owner.
+        if existing.user_id == user.id and existing.revoked_at is not None:
+            existing.revoked_at = None
+            existing.label = normalized_label
+            await session.flush()
+            await record_audit_event(
+                session,
+                event_type="ssh_key.reactivated",
+                actor_user_id=user.id,
+                request_id=request_id,
+                metadata_json={"key_label": normalized_label},
+            )
+            await session.commit()
+            if authorized_keys_output_path is not None:
+                await sync_authorized_keys(session, output_path=authorized_keys_output_path)
+            await session.refresh(existing)
+            return existing
         raise ConflictError("SSH public key already exists.")
 
     key = SshPublicKey(
