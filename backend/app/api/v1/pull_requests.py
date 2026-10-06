@@ -41,8 +41,14 @@ from app.schemas.pull_requests import (
     PullRequestReviewResponse,
     PullRequestUpdateRequest,
 )
-from app.services.errors import ConflictError, ForbiddenError, NotFoundError
+from app.services.errors import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailure,
+)
 from app.services.pr_diff_service import compute_diff
+from app.services.pr_merge_service import verify_landed_merge
 from app.services.pull_request_service import (
     add_comment,
     add_review,
@@ -581,11 +587,12 @@ async def merge_pull_request_route(
             identity=identity,
         )
         pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pull_request_id)
-        head_result = await command_runner.run(
-            ["identify", "--rev", pr.source_revision, "--id"],
+        merged_revision = await verify_landed_merge(
+            command_runner,
             repository_path=storage_locator.repository_path(repo),
+            source_revision=pr.source_revision,
+            target_revision=pr.target_revision,
         )
-        merged_revision = head_result.stdout.decode("utf-8").strip()
 
         pr = await merge_pull_request(
             session,
@@ -605,6 +612,11 @@ async def merge_pull_request_route(
     except ConflictError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValidationFailure as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
     except HgCommandFailedError as exc:
         await session.rollback()
         raise HTTPException(
