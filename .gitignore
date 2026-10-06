@@ -52,4 +52,4 @@ CLAUDE.local.md
 .claude/worktrees/
 
 # Security audit notes: may describe unfixed vulnerabilities; keep out of the public repo
-docs/audit/
+scratch.txt
