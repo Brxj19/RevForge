@@ -25,10 +25,10 @@ Scaffold (phase-0-setup.md), tokens, every `ui/` primitive + `/dev/ui` kit, icon
 
 | Screen / piece | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| UI kit | `#/ui`, `#/illustrations` | `dev-ui` | — | U-items via primitives | todo |
-| App shell, sidebar, pins | any page | `app/shell` | ✅ `GET /auth/me` · 🆕 `GET/PUT /me/pins` | — | todo |
-| Auth state & session | — | `app/auth` | ✅ `/auth/login` `/auth/logout` `/auth/csrf` `/auth/me` | F1, F2, F3 | todo |
-| Error envelope parsing | — | `lib/api/client` | 🔁 all errors carry `request_id` | I1 | todo |
+| UI kit | `#/ui`, `#/illustrations` | `dev-ui` | — | U-items via primitives | done (`/dev/ui`, `/dev/illustrations`) |
+| App shell, sidebar, pins | any page | `app/shell` | ✅ `GET /auth/me` · 🆕 `GET/PUT /me/pins` (API-GAP: pins — MSW + local fallback) | — | done (frontend; pins endpoint open) |
+| Auth state & session | — | `app/auth` | ✅ `/auth/login` `/auth/logout` `/auth/csrf` `/auth/me` | F1, F2, F3 | done |
+| Error envelope parsing | — | `lib/api/client` | 🔁 all errors carry `request_id` | I1 | done |
 
 ## Phase 1 — Repository read path
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
