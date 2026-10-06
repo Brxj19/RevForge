@@ -1,0 +1,33 @@
+.card {
+  z-index: 86;
+  width: 440px;
+  max-width: calc(100vw - 16px);
+  background: var(--hovercard-bg);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-hovercard);
+  font-size: 13px;
+  overflow: hidden;
+  animation: hcin var(--t-fast) ease-out;
+}
+.sec {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.sec:last-child {
+  border-bottom: 0;
+}
+.sec[data-tone="actions"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 12.5px;
+  background: var(--raised);
+}
+@keyframes hcin {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}

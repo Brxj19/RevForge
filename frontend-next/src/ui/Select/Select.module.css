@@ -1,0 +1,60 @@
+.root {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+/* Custom select trigger (prototype .dd). Native <select> is never used (DESIGN.md §6). */
+.dd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r);
+  background: var(--raised);
+  font-size: 13px;
+  color: var(--text);
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+}
+.dd:hover:not(:disabled) {
+  border-color: var(--border-3);
+}
+.dd[data-expanded] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.dd:disabled {
+  opacity: 0.5;
+}
+.dd[data-size="sm"] {
+  height: 28px;
+  font-size: 12.5px;
+}
+.lead {
+  display: grid;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.v {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v:empty::before,
+.v [data-placeholder-shown] {
+  color: var(--subtle);
+}
+.chev {
+  display: grid;
+  color: var(--muted);
+  transition: transform var(--t-base);
+}
+.dd[data-expanded] .chev {
+  transform: rotate(180deg);
+}

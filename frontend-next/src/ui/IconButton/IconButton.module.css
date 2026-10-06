@@ -1,0 +1,29 @@
+.root {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: none;
+  color: var(--text-2);
+  flex-shrink: 0;
+  padding: 0;
+}
+.root:hover:not(:disabled),
+.root[data-expanded] {
+  background: var(--hover);
+  color: var(--text);
+}
+.root:disabled {
+  opacity: 0.5;
+}
+.root[data-size="sm"] {
+  width: 28px;
+  height: 28px;
+}
+.root[data-size="xs"] {
+  width: 24px;
+  height: 24px;
+}

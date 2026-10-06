@@ -1,0 +1,28 @@
+.control {
+  cursor: text;
+}
+.control:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  color: var(--text);
+  font-size: inherit;
+  padding: 0;
+}
+.input::placeholder {
+  color: var(--subtle);
+}
+.trigger {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+}

@@ -1,0 +1,4 @@
+.fi {
+  flex-shrink: 0;
+  display: block;
+}

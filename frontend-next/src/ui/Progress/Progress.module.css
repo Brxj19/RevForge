@@ -1,0 +1,25 @@
+.track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+  overflow: hidden;
+}
+.fill,
+.ind {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}
+.ind {
+  width: 35%;
+  animation: ind 1.2s ease-in-out infinite;
+}
+@keyframes ind {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}

@@ -1,0 +1,59 @@
+.callout {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--border-2);
+  background: var(--raised);
+  font-size: 13px;
+}
+.icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.text {
+  flex: 1;
+  min-width: 0;
+}
+.text b {
+  font-weight: 500;
+}
+.text p {
+  margin: 2px 0 0;
+  color: var(--text-2);
+}
+.text b + p {
+  margin-top: 2px;
+}
+.action {
+  flex-shrink: 0;
+}
+.callout[data-tone="info"] {
+  border-color: var(--accent-line);
+  background: var(--accent-bg);
+}
+.callout[data-tone="info"] .icon {
+  color: var(--accent);
+}
+.callout[data-tone="warn"] {
+  border-color: var(--amber-line);
+  background: var(--amber-bg);
+}
+.callout[data-tone="warn"] .icon {
+  color: var(--amber);
+}
+.callout[data-tone="err"] {
+  border-color: var(--red-line);
+  background: var(--red-bg);
+}
+.callout[data-tone="err"] .icon {
+  color: var(--red);
+}
+.callout[data-tone="ok"] {
+  border-color: var(--green-line);
+  background: var(--green-bg);
+}
+.callout[data-tone="ok"] .icon {
+  color: var(--green);
+}

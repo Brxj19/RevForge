@@ -1,0 +1,80 @@
+.ws {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.header {
+  flex: none;
+}
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 28px 0;
+}
+.body > * {
+  flex: none;
+}
+.body > .panes {
+  flex: 1;
+}
+.panes {
+  min-height: 0;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: var(--panes-columns, minmax(0, 1fr));
+}
+/* Scroll containers are containing blocks so visually-hidden (absolute) descendants scroll with
+   them instead of stretching an outer overflow:hidden ancestor that then gets scrolled. */
+.pane {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding-bottom: 28px;
+  overscroll-behavior: contain;
+}
+.pane[data-flush] {
+  padding-bottom: 0;
+  margin-bottom: 20px;
+}
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 24px 28px 64px;
+}
+@media (max-width: 860px) {
+  .ws {
+    display: block;
+    overflow: auto;
+  }
+  .body {
+    display: block;
+    padding: 14px 16px 40px;
+  }
+  .body > * + * {
+    margin-top: 14px;
+  }
+  .panes {
+    display: block;
+  }
+  .pane {
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .pane + .pane {
+    margin-top: 16px;
+  }
+  .pane[data-collapse] {
+    max-height: 300px;
+    overflow: auto;
+  }
+  .page {
+    padding: 18px 16px 56px;
+  }
+}

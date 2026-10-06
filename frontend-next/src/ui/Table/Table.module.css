@@ -1,0 +1,61 @@
+.scroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+.t {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.caption {
+  text-align: left;
+  padding: 8px 16px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.t th {
+  text-align: left;
+  font: 500 12px var(--sans);
+  color: var(--muted);
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.t td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.t tbody tr:last-child td {
+  border-bottom: 0;
+}
+.t tbody tr:hover {
+  background: var(--raised);
+}
+.t [data-numeric] {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.t th[data-numeric] {
+  font: 500 12px var(--sans);
+  color: var(--muted);
+}
+.sortBtn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sortBtn:hover {
+  color: var(--text);
+}

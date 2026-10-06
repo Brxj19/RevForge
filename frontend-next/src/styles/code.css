@@ -1,0 +1,32 @@
+/* Syntax colours (DESIGN.md §3.1). CodeMirror's theme (lib/codemirror/theme.ts, Phase 1) reads these. */
+:root {
+  --tk-keyword: #ff7b72;
+  --tk-string: #a5d6ff;
+  --tk-comment: #6e7681;
+  --tk-number: #79c0ff;
+  --tk-function: #d2a8ff;
+  --tk-key: #7ee787;
+  --tk-variable: #ffa657;
+  --bracket-1: #ffd700;
+  --bracket-2: #da70d6;
+  --bracket-3: #179fff;
+  --code-row-hover: #0f0f0f;
+  --indent-guide: #1d1d1d;
+  --indent-guide-active: #2a2a2a;
+}
+.tk-k {
+  color: var(--tk-keyword);
+}
+.tk-s {
+  color: var(--tk-string);
+}
+.tk-c {
+  color: var(--tk-comment);
+}
+.tk-n {
+  color: var(--tk-number);
+}
+.tk-p,
+.tk-f {
+  color: var(--tk-function);
+}

@@ -1,0 +1,15 @@
+.sk {
+  background: linear-gradient(90deg, #121212 25%, #1b1b1b 50%, #121212 75%);
+  background-size: 200% 100%;
+  animation: sk 1.4s infinite;
+  border-radius: var(--r-xs);
+}
+@keyframes sk {
+  to {
+    background-position: -200% 0;
+  }
+}
+.group {
+  display: grid;
+  gap: 10px;
+}
