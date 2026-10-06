@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
+import ipaddress
 import json
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 import httpx
@@ -17,14 +20,6 @@ from app.models.webhook import Webhook, WebhookDelivery
 class WebhookService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._ssrf_blocked_ranges = [
-            "127.0.0.0/8",
-            "10.0.0.0/8",
-            "172.16.0.0/12",
-            "192.168.0.0/16",
-            "169.254.0.0/16",
-            "::1/128",
-        ]
 
     def _sign_payload(self, secret: str, payload: bytes) -> str:
         return hmac.new(
@@ -33,27 +28,50 @@ class WebhookService:
             hashlib.sha256,
         ).hexdigest()
 
-    def _check_ssrf(self, url: str) -> bool:
-        import ipaddress
-        import socket
-        from urllib.parse import urlparse
+    @staticmethod
+    def _ip_is_safe(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+        # Unwrap IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) so the checks below apply.
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if mapped is not None:
+            ip = mapped
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            return False
+        return bool(ip.is_global)
 
+    async def _check_ssrf(self, url: str) -> bool:
         parsed = urlparse(url)
-        if not parsed.hostname:
+        if parsed.scheme not in ("http", "https"):
             return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        # Resolve the destination. IP literals are checked directly; names are
+        # resolved via the event loop so we never block the request thread.
         try:
-            addrs = socket.getaddrinfo(parsed.hostname, None)
-        except OSError:
-            return False
-        for addr in addrs:
+            literal = ipaddress.ip_address(hostname)
+        except ValueError:
             try:
-                ip = ipaddress.ip_address(addr[4][0])
-            except ValueError:
+                infos = await asyncio.get_running_loop().getaddrinfo(hostname, None)
+            except OSError:
                 return False
-            for blocked in self._ssrf_blocked_ranges:
-                if ip in ipaddress.ip_network(blocked):
+            candidates = []
+            for info in infos:
+                try:
+                    candidates.append(ipaddress.ip_address(info[4][0]))
+                except ValueError:
                     return False
-        return True
+            if not candidates:
+                return False
+        else:
+            candidates = [literal]
+        return all(self._ip_is_safe(ip) for ip in candidates)
 
     async def list_webhooks(
         self,
@@ -78,7 +96,7 @@ class WebhookService:
         secret: str | None,
         created_by_user_id: UUID,
     ) -> Webhook:
-        if not self._check_ssrf(url):
+        if not await self._check_ssrf(url):
             from app.services.errors import ValidationFailure
 
             raise ValidationFailure("Webhook URL points to a blocked or unresolvable address.")
@@ -100,15 +118,25 @@ class WebhookService:
         self,
         session: AsyncSession,
         *,
+        repository_id: UUID,
         webhook_id: UUID,
         url: str | None,
         event_types: list[str] | None,
         is_active: bool | None,
     ) -> Webhook | None:
-        webhook = await session.get(Webhook, webhook_id)
+        webhook = await session.scalar(
+            select(Webhook).where(
+                Webhook.id == webhook_id,
+                Webhook.repository_id == repository_id,
+            )
+        )
         if webhook is None:
             return None
         if url is not None:
+            if not await self._check_ssrf(url):
+                from app.services.errors import ValidationFailure
+
+                raise ValidationFailure("Webhook URL points to a blocked or unresolvable address.")
             webhook.url = url
         if event_types is not None:
             webhook.event_types = event_types
@@ -122,9 +150,15 @@ class WebhookService:
         self,
         session: AsyncSession,
         *,
+        repository_id: UUID,
         webhook_id: UUID,
     ) -> bool:
-        webhook = await session.get(Webhook, webhook_id)
+        webhook = await session.scalar(
+            select(Webhook).where(
+                Webhook.id == webhook_id,
+                Webhook.repository_id == repository_id,
+            )
+        )
         if webhook is None:
             return False
         await session.delete(webhook)
@@ -145,7 +179,7 @@ class WebhookService:
         if not webhook.is_active:
             raise ValueError(f"Webhook {webhook_id} is not active.")
 
-        if not self._check_ssrf(webhook.url):
+        if not await self._check_ssrf(webhook.url):
             delivery = WebhookDelivery(
                 webhook_id=webhook_id,
                 event_type=event_type,
@@ -183,7 +217,7 @@ class WebhookService:
         await session.flush()
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
                 response = await client.post(
                     webhook.url,
                     content=body,
@@ -206,17 +240,37 @@ class WebhookService:
         await session.flush()
         return delivery
 
+    async def get_webhook(
+        self,
+        session: AsyncSession,
+        *,
+        repository_id: UUID,
+        webhook_id: UUID,
+    ) -> Webhook | None:
+        webhook: Webhook | None = await session.scalar(
+            select(Webhook).where(
+                Webhook.id == webhook_id,
+                Webhook.repository_id == repository_id,
+            )
+        )
+        return webhook
+
     async def list_deliveries(
         self,
         session: AsyncSession,
         *,
+        repository_id: UUID,
         webhook_id: UUID,
         limit: int = 25,
         offset: int = 0,
     ) -> list[WebhookDelivery]:
         result = await session.execute(
             select(WebhookDelivery)
-            .where(WebhookDelivery.webhook_id == webhook_id)
+            .join(Webhook, Webhook.id == WebhookDelivery.webhook_id)
+            .where(
+                WebhookDelivery.webhook_id == webhook_id,
+                Webhook.repository_id == repository_id,
+            )
             .order_by(WebhookDelivery.created_at.desc())
             .offset(offset)
             .limit(limit)

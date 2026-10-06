@@ -676,3 +676,93 @@ def test_provisioning_audit_events_do_not_leak_absolute_storage_paths(
     assert [event.event_type for event in events].count("repository.provision_requested") == 1
     assert [event.event_type for event in events].count("repository.provisioned") == 1
     assert all(str(repository_path) not in str(event.metadata_json) for event in events)
+
+
+def test_blame_rejects_mercurial_pattern_injection(
+    client,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    _register(client)
+    _create_organization(client, "inj")
+    _create_repository(client, "inj", "repo", "public")
+    assert (
+        client.post(
+            "/api/v1/organizations/inj/repositories/repo/provision",
+            headers=_csrf_headers(client),
+        ).status_code
+        == 200
+    )
+    repository_path = _repository_path(session_factory, slug="repo")
+    _seed_repository(repository_path)
+    node = client.get("/api/v1/organizations/inj/repositories/repo/changesets").json()[
+        "changesets"
+    ][0]["node"]
+
+    # Fileset / listfile / regex pattern prefixes must be treated as literal paths
+    # (which do not exist), not as hg patterns that match real files or read host files.
+    for malicious in ("set:**", "re:.*", "listfile:/etc/passwd", "glob:**"):
+        resp = client.get(
+            "/api/v1/organizations/inj/repositories/repo/blame",
+            params={"revision": node, "path": malicious},
+        )
+        assert resp.status_code == 404, (malicious, resp.status_code, resp.text)
+
+    # A real path still works.
+    ok = client.get(
+        "/api/v1/organizations/inj/repositories/repo/blame",
+        params={"revision": node, "path": "src/hello.py"},
+    )
+    assert ok.status_code == 200
+
+
+def test_literal_pathspec_neutralizes_pattern_kinds() -> None:
+    from app.mercurial.read_service import _literal_pathspec
+
+    for raw in ("set:**", "re:.*", "glob:**", "listfile:/etc/passwd", "relpath:x", "src/a.py"):
+        assert _literal_pathspec(raw) == f"path:{raw}"
+
+
+def test_blame_invokes_hg_with_path_prefixed_argument(
+    client,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Directly guard the path: fix at the annotate site (not just the manifest gate)."""
+    from app.core.config import get_settings
+    from app.mercurial.command_runner import HgCommandRunner
+    from app.mercurial.read_service import MercurialReadService
+
+    _register(client)
+    _create_organization(client, "spy")
+    _create_repository(client, "spy", "repo", "public")
+    assert (
+        client.post(
+            "/api/v1/organizations/spy/repositories/repo/provision",
+            headers=_csrf_headers(client),
+        ).status_code
+        == 200
+    )
+    repository_path = _repository_path(session_factory, slug="repo")
+    _seed_repository(repository_path)
+
+    settings = get_settings()
+    recorded: list[list[str]] = []
+
+    class _RecordingRunner(HgCommandRunner):
+        async def run_json(self, args, **kwargs):
+            recorded.append(list(args))
+            return await super().run_json(args, **kwargs)
+
+    service = MercurialReadService(settings=settings, command_runner=_RecordingRunner(settings))
+
+    async def _blame():
+        node = await service.resolve_revision(repository_path, None)
+        return await service.get_blame(repository_path, revision=node, path="src/hello.py")
+
+    import asyncio
+
+    result = asyncio.run(_blame())
+    assert result.path == "src/hello.py"
+    annotate_calls = [a for a in recorded if a and a[0] == "annotate"]
+    assert annotate_calls, recorded
+    assert "path:src/hello.py" in annotate_calls[0]
+    assert "src/hello.py" not in annotate_calls[0]  # never the bare pattern

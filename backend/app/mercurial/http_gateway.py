@@ -5,7 +5,7 @@ import base64
 import json
 import os
 from collections import defaultdict
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Iterable, Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 from threading import Lock
@@ -43,12 +43,19 @@ if TYPE_CHECKING:
 
     from app.services.authorization import RepositoryAccess
 
+from app.mercurial.transport_security import harden_bundle2_part_handlers
+
 initialization.init()
+harden_bundle2_part_handlers()
 
 
 class TransportCommandKind(StrEnum):
     READ = "read"
     WRITE = "write"
+
+
+class RateLimitExceeded(Exception):
+    """Too many failed transport authentication attempts for a key."""
 
 
 READ_ONLY_COMMANDS = {
@@ -88,21 +95,32 @@ class TransportRateLimiter:
         self._attempts: dict[str, list[float]] = defaultdict(list)
         self._lock = Lock()
 
-    def allow(self, key: str) -> bool:
+    def is_blocked(self, key: str) -> bool:
         now = monotonic()
         window_start = now - self._window_seconds
         with self._lock:
             attempts = [attempt for attempt in self._attempts[key] if attempt >= window_start]
             self._attempts[key] = attempts
-            if len(attempts) >= self._max_attempts:
-                return False
+            return len(attempts) >= self._max_attempts
+
+    def register_failure(self, key: str) -> None:
+        now = monotonic()
+        window_start = now - self._window_seconds
+        with self._lock:
+            attempts = [attempt for attempt in self._attempts[key] if attempt >= window_start]
             attempts.append(now)
-            return True
+            self._attempts[key] = attempts
 
 
 def classify_hg_http_command(query_string: str) -> TransportCommandKind:
     params = parse_qs(query_string, keep_blank_values=True)
-    command = params.get("cmd", [""])[0].strip().lower()
+    cmd_values = params.get("cmd", [""])
+    # hgweb dispatches the LAST cmd value; a request carrying more than one is a
+    # classification-bypass attempt (audit C12). Treat it as a write so it needs
+    # write authorization.
+    if len(cmd_values) > 1:
+        return TransportCommandKind.WRITE
+    command = cmd_values[0].strip().lower()
     if not command:
         return TransportCommandKind.WRITE
     if command == "batch":
@@ -143,7 +161,7 @@ class HgHttpGatewayApplication:
             window_seconds=settings.transport_rate_limit_window_seconds,
         )
 
-    def __call__(self, environ: dict[str, Any], start_response: StartResponse) -> list[bytes]:
+    def __call__(self, environ: dict[str, Any], start_response: StartResponse) -> Iterable[bytes]:
         request_id = environ.get("HTTP_X_REQUEST_ID") or str(uuid4())
         path_info = environ.get("PATH_INFO", "")
         path_segments = [segment for segment in path_info.split("/") if segment]
@@ -171,22 +189,14 @@ class HgHttpGatewayApplication:
                     remote_addr=remote_addr,
                 )
             )
-        except ValueError:
-            return self._respond(
-                start_response,
-                status="404 Not Found",
-                body={"error": "Repository not found."},
-                request_id=request_id,
-            )
         except AuthenticationError:
-            return self._respond(
-                start_response,
-                status="401 Unauthorized",
-                body={"error": "Authentication required."},
-                request_id=request_id,
-                headers=[("WWW-Authenticate", 'Basic realm="RevForge Mercurial"')],
-            )
-        except NotFoundError:
+            return self._challenge(start_response, request_id=request_id)
+        except (ValueError, NotFoundError):
+            # Stock hg clients send credentials only after a 401 challenge, so an
+            # anonymous miss must challenge rather than 404. Private and missing
+            # repositories get the same challenge, so this reveals nothing.
+            if basic_auth is None:
+                return self._challenge(start_response, request_id=request_id)
             return self._respond(
                 start_response,
                 status="404 Not Found",
@@ -200,10 +210,23 @@ class HgHttpGatewayApplication:
                 body={"error": "Access denied."},
                 request_id=request_id,
             )
+        except RateLimitExceeded:
+            return self._respond(
+                start_response,
+                status="429 Too Many Requests",
+                body={"error": "Too many failed authentication attempts."},
+                request_id=request_id,
+            )
 
         baseui = uimod.ui.load()
         baseui.setconfig(b"ui", b"nontty", b"true", b"revforge")
-        baseui.setconfig(b"web", b"allow_push", b"*", b"revforge")
+        # Fail push closed in hgweb itself: only writers get allow_push. Read/anon
+        # callers get deny_push=*, so hgweb's own checkperm("push") rejects
+        # unbundle/pushkey even if the cmd classification is bypassed (audit C12).
+        if auth_result.can_write:
+            baseui.setconfig(b"web", b"allow_push", b"*", b"revforge")
+        else:
+            baseui.setconfig(b"web", b"deny_push", b"*", b"revforge")
         request_is_secure = (
             environ.get("wsgi.url_scheme") == "https"
             or environ.get("HTTP_X_FORWARDED_PROTO") == "https"
@@ -221,6 +244,7 @@ class HgHttpGatewayApplication:
             b"revforge",
         )
         for hook_name in (
+            b"pretxnopen.revforge",
             b"prechangegroup.revforge",
             b"pretxnchangegroup.revforge",
             b"prepushkey.revforge",
@@ -283,22 +307,27 @@ class HgHttpGatewayApplication:
         if "SERVER_PORT" in hg_environ:
             hg_environ["SERVER_PORT"] = str(hg_environ["SERVER_PORT"])
         result = hg_app(hg_environ, capture_start_response)
-        try:
-            payload = list(result)
-        finally:
-            close = getattr(result, "close", None)
-            if callable(close):
-                close()
-        self._run_coroutine(
-            self._record_access(
-                request_id=request_id,
-                organization_slug=organization_slug,
-                repository_slug=repository_slug,
-                auth_result=auth_result,
-                status=status_headers.get("status", "200 OK"),
-            )
-        )
-        return payload
+
+        def _stream() -> Iterator[bytes]:
+            # Stream hg output chunk by chunk instead of buffering the whole
+            # response in memory (audit C9: large clones must not exhaust RAM).
+            try:
+                yield from result
+            finally:
+                close = getattr(result, "close", None)
+                if callable(close):
+                    close()
+                self._run_coroutine(
+                    self._record_access(
+                        request_id=request_id,
+                        organization_slug=organization_slug,
+                        repository_slug=repository_slug,
+                        auth_result=auth_result,
+                        status=status_headers.get("status", "200 OK"),
+                    )
+                )
+
+        return _stream()
 
     def _run_coroutine[T](self, coroutine: Coroutine[Any, Any, T]) -> T:
         try:
@@ -329,15 +358,21 @@ class HgHttpGatewayApplication:
             if basic_auth is not None:
                 username, password = basic_auth
                 limiter_key = f"http:{remote_addr}:{username}"
-                if not self._rate_limiter.allow(limiter_key):
-                    raise ForbiddenError("Rate limit exceeded.")
-                actor, token = await authenticate_personal_access_token(
-                    session,
-                    settings=self._settings,
-                    username=username,
-                    raw_token=password,
-                    request_id=request_id,
-                )
+                if self._rate_limiter.is_blocked(limiter_key):
+                    raise RateLimitExceeded("Too many failed authentication attempts.")
+                try:
+                    actor, token = await authenticate_personal_access_token(
+                        session,
+                        settings=self._settings,
+                        username=username,
+                        raw_token=password,
+                        request_id=request_id,
+                    )
+                except AuthenticationError:
+                    # Count only failures so legitimate multi-request clones/pulls
+                    # and CI are never throttled (audit C9).
+                    self._rate_limiter.register_failure(limiter_key)
+                    raise
 
             organization = await get_organization_by_repo_slug(
                 session, organization_slug=organization_slug
@@ -446,6 +481,15 @@ class HgHttpGatewayApplication:
                 },
             )
             await session.commit()
+
+    def _challenge(self, start_response: StartResponse, *, request_id: str) -> list[bytes]:
+        return self._respond(
+            start_response,
+            status="401 Unauthorized",
+            body={"error": "Authentication required."},
+            request_id=request_id,
+            headers=[("WWW-Authenticate", 'Basic realm="RevForge Mercurial"')],
+        )
 
     def _respond(
         self,

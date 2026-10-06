@@ -58,9 +58,14 @@ def spool_push_event(
             "timestamp": datetime.now(UTC).isoformat(),
         }
 
-        event_path = os.path.join(spool_dir, f"{uuid4().hex}.json")
-        with open(event_path, "w") as f:
+        # Write to a temp name then atomically rename so the worker never reads a
+        # partially written .json (which it would treat as corrupt and delete).
+        name = uuid4().hex
+        event_path = os.path.join(spool_dir, f"{name}.json")
+        tmp_path = os.path.join(spool_dir, f"{name}.json.tmp")
+        with open(tmp_path, "w") as f:
             json.dump(event, f)
+        os.replace(tmp_path, event_path)
     except Exception:
         pass
     return False

@@ -19,7 +19,7 @@ from app.schemas.events import (
     WebhookResponse,
     WebhookUpdateRequest,
 )
-from app.services.errors import ForbiddenError, NotFoundError
+from app.services.errors import ForbiddenError, NotFoundError, ValidationFailure
 from app.services.repository_service import (
     get_organization_by_slug_for_repo_routes,
     get_repository_for_actor,
@@ -143,6 +143,11 @@ async def create_webhook(
     except NotFoundError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationFailure as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
     return _serialize_webhook(webhook)
 
 
@@ -156,7 +161,7 @@ async def update_webhook(
     session: AsyncSession = Depends(get_session),
 ) -> WebhookResponse:
     try:
-        await _get_repo_for_admin(
+        repository = await _get_repo_for_admin(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
@@ -165,6 +170,7 @@ async def update_webhook(
         service = _get_webhook_service()
         webhook = await service.update_webhook(
             session,
+            repository_id=repository.id,
             webhook_id=webhook_id,
             url=payload.url,
             event_types=payload.event_types,
@@ -179,6 +185,11 @@ async def update_webhook(
     except NotFoundError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationFailure as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
     return _serialize_webhook(webhook)
 
 
@@ -191,14 +202,16 @@ async def delete_webhook(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     try:
-        await _get_repo_for_admin(
+        repository = await _get_repo_for_admin(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
             identity=identity,
         )
         service = _get_webhook_service()
-        deleted = await service.delete_webhook(session, webhook_id=webhook_id)
+        deleted = await service.delete_webhook(
+            session, repository_id=repository.id, webhook_id=webhook_id
+        )
         if not deleted:
             raise NotFoundError("Webhook not found.")
         await session.commit()
@@ -219,15 +232,21 @@ async def list_webhook_deliveries(
     session: AsyncSession = Depends(get_session),
 ) -> list[WebhookDeliveryResponse]:
     try:
-        await _get_repo_for_admin(
+        repository = await _get_repo_for_admin(
             session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
             identity=identity,
         )
         service = _get_webhook_service()
+        if (
+            await service.get_webhook(session, repository_id=repository.id, webhook_id=webhook_id)
+            is None
+        ):
+            raise NotFoundError("Webhook not found.")
         deliveries = await service.list_deliveries(
             session,
+            repository_id=repository.id,
             webhook_id=webhook_id,
         )
     except ForbiddenError as exc:

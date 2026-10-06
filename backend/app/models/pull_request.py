@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID as UUIDType
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, Uuid
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, UniqueConstraint, Uuid
 from sqlalchemy import false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -126,6 +126,11 @@ class PullRequestReviewer(UUIDPrimaryKeyMixin, Base):
 
 class PullRequestReview(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "pull_request_reviews"
+    __table_args__ = (
+        UniqueConstraint(
+            "pull_request_id", "reviewer_id", name="uq_pull_request_reviews_pr_reviewer"
+        ),
+    )
 
     pull_request_id: Mapped[UUIDType] = mapped_column(
         Uuid(as_uuid=True),

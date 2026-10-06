@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from threading import Lock
 from time import monotonic
 from typing import TYPE_CHECKING
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from mercurial import hg, initialization
 from mercurial import ui as uimod
@@ -38,7 +38,10 @@ from app.services.transport_credentials import authenticate_ssh_public_key
 if TYPE_CHECKING:
     from app.services.authorization import RepositoryAccess
 
+from app.mercurial.transport_security import harden_bundle2_part_handlers
+
 initialization.init()
+harden_bundle2_part_handlers()
 
 
 @dataclass(slots=True)
@@ -113,6 +116,9 @@ class MercurialSshGateway:
     async def run(self) -> None:
         original_command = os.environ.get("SSH_ORIGINAL_COMMAND")
         request = parse_ssh_original_command(original_command)
+        # A stable request id per session keeps spooled push events attributable even
+        # when the environment supplies none (audit C8).
+        request_id = os.environ.get("REVFORGE_REQUEST_ID") or str(uuid4())
         limiter_key = f"ssh:{self._key_id}"
         if not self._rate_limiter.allow(limiter_key):
             raise ForbiddenError("Rate limit exceeded.")
@@ -122,7 +128,7 @@ class MercurialSshGateway:
             actor, key = await authenticate_ssh_public_key(
                 session,
                 key_id=self._key_id,
-                request_id=os.environ.get("REVFORGE_REQUEST_ID"),
+                request_id=request_id,
             )
             organization = await get_organization_by_repo_slug(
                 session, organization_slug=request.organization_slug
@@ -164,6 +170,7 @@ class MercurialSshGateway:
                 b"revforge",
             )
             for hook_name in (
+                b"pretxnopen.revforge",
                 b"prechangegroup.revforge",
                 b"pretxnchangegroup.revforge",
                 b"prepushkey.revforge",
@@ -183,7 +190,7 @@ class MercurialSshGateway:
             baseui.setconfig(
                 b"revforge",
                 b"request_id",
-                (os.environ.get("REVFORGE_REQUEST_ID") or "").encode(),
+                request_id.encode(),
                 b"revforge",
             )
             event_spool_dir = os.environ.get("REVFORGE_EVENT_SPOOL_DIR", "")
@@ -205,7 +212,7 @@ class MercurialSshGateway:
                 actor_user_id=actor.id,
                 organization_id=organization.id,
                 repository_id=repository.id,
-                request_id=os.environ.get("REVFORGE_REQUEST_ID"),
+                request_id=request_id,
                 metadata_json={
                     "repository_slug": repository.slug,
                     "can_write": permission.can_write,
