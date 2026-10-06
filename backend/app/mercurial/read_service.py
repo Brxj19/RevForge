@@ -45,6 +45,8 @@ DIFFSTAT_SUMMARY_RE = re.compile(
     r"(?:,\s*(?P<deletions>\d+)\s+deletions?\(-\))?\s*$"
 )
 DIFFSTAT_PER_FILE_FALLBACK_LIMIT = 200
+# `{diffstat}` renders as "<files>: +<insertions>/-<deletions>".
+DIFFSTAT_TEMPLATE_RE = re.compile(r"^(?P<files>\d+):\s*\+(?P<insertions>\d+)/-(?P<deletions>\d+)$")
 
 initialization.init()
 
@@ -70,13 +72,22 @@ class MercurialReadService:
         if start_revision < 0:
             return HgChangesetPage(changesets=[], next_cursor=None)
 
-        changesets: list[HgChangeset] = []
-        for revision in range(start_revision, max(-1, start_revision - (page_size + 1)), -1):
-            changesets.append(
-                await self._build_changeset(repository_path, repo[revision], include_files=True)
-            )
+        # Parse the context for each candidate (no subprocess), then fetch summary
+        # diffstats for the SHOWN page in a single `hg log` call rather than running
+        # ~3 hg processes per changeset (audit C10). Full per-file stats stay in
+        # get_changeset.
+        changesets: list[HgChangeset] = [
+            self._parse_changeset_context(repo[revision], include_files=True)
+            for revision in range(start_revision, max(-1, start_revision - (page_size + 1)), -1)
+        ]
+        page = changesets[:page_size]
         next_cursor = changesets[page_size - 1].node if len(changesets) > page_size else None
-        return HgChangesetPage(changesets=changesets[:page_size], next_cursor=next_cursor)
+        summaries = await self._load_diffstat_summaries(
+            repository_path, [changeset.node for changeset in page]
+        )
+        for changeset in page:
+            changeset.stats = summaries.get(changeset.node)
+        return HgChangesetPage(changesets=page, next_cursor=next_cursor)
 
     async def get_changeset(self, repository_path: Path, revision: str) -> HgChangeset:
         repo = self._open_repository(repository_path)
@@ -411,6 +422,37 @@ class MercurialReadService:
         changeset = self._parse_changeset_context(ctx, include_files=include_files)
         changeset.stats = await self._load_changeset_stats(repository_path, changeset.node)
         return changeset
+
+    async def _load_diffstat_summaries(
+        self, repository_path: Path, nodes: list[str]
+    ) -> dict[str, HgChangesetStats]:
+        """Summary (files/insertions/deletions) for several changesets in one hg call."""
+        if not nodes:
+            return {}
+        revset = " or ".join(nodes)  # concrete 40-hex nodes; safe to interpolate
+        try:
+            result = await self._command_runner.run(
+                ["log", "-r", revset, "-T", "{node} {diffstat}\n"],
+                repository_path=repository_path,
+                stdout_limit=self._settings.hg_max_stdout_bytes,
+            )
+        except (HgCommandFailedError, HgCommandOutputLimitError):
+            # Rare: the whole page falls back to file-count-only stats rather than
+            # failing the history view.
+            return {}
+        summaries: dict[str, HgChangesetStats] = {}
+        for line in result.stdout.decode("utf-8", errors="replace").splitlines():
+            node, _, diffstat = line.partition(" ")
+            match = DIFFSTAT_TEMPLATE_RE.match(diffstat.strip())
+            if not node or match is None:
+                continue
+            summaries[node] = HgChangesetStats(
+                files_changed=int(match.group("files")),
+                insertions=int(match.group("insertions")),
+                deletions=int(match.group("deletions")),
+                changed_files=[],
+            )
+        return summaries
 
     async def _load_changeset_stats(
         self,
