@@ -14,6 +14,7 @@ from app.api.deps import (
     get_repository_storage_locator,
 )
 from app.core.config import get_settings
+from app.mercurial.command_runner import resolve_hg_executable
 from app.mercurial.storage_locator import RepositoryStorageLocator
 from app.models.audit_event import AuditEvent
 from app.models.repository import Repository
@@ -133,9 +134,13 @@ def _hg_env() -> dict[str, str]:
     }
 
 
+# The same pinned hg the server uses (I38), never whatever `hg` is first on PATH.
+HG_EXECUTABLE = resolve_hg_executable("hg")
+
+
 def _hg(repository_path: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
-        ["hg", "--repository", str(repository_path), *args],
+        [HG_EXECUTABLE, "--repository", str(repository_path), *args],
         check=True,
         cwd=repository_path,
         env=_hg_env(),

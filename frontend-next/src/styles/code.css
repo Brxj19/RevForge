@@ -30,3 +30,15 @@
 .tk-f {
   color: var(--tk-function);
 }
+.tk-key {
+  color: var(--tk-key);
+}
+.tk-v {
+  color: var(--tk-variable);
+}
+.tk-strong {
+  font-weight: 600;
+}
+.tk-em {
+  font-style: italic;
+}

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -17,24 +18,41 @@ from app.api.deps import (
     get_session,
     require_csrf,
 )
+from app.api.rate_limit import rate_limited
 from app.core.config import Settings, get_settings
-from app.domain.enums import RepositoryRole
+from app.core.errors import ApiError
+from app.domain.enums import PROVISIONING_ERROR_CODES, RepositoryRole, RepositoryVisibility
 from app.mercurial.command_runner import HgCommandRunner
 from app.mercurial.errors import (
+    ContentTooLargeError,
+    HgBusyError,
     HgCommandFailedError,
     HgCommandOutputLimitError,
     HgCommandTimeoutError,
     InvalidRepositoryPathError,
     InvalidRevisionError,
+    InvalidSearchQueryError,
     MercurialNotFoundError,
     ProvisioningFailedError,
     ProvisioningInProgressError,
     RepositoryNotProvisionedError,
     RepositoryStorageError,
+    RevisionAmbiguousError,
+    RevisionNotFoundError,
 )
-from app.mercurial.provisioning_service import provision_repository
-from app.mercurial.read_service import MercurialReadService
-from app.mercurial.schemas import HgBlame, HgChangeset, HgDirectoryBrowse, HgFileBrowse
+from app.mercurial.provisioning_service import (
+    provision_repository,
+    public_provisioning_error,
+)
+from app.mercurial.read_service import MercurialReadService, classify_raw_content
+from app.mercurial.schemas import (
+    HgBlame,
+    HgChangeset,
+    HgCodeSearchResult,
+    HgDirectoryBrowse,
+    HgFileBrowse,
+    HgRepositoryStats,
+)
 from app.mercurial.storage_locator import RepositoryStorageLocator
 from app.models.organization import Organization
 from app.models.repository import Repository
@@ -48,6 +66,8 @@ from app.schemas.repositories import (
     ChangesetDiffResponse,
     ChangesetListResponse,
     ChangesetSummaryResponse,
+    CodeSearchMatchResponse,
+    CodeSearchResponse,
     RepositoryBlameLineResponse,
     RepositoryBlameResponse,
     RepositoryCreateRequest,
@@ -57,18 +77,21 @@ from app.schemas.repositories import (
     RepositoryFileSearchMatchResponse,
     RepositoryFileSearchResponse,
     RepositoryHttpsTransportResponse,
+    RepositoryLanguageShareResponse,
     RepositoryPermissionRequest,
     RepositoryPermissionResponse,
     RepositoryProvisionResponse,
     RepositoryRefResponse,
     RepositoryRefsResponse,
     RepositorySshTransportResponse,
+    RepositoryStatsResponse,
     RepositorySummary,
     RepositoryTransportInfo,
     RepositoryTransportResponse,
     RepositoryTransportSetupResponse,
     RepositoryTreeEntryResponse,
     RepositoryUpdateRequest,
+    TreeEntryChangesetResponse,
 )
 from app.services.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailure
 from app.services.repository_service import (
@@ -93,6 +116,10 @@ from app.services.transport_metadata import (
 )
 
 _KNOWN_READ_ERRORS = (
+    ContentTooLargeError,
+    HgBusyError,
+    InvalidSearchQueryError,
+    RevisionAmbiguousError,
     HgCommandFailedError,
     HgCommandTimeoutError,
     HgCommandOutputLimitError,
@@ -162,6 +189,8 @@ def _serialize_repository_detail(
         inherited_access=inherited_access,
         organization_slug=organization_slug,
         phase_status=repository_phase_status(repository),
+        provisioning_error=public_provisioning_error(repository),
+        provisioning_started_at=repository.provisioning_started_at,
     )
 
 
@@ -251,7 +280,23 @@ def _serialize_browse_response(
             revision=browse_result.revision,
             path=browse_result.path,
             entries=[
-                RepositoryTreeEntryResponse(name=entry.name, path=entry.path, kind=entry.kind)
+                RepositoryTreeEntryResponse(
+                    name=entry.name,
+                    path=entry.path,
+                    kind=entry.kind,
+                    size=entry.size,
+                    last_changeset=(
+                        TreeEntryChangesetResponse(
+                            node=entry.last_changeset.node,
+                            short_node=entry.last_changeset.short_node,
+                            summary=entry.last_changeset.summary,
+                            author_name=entry.last_changeset.author_name,
+                            date=entry.last_changeset.date,
+                        )
+                        if entry.last_changeset is not None
+                        else None
+                    ),
+                )
                 for entry in browse_result.entries
             ],
         )
@@ -263,6 +308,9 @@ def _serialize_browse_response(
         is_binary=browse_result.is_binary,
         is_too_large=browse_result.is_too_large,
         size_when_known=browse_result.size_when_known,
+        content_kind=browse_result.content_kind,
+        size=browse_result.size_when_known,
+        language=browse_result.language,
     )
 
 
@@ -270,22 +318,83 @@ def _serialize_blame_response(blame_result: HgBlame) -> RepositoryBlameResponse:
     return RepositoryBlameResponse(
         revision=blame_result.revision,
         path=blame_result.path,
+        is_binary=blame_result.is_binary,
+        is_too_large=blame_result.is_too_large,
         lines=[
             RepositoryBlameLineResponse(
                 line_number=line.line_number,
-                revision=line.revision,
-                short_revision=line.short_revision,
+                origin_line=line.origin_line,
+                node=line.revision,
+                short_node=line.short_revision,
                 author_name=line.author_name,
-                author_email_when_available=line.author_email_when_available,
+                author_email=line.author_email_when_available,
+                date=line.date,
+                summary=line.summary,
                 path=line.path,
                 content=line.content,
+                revision=line.revision,
+                short_revision=line.short_revision,
+                author_email_when_available=line.author_email_when_available,
             )
             for line in blame_result.lines
         ],
     )
 
 
+def _serialize_stats(stats: HgRepositoryStats) -> RepositoryStatsResponse:
+    return RepositoryStatsResponse(
+        languages=[
+            RepositoryLanguageShareResponse(
+                name=share.name, percent=share.percent, color=share.color
+            )
+            for share in stats.languages
+        ],
+        contributors=stats.contributors,
+        contributors_truncated=stats.contributors_truncated,
+        size_bytes=stats.size_bytes,
+    )
+
+
+def _serialize_code_search(result: HgCodeSearchResult) -> CodeSearchResponse:
+    return CodeSearchResponse(
+        items=[
+            CodeSearchMatchResponse(
+                path=item.path, line=item.line, text=item.text, ranges=list(item.ranges)
+            )
+            for item in result.items
+        ],
+        truncated=result.truncated,
+    )
+
+
+def _pick_revision(rev: str | None, revision: str | None) -> str | None:
+    """`rev` is the Phase 1 query name; `revision` stays accepted for older clients."""
+    return rev if rev not in (None, "") else revision
+
+
 def _raise_read_error(exc: Exception) -> None:
+    if isinstance(exc, RevisionNotFoundError):
+        raise ApiError(404, code="revision_not_found", detail="Revision not found.") from exc
+    if isinstance(exc, RevisionAmbiguousError):
+        # No candidate nodes are listed: they could reveal other changesets.
+        raise ApiError(
+            409, code="revision_ambiguous", detail="Revision prefix is ambiguous."
+        ) from exc
+    if isinstance(exc, ContentTooLargeError):
+        raise ApiError(413, code="content_too_large", detail="Content exceeds size limit.") from exc
+    if isinstance(exc, HgBusyError):
+        raise ApiError(
+            503,
+            code="repository_busy",
+            detail="Repository is busy. Try again shortly.",
+            headers={"Retry-After": "2"},
+        ) from exc
+    if isinstance(exc, InvalidSearchQueryError):
+        raise ApiError(
+            422,
+            code="validation_error",
+            detail="Search query must be 2-200 characters without control characters.",
+        ) from exc
     if isinstance(exc, HgCommandFailedError) and exc.code in {
         "hg_unknown_revision",
         "hg_missing_path",
@@ -314,8 +423,9 @@ def _raise_read_error(exc: Exception) -> None:
             detail="Revision or repository path is invalid.",
         ) from exc
     if isinstance(exc, RepositoryNotProvisionedError):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+        raise ApiError(
+            409,
+            code="repository_not_ready",
             detail="Repository is not provisioned for Mercurial browsing yet.",
         ) from exc
     if isinstance(exc, HgCommandTimeoutError):
@@ -476,6 +586,7 @@ async def provision_repository_route(
     request_id: str | None = Depends(get_request_id),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
     command_runner: HgCommandRunner = Depends(get_hg_command_runner),
+    settings: Settings = Depends(get_settings),
 ) -> RepositoryProvisionResponse:
     try:
         (
@@ -500,6 +611,7 @@ async def provision_repository_route(
             request_id=request_id,
             storage_locator=storage_locator,
             command_runner=command_runner,
+            stale_after_seconds=settings.provisioning_stale_after_seconds,
         )
     except NotFoundError as exc:
         await session.rollback()
@@ -509,18 +621,26 @@ async def provision_repository_route(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ProvisioningInProgressError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+        raise ApiError(
+            409,
+            code="provisioning_in_progress",
             detail="Repository provisioning is already in progress.",
         ) from exc
     except ProvisioningFailedError as exc:
         await session.rollback()
-        detail = (
-            "Archived repositories cannot be provisioned."
-            if str(exc) == "repository_archived"
-            else "Repository provisioning failed."
-        )
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
+        reason = str(exc)
+        if reason == "repository_archived":
+            raise ApiError(
+                409,
+                code="repository_archived",
+                detail="Archived repositories cannot be provisioned.",
+            ) from exc
+        # The code is one of PROVISIONING_ERROR_CODES (never stderr or a path).
+        raise ApiError(
+            409,
+            code=reason if reason in PROVISIONING_ERROR_CODES else "provisioning_failed",
+            detail="Repository provisioning failed.",
+        ) from exc
 
     return _serialize_provision_response(repository=repository, organization_slug=organization.slug)
 
@@ -564,22 +684,23 @@ async def get_repository(
 async def get_repository_transport(
     organization_slug: str,
     repository_slug: str,
-    identity: SessionIdentity = Depends(get_current_identity),
+    identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> RepositoryTransportResponse:
+    actor = identity.user if identity is not None else None
     try:
         (
             organization,
             repository,
             viewer_role,
-            _can_manage,
+            can_manage,
             _inherited_access,
         ) = await _get_repository_with_access(
             session=session,
             organization_slug=organization_slug,
             repository_slug=repository_slug,
-            actor=identity.user,
+            actor=actor,
             allow_archived=True,
         )
     except NotFoundError as exc:
@@ -587,10 +708,45 @@ async def get_repository_transport(
     except ForbiddenError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
+    https_clone_url = build_https_clone_url(
+        settings,
+        organization_slug=organization.slug,
+        repository_slug=repository.slug,
+    )
+    if actor is None:
+        # Access resolution only lets anonymous callers reach PUBLIC repositories; keep the
+        # check explicit anyway. Anonymous viewers get the HTTPS clone URL only.
+        if repository.visibility != RepositoryVisibility.PUBLIC:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
+        return RepositoryTransportResponse(
+            repository=RepositoryTransportInfo(
+                organization_slug=organization.slug,
+                repository_slug=repository.slug,
+                provisioning_state=repository.provisioning_state,
+                is_browsable=repository_is_browsable(repository),
+                viewer_role=None,
+                can_read=True,
+                can_write=False,
+            ),
+            https=RepositoryHttpsTransportResponse(
+                enabled=True,
+                clone_url=https_clone_url,
+                clone_command=f"hg clone {https_clone_url}",
+                username_hint=None,
+                password_hint=None,
+            ),
+            ssh=None,
+            setup=RepositoryTransportSetupResponse(
+                has_active_token=False,
+                has_active_ssh_key=False,
+                recommended_next_step="sign_in",
+            ),
+        )
+
     can_read = viewer_role is not None
     can_write = viewer_role in {RepositoryRole.WRITE, RepositoryRole.ADMIN}
-    active_token = await has_active_personal_access_token(session, user_id=identity.user.id)
-    active_ssh_key = await has_active_ssh_key(session, user_id=identity.user.id)
+    active_token = await has_active_personal_access_token(session, user_id=actor.id)
+    active_ssh_key = await has_active_ssh_key(session, user_id=actor.id)
     https_clone_url = build_https_clone_url(
         settings,
         organization_slug=organization.slug,
@@ -616,7 +772,7 @@ async def get_repository_transport(
             enabled=True,
             clone_url=https_clone_url,
             clone_command=f"hg clone {https_clone_url}",
-            username_hint=identity.user.email,
+            username_hint=actor.email,
             password_hint="Personal Access Token",
         ),
         ssh=RepositorySshTransportResponse(
@@ -625,7 +781,8 @@ async def get_repository_transport(
             clone_command=f"hg clone {ssh_clone_url}",
             username=settings.transport_hg_username,
             port=settings.ssh_public_port,
-            authorized_keys_path_hint=settings.ssh_authorized_keys_path,
+            # A server filesystem path: repository admins only.
+            authorized_keys_path_hint=settings.ssh_authorized_keys_path if can_manage else None,
         ),
         setup=RepositoryTransportSetupResponse(
             has_active_token=active_token,
@@ -644,7 +801,8 @@ async def get_repository_transport(
 async def list_changesets_route(
     organization_slug: str,
     repository_slug: str,
-    cursor: str | None = Query(default=None),
+    cursor: str | None = Query(default=None, max_length=120),
+    limit: int | None = Query(default=None, ge=1, le=50),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
@@ -665,7 +823,7 @@ async def list_changesets_route(
             actor=identity.user if identity is not None else None,
             storage_locator=storage_locator,
         )
-        page = await read_service.list_changesets(repository_path, cursor=cursor)
+        page = await read_service.list_changesets(repository_path, cursor=cursor, limit=limit)
     except _KNOWN_READ_ERRORS as exc:
         _raise_read_error(exc)
 
@@ -750,8 +908,9 @@ async def get_changeset_diff_route(
 async def browse_repository_route(
     organization_slug: str,
     repository_slug: str,
-    revision: str | None = Query(default=None),
-    path: str | None = Query(default=None),
+    rev: str | None = Query(default=None, max_length=120),
+    revision: str | None = Query(default=None, max_length=120),
+    path: str | None = Query(default=None, max_length=1024),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
@@ -774,7 +933,7 @@ async def browse_repository_route(
         )
         browse_result = await read_service.browse(
             repository_path,
-            revision=revision,
+            revision=_pick_revision(rev, revision),
             path=path,
         )
     except _KNOWN_READ_ERRORS as exc:
@@ -787,8 +946,10 @@ async def browse_repository_route(
 async def blame_repository_file_route(
     organization_slug: str,
     repository_slug: str,
-    revision: str | None = Query(default=None),
-    path: str = Query(...),
+    rev: str | None = Query(default=None, max_length=120),
+    revision: str | None = Query(default=None, max_length=120),
+    path: str = Query(..., max_length=1024),
+    _rate_limit: None = Depends(rate_limited("blame")),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
@@ -811,7 +972,7 @@ async def blame_repository_file_route(
         )
         blame_result = await read_service.get_blame(
             repository_path,
-            revision=revision,
+            revision=_pick_revision(rev, revision),
             path=path,
         )
     except _KNOWN_READ_ERRORS as exc:
@@ -824,8 +985,9 @@ async def blame_repository_file_route(
 async def search_repository_files_route(
     organization_slug: str,
     repository_slug: str,
-    q: str = Query(..., min_length=1),
-    revision: str | None = Query(default=None),
+    q: str = Query(..., min_length=1, max_length=200),
+    rev: str | None = Query(default=None, max_length=120),
+    revision: str | None = Query(default=None, max_length=120),
     limit: int = Query(default=50, ge=1, le=200),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
@@ -849,7 +1011,7 @@ async def search_repository_files_route(
         )
         resolved_revision, matches = await read_service.search_files(
             repository_path,
-            revision=revision,
+            revision=_pick_revision(rev, revision),
             query=q,
             limit=limit,
         )
@@ -867,6 +1029,136 @@ async def search_repository_files_route(
             for match in matches
         ],
     )
+
+
+@router.get("/{repository_slug}/search/code", response_model=CodeSearchResponse)
+async def search_repository_code_route(
+    organization_slug: str,
+    repository_slug: str,
+    q: str = Query(..., min_length=2, max_length=200),
+    rev: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=50, ge=1, le=100),
+    _rate_limit: None = Depends(rate_limited("search_code")),
+    identity: SessionIdentity | None = Depends(get_optional_identity),
+    session: AsyncSession = Depends(get_session),
+    storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
+    read_service: MercurialReadService = Depends(get_mercurial_read_service),
+) -> CodeSearchResponse:
+    """Literal, case-insensitive code search at one revision (no regex mode)."""
+    try:
+        (
+            _organization,
+            _repository,
+            repository_path,
+            _viewer_role,
+            _can_manage,
+            _inherited_access,
+        ) = await _ensure_browsable_repository(
+            session=session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            actor=identity.user if identity is not None else None,
+            storage_locator=storage_locator,
+        )
+        result = await read_service.search_code(repository_path, revision=rev, query=q, limit=limit)
+    except _KNOWN_READ_ERRORS as exc:
+        _raise_read_error(exc)
+
+    return _serialize_code_search(result)
+
+
+@router.get("/{repository_slug}/stats", response_model=RepositoryStatsResponse)
+async def get_repository_stats_route(
+    organization_slug: str,
+    repository_slug: str,
+    rev: str | None = Query(default=None, max_length=120),
+    _rate_limit: None = Depends(rate_limited("stats")),
+    identity: SessionIdentity | None = Depends(get_optional_identity),
+    session: AsyncSession = Depends(get_session),
+    storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
+    read_service: MercurialReadService = Depends(get_mercurial_read_service),
+) -> RepositoryStatsResponse:
+    try:
+        (
+            _organization,
+            _repository,
+            repository_path,
+            _viewer_role,
+            _can_manage,
+            _inherited_access,
+        ) = await _ensure_browsable_repository(
+            session=session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            actor=identity.user if identity is not None else None,
+            storage_locator=storage_locator,
+        )
+        stats = await read_service.get_stats(repository_path, revision=rev)
+    except _KNOWN_READ_ERRORS as exc:
+        _raise_read_error(exc)
+
+    return _serialize_stats(stats)
+
+
+_RAW_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "sandbox; default-src 'none'",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Cache-Control": "private, no-store",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+def _content_disposition(path: str, *, inline: bool) -> str:
+    filename = PurePosixPath(path).name or "download"
+    disposition = "inline" if inline else "attachment"
+    # RFC 6266 / 5987 encoding: no raw quotes, CR/LF or non-ASCII reach the header.
+    return f"{disposition}; filename*=UTF-8''{quote(filename, safe='')}"
+
+
+@router.get(
+    "/{repository_slug}/raw",
+    response_class=Response,
+    responses={200: {"content": {"application/octet-stream": {}}}},
+)
+async def get_repository_raw_route(
+    organization_slug: str,
+    repository_slug: str,
+    path: str = Query(..., min_length=1, max_length=1024),
+    rev: str | None = Query(default=None, max_length=120),
+    _rate_limit: None = Depends(rate_limited("raw")),
+    identity: SessionIdentity | None = Depends(get_optional_identity),
+    session: AsyncSession = Depends(get_session),
+    storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
+    read_service: MercurialReadService = Depends(get_mercurial_read_service),
+) -> Response:
+    """Raw file bytes. Never served with an active content type (HTML/SVG/XML/JS)."""
+    try:
+        (
+            _organization,
+            _repository,
+            repository_path,
+            _viewer_role,
+            _can_manage,
+            _inherited_access,
+        ) = await _ensure_browsable_repository(
+            session=session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            actor=identity.user if identity is not None else None,
+            storage_locator=storage_locator,
+        )
+        raw = await read_service.read_raw(repository_path, revision=rev, path=path)
+    except _KNOWN_READ_ERRORS as exc:
+        _raise_read_error(exc)
+
+    content_type, inline = classify_raw_content(raw.path, raw.data)
+    headers = {
+        **_RAW_SECURITY_HEADERS,
+        "Content-Disposition": _content_disposition(raw.path, inline=inline),
+        "X-RevForge-Revision": raw.revision,
+    }
+    return Response(content=raw.data, media_type=content_type, headers=headers)
 
 
 @router.get("/{repository_slug}/refs", response_model=RepositoryRefsResponse)

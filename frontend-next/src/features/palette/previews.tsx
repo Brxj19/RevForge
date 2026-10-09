@@ -1,8 +1,10 @@
 import { Show } from "solid-js";
-import type { RepositoryDetail } from "~/lib/api";
+import type { CodeSearchMatch, RepositoryDetail } from "~/lib/api";
+import { Highlight } from "~/ui/Menu";
 import { Pill } from "~/ui/Pill";
 import { Shortcut } from "~/ui/Kbd";
-import { Icon, type IconName } from "~/ui/icons";
+import { FileIcon, Icon, type IconName } from "~/ui/icons";
+import { rangeParts } from "./ranges";
 import styles from "./palette.module.css";
 
 const STATE_TONE = {
@@ -76,6 +78,32 @@ export function ActionPreview(props: {
           </div>
         )}
       </Show>
+    </>
+  );
+}
+
+/** Code search hit: path, line and the matching line with hits marked (text nodes only). */
+export function MatchPreview(props: { match: CodeSearchMatch }) {
+  return (
+    <>
+      <div class={styles.prevTitle}>
+        <FileIcon
+          name={props.match.path.split("/").pop() ?? props.match.path}
+        />
+        <b class={styles.prevPath}>{props.match.path}</b>
+      </div>
+      <div class={styles.prevCode}>
+        <span class={styles.prevLn}>{props.match.line}</span>
+        <span>
+          <Highlight
+            text={props.match.text}
+            parts={rangeParts(props.match.text, props.match.ranges)}
+          />
+        </span>
+      </div>
+      <p class={styles.prevDesc}>
+        Line {props.match.line}. Enter opens the file at this line.
+      </p>
     </>
   );
 }

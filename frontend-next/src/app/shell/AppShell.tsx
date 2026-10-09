@@ -14,6 +14,7 @@ import {
 import { PaletteProvider } from "~/features/palette";
 import { copyText } from "~/lib/clipboard";
 import { handleShortcutKey, useShortcut } from "~/lib/keyboard";
+import { SkeletonText } from "~/ui/Skeleton";
 import { showToast } from "~/ui/Toast";
 import { storedAccent, applyAccent } from "../accent";
 import { SessionExpiredDialog, useAuth } from "../auth";
@@ -178,7 +179,21 @@ export function AppShell(props: { children?: JSX.Element }) {
           <Show when={mode() === "signed-in"}>
             <BreakGlassBanner />
           </Show>
-          <div class={styles.page}>{props.children}</div>
+          <div class={styles.page}>
+            {/* Pages mount only once the session is known: restoring it clears the query cache
+                (F1), and queries created before that would be orphaned mid-flight. */}
+            <Show
+              when={mode() !== "loading"}
+              fallback={
+                <SkeletonText
+                  lines={["30%", "70%", "55%"]}
+                  label="Restoring your session"
+                />
+              }
+            >
+              {props.children}
+            </Show>
+          </div>
         </main>
       </div>
       <ShortcutsDialog open={shortcuts()} onOpenChange={setShortcuts} />

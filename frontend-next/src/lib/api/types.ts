@@ -120,9 +120,21 @@ export interface RepositorySummary {
   inherited_access: boolean;
 }
 
+/** Enum code only, never stderr or storage paths (screen-map "Phase 1 changes", I36). */
+export type ProvisioningErrorCode =
+  | "hg_init_failed"
+  | "hg_verify_failed"
+  | "storage_error"
+  | "storage_conflict"
+  | "provisioning_stale"
+  | "cancelled";
+
 export interface RepositoryDetail extends RepositorySummary {
   organization_slug: string;
   phase_status: string;
+  /** API-GAP: repo-states (Phase 1) — optional until the backend returns it. */
+  provisioning_error?: ProvisioningErrorCode | null;
+  provisioning_started_at?: string | null;
 }
 
 export interface RepositoryProvisionResponse {
@@ -183,11 +195,26 @@ export interface ChangesetDiff {
   truncation_reason_when_applicable: string | null;
 }
 
+/** The changeset that last touched an entry (directory: newest under it). */
+export interface LastChangeset {
+  node: string;
+  short_node: string;
+  summary: string;
+  author_name: string;
+  date: string;
+}
+
 export interface RepositoryTreeEntry {
   name: string;
   path: string;
   kind: "directory" | "file";
+  /** Files only; null for directories or when unknown. */
+  size?: number | null;
+  /** null past the backend's 10k-file cap. */
+  last_changeset?: LastChangeset | null;
 }
+
+export type ContentKind = "text" | "binary" | "image" | "font" | "symlink";
 
 export interface RepositoryBrowseDirectory {
   kind: "directory";
@@ -205,14 +232,23 @@ export interface RepositoryBrowseFile {
   is_binary: boolean;
   is_too_large: boolean;
   size_when_known: number | null;
+  /** Phase 1 additions; reposApi.browse fills them from the legacy fields when missing. */
+  content_kind: ContentKind;
+  size: number | null;
+  /** Friendly name such as "C++" (U3). */
+  language: string | null;
 }
 
 export interface RepositoryBlameLine {
   line_number: number;
-  revision: string;
-  short_revision: string;
+  /** Line number in the changeset that introduced it. */
+  origin_line: number;
+  node: string;
+  short_node: string;
   author_name: string;
-  author_email_when_available: string | null;
+  author_email: string | null;
+  date: string | null;
+  summary: string;
   path: string;
   content: string;
 }
@@ -220,7 +256,31 @@ export interface RepositoryBlameLine {
 export interface RepositoryBlame {
   revision: string;
   path: string;
+  is_binary: boolean;
+  is_too_large: boolean;
   lines: RepositoryBlameLine[];
+}
+
+/** GET R/stats?rev (🆕, API-GAP: stats). */
+export interface RepositoryStats {
+  languages: { name: string; percent: number; color: string }[];
+  contributors: number;
+  contributors_truncated: boolean;
+  size_bytes: number;
+}
+
+/** GET R/search/code?q&rev&limit (🆕, API-GAP: search-code). Literal, case-insensitive. */
+export interface CodeSearchMatch {
+  path: string;
+  line: number;
+  text: string;
+  /** [start, end) offsets into `text`. */
+  ranges: [number, number][];
+}
+
+export interface CodeSearchResponse {
+  items: CodeSearchMatch[];
+  truncated: boolean;
 }
 
 export interface RepositoryFileSearchMatch {
@@ -333,19 +393,21 @@ export interface RepositoryTransportMetadata {
     username_hint: string;
     password_hint: string;
   };
+  /** Anonymous visitors on public repositories get HTTPS only: ssh is null or has null fields. */
   ssh: {
     enabled: boolean;
-    clone_url: string;
-    clone_command: string;
-    username: string;
+    clone_url: string | null;
+    clone_command: string | null;
+    username: string | null;
     port: number | null;
+    /** Repo admins only. */
     authorized_keys_path_hint: string | null;
-  };
+  } | null;
   setup: {
     has_active_token: boolean;
     has_active_ssh_key: boolean;
     recommended_next_step: string;
-  };
+  } | null;
 }
 
 export interface PullRequestSummary {

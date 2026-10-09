@@ -53,3 +53,23 @@ class HgCommandOutputLimitError(MercurialError):
         super().__init__("hg_output_limit")
         self.stdout = stdout
         self.stderr = stderr
+
+
+class RevisionNotFoundError(MercurialNotFoundError):
+    """A syntactically valid revision does not name a served changeset."""
+
+
+class RevisionAmbiguousError(MercurialError):
+    """A short hex prefix matches more than one served changeset."""
+
+
+class ContentTooLargeError(MercurialError):
+    """Requested repository content exceeds the configured size limit."""
+
+
+class HgBusyError(MercurialError):
+    """No Mercurial work slot became free before the acquire timeout."""
+
+
+class InvalidSearchQueryError(MercurialError):
+    """Code search query is empty, too long, or contains control characters."""

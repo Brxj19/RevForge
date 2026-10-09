@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import shutil
+import sys
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -21,10 +22,41 @@ class HgCommandResult:
     stderr: bytes
 
 
+# Fixed search path for the hg child process. The executable itself is always invoked by
+# absolute path; PATH only matters for helpers hg might spawn (none in our usage).
+_FIXED_CHILD_PATH = "/usr/local/bin:/usr/bin:/bin"
+
+
+def resolve_hg_executable(configured: str) -> str:
+    """Return an absolute path to the hg executable that matches the imported library.
+
+    A bare name ("hg") prefers the script installed next to the running interpreter
+    (the uv-managed environment that also provides ``import mercurial``), so the CLI
+    and the library come from the same pinned release (I38). Only if that does not
+    exist is ``PATH`` consulted. An explicit path must be absolute and exist.
+    """
+    if os.sep in configured:
+        executable = Path(configured)
+        if not executable.is_absolute() or not executable.is_file():
+            raise FileNotFoundError("configured hg executable is not an absolute file path")
+        return str(executable)
+    sibling = Path(sys.executable).parent / configured
+    if sibling.is_file() and os.access(sibling, os.X_OK):
+        return str(sibling)
+    resolved = shutil.which(configured)
+    if resolved is None:
+        raise FileNotFoundError(configured)
+    return str(Path(resolved).absolute())
+
+
 class HgCommandRunner:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._executable = self._resolve_executable(settings.hg_executable)
+        self._executable = resolve_hg_executable(settings.hg_executable)
+
+    @property
+    def executable(self) -> str:
+        return self._executable
 
     async def run(
         self,
@@ -57,10 +89,42 @@ class HgCommandRunner:
         if process.stderr is None:
             raise HgCommandFailedError(code="hg_process_init_failed")
 
+        try:
+            return await self._collect(process, stdout_cap=stdout_cap, stderr_cap=stderr_cap)
+        except BaseException:
+            # Cancellation (client disconnect, provisioning abort) or any unexpected error
+            # must not leave an orphaned hg child behind (I36).
+            await asyncio.shield(self._terminate(process))
+            raise
+
+    async def _collect(
+        self,
+        process: asyncio.subprocess.Process,
+        *,
+        stdout_cap: int,
+        stderr_cap: int,
+    ) -> HgCommandResult:
+        assert process.stdout is not None and process.stderr is not None
         stdout_task = asyncio.create_task(self._read_stream(process.stdout, stdout_cap))
         stderr_task = asyncio.create_task(self._read_stream(process.stderr, stderr_cap))
         wait_task = asyncio.create_task(process.wait())
+        try:
+            return await self._wait_for_result(
+                process, stdout_task=stdout_task, stderr_task=stderr_task, wait_task=wait_task
+            )
+        finally:
+            for task in (stdout_task, stderr_task, wait_task):
+                if not task.done():
+                    task.cancel()
 
+    async def _wait_for_result(
+        self,
+        process: asyncio.subprocess.Process,
+        *,
+        stdout_task: asyncio.Task[tuple[bytes, bool]],
+        stderr_task: asyncio.Task[tuple[bytes, bool]],
+        wait_task: asyncio.Task[int],
+    ) -> HgCommandResult:
         timeout_deadline = time.monotonic() + self._settings.hg_command_timeout_seconds
         stdout_bytes = b""
         stderr_bytes = b""
@@ -135,20 +199,9 @@ class HgCommandRunner:
             "HGRCPATH": "",
             "LANG": "C.UTF-8",
             "LC_ALL": "C.UTF-8",
-            "PATH": os.environ.get("PATH", ""),
+            "PATH": _FIXED_CHILD_PATH,
         }
         return env
-
-    def _resolve_executable(self, configured: str) -> str:
-        if os.sep in configured:
-            executable = Path(configured)
-            if not executable.exists():
-                raise FileNotFoundError(configured)
-            return str(executable)
-        resolved = shutil.which(configured)
-        if resolved is None:
-            raise FileNotFoundError(configured)
-        return resolved
 
     async def _read_stream(
         self,
@@ -172,7 +225,10 @@ class HgCommandRunner:
     async def _terminate(self, process: asyncio.subprocess.Process) -> None:
         if process.returncode is not None:
             return
-        process.kill()
+        try:
+            process.kill()
+        except ProcessLookupError:
+            return
         await process.wait()
 
     def _classify_failure(self, *, stderr: bytes, exit_code: int | None) -> HgCommandFailedError:

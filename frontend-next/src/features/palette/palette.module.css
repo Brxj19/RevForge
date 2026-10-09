@@ -281,3 +281,34 @@
     display: none;
   }
 }
+.prevPath {
+  font: 500 13px var(--mono);
+  overflow-wrap: anywhere;
+}
+/* Prototype .prev-code: the matching line, hits marked. */
+.prevCode {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--raised);
+  font: 12px/1.6 var(--mono);
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.prevCode mark {
+  background: var(--amber-bg);
+  color: var(--text);
+  border-radius: 2px;
+}
+.prevLn {
+  color: var(--subtle);
+  flex: none;
+}
+.note {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}

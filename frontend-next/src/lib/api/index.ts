@@ -1,6 +1,7 @@
 export {
   API_PREFIX,
   ApiError,
+  apiUrl,
   isRetryable,
   path,
   request,

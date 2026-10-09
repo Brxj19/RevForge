@@ -8,14 +8,17 @@ import {
   type Accessor,
 } from "solid-js";
 import {
+  ApiError,
   reposApi,
+  type CodeSearchMatch,
   type OrganizationSummary,
   type RepositoryDetail,
 } from "~/lib/api";
 import { fuzzy } from "~/lib/fuzzy";
 import { qk } from "~/lib/query-keys";
 import type { PaletteModeId } from "./modes";
-import { RepoPreview } from "./previews";
+import { MatchPreview, RepoPreview } from "./previews";
+import { rangeParts } from "./ranges";
 import type { PaletteItem, ScoredItem } from "./types";
 
 export function repoItems(
@@ -59,14 +62,22 @@ export function createRepoSources(
   navigate: (to: string) => void,
 ) {
   const [debounced, setDebounced] = createSignal("");
+  const [codeTerm, setCodeTerm] = createSignal("");
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let codeTimer: ReturnType<typeof setTimeout> | undefined;
   createEffect(
     on(term, (t) => {
       clearTimeout(timer);
       timer = setTimeout(() => setDebounced(t), 150);
+      // Code search hits the server per query: wait for a pause in typing (F5-style debounce).
+      clearTimeout(codeTimer);
+      codeTimer = setTimeout(() => setCodeTerm(t.trim()), 250);
     }),
   );
-  onCleanup(() => clearTimeout(timer));
+  onCleanup(() => {
+    clearTimeout(timer);
+    clearTimeout(codeTimer);
+  });
   const base = () => {
     const r = repo();
     return r
@@ -117,10 +128,36 @@ export function createRepoSources(
     staleTime: 60_000,
   }));
 
+  // API-GAP: search-code — literal, case-insensitive, at the revision in the URL (?rev).
+  const code = createQuery(() => ({
+    queryKey: qk.codeSearch(
+      repo()?.org ?? "",
+      repo()?.repo ?? "",
+      repo()?.rev ?? "",
+      codeTerm(),
+    ),
+    queryFn: () => {
+      const r = repo();
+      return r
+        ? reposApi.searchCode(r.org, r.repo, {
+            q: codeTerm(),
+            rev: r.rev,
+            limit: 100,
+          })
+        : null;
+    },
+    enabled: !!repo() && mode() === "search" && validCodeQuery(codeTerm()),
+    staleTime: 60_000,
+    retry: false,
+  }));
+
   const items = createMemo<PaletteItem[]>(() => {
     if (!repo()) return [];
     const out: PaletteItem[] = [];
     const b = base();
+    const r = repo();
+    for (const m of mode() === "search" && r ? (code.data?.items ?? []) : [])
+      out.push(matchItem(m, r?.repo ?? "", b, r?.rev, navigate));
     for (const f of files.data?.results ?? [])
       out.push({
         id: `f:${f.path}`,
@@ -172,7 +209,61 @@ export function createRepoSources(
   });
   return {
     items,
-    loading: () => files.isFetching || refs.isFetching || changesets.isFetching,
+    loading: () =>
+      files.isFetching ||
+      refs.isFetching ||
+      changesets.isFetching ||
+      code.isFetching ||
+      (mode() === "search" && term().trim() !== codeTerm()),
+    codeSearch: () => ({
+      truncated: code.data?.truncated ?? false,
+      error:
+        code.error instanceof ApiError
+          ? code.error.status === 429
+            ? "Code search is busy. Wait a moment, then try again."
+            : code.error.message
+          : code.error
+            ? "Couldn't search the code."
+            : null,
+    }),
+  };
+}
+
+/** q 2..200 chars, one line (screen-map contract); shorter queries never reach the server. */
+export function validCodeQuery(q: string): boolean {
+  // eslint-disable-next-line no-control-regex
+  return q.length >= 2 && q.length <= 200 && !/[\u0000\r\n]/.test(q);
+}
+
+function matchItem(
+  m: CodeSearchMatch,
+  repoSlug: string,
+  base: string,
+  rev: string | undefined,
+  navigate: (to: string) => void,
+): PaletteItem {
+  // Trim leading indentation for the label and shift the ranges with it.
+  const lead = m.text.length - m.text.trimStart().length;
+  const label = m.text.trim();
+  const ranges = m.ranges.map(([a, b]) => [a - lead, b - lead] as const);
+  const name = m.path.split("/").pop() ?? m.path;
+  const q = new URLSearchParams();
+  if (rev) q.set("rev", rev);
+  q.set("L", String(m.line));
+  return {
+    id: `s:${m.path}:${m.line}`,
+    group: `Matches in ${repoSlug}`,
+    label,
+    detail: `${m.path}:${m.line}`,
+    fileName: name,
+    kbd: `L${m.line}`,
+    parts: rangeParts(label, ranges),
+    serverMatched: true,
+    run: () =>
+      navigate(
+        `${base}/code/${m.path.split("/").map(encodeURIComponent).join("/")}?${q.toString()}`,
+      ),
+    preview: () => <MatchPreview match={m} />,
   };
 }
 
@@ -183,7 +274,7 @@ const GROUPS_BY_MODE: Record<PaletteModeId, readonly string[] | null> = {
   people: ["People"],
   files: ["Files"],
   revisions: ["Changesets", "Branches and tags"],
-  search: ["Matches"],
+  search: ["Matches in"],
 };
 
 /** Filter, score and order items for the active mode (prototype palSource). */
@@ -195,7 +286,13 @@ export function rank(
   const groups = GROUPS_BY_MODE[mode];
   const out: ScoredItem[] = [];
   for (const it of items) {
-    if (groups && !groups.includes(it.group)) continue;
+    if (groups && !groups.some((g) => it.group === g || it.group.startsWith(g)))
+      continue;
+    // Server-side matches (code search) are already filtered and carry their own highlights.
+    if (it.serverMatched) {
+      out.push({ ...it, score: 0, parts: it.parts });
+      continue;
+    }
     const f = fuzzy(`${it.label}${it.alt ? ` ${it.alt}` : ""}`, term);
     if (!f.ok) continue;
     out.push({

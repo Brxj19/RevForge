@@ -1,6 +1,7 @@
 // Users, organizations and repositories from the prototype's demo data (fictional).
 import type {
   OrganizationSummary,
+  ProvisioningErrorCode,
   RepositoryDetail,
   Viewer,
 } from "~/lib/api/types";
@@ -78,7 +79,9 @@ export interface RepoFixture {
   color: string;
   activity: number[];
   updated_at: string;
-  provisioning_error?: string;
+  /** Enum code only (screen-map "Phase 1 changes"); never stderr or paths. */
+  provisioning_error?: ProvisioningErrorCode;
+  provisioning_started_at?: string;
 }
 
 const days = (n: number) =>
@@ -115,6 +118,7 @@ export const REPOS: RepoFixture[] = [
     description: "Provisioning and deploy scripts for the forge hosts",
     visibility: "private",
     state: "provisioning",
+    provisioning_started_at: "2026-10-05T09:58:00.000Z",
     grants: {},
     language: "Shell",
     color: "#e3b341",
@@ -169,7 +173,8 @@ export const REPOS: RepoFixture[] = [
     color: "#ef5350",
     activity: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     updated_at: days(1),
-    provisioning_error: "hg init failed: permission denied on storage volume",
+    provisioning_error: "hg_init_failed",
+    provisioning_started_at: "2026-10-04T12:04:11.000Z",
   },
   {
     org: "acme-labs",

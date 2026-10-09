@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.wsgi import WSGIMiddleware
@@ -12,6 +16,17 @@ from app.core.middleware import RequestContextMiddleware
 from app.db.session import SessionLocal
 from app.mercurial.body_limit import BodySizeLimitMiddleware
 from app.mercurial.http_gateway_service import create_http_gateway_application
+from app.mercurial.version_check import ensure_mercurial_versions_match
+
+logger = structlog.get_logger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
+    # Refuse to serve if the hg CLI and the imported library are different releases (I38).
+    version = await ensure_mercurial_versions_match(get_settings())
+    logger.info("mercurial.version_verified", version=version)
+    yield
 
 
 def create_application() -> FastAPI:
@@ -22,6 +37,7 @@ def create_application() -> FastAPI:
         title="RevForge Backend",
         version="0.1.0",
         debug=settings.debug,
+        lifespan=_lifespan,
     )
 
     application.add_middleware(RequestContextMiddleware)

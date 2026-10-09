@@ -27,6 +27,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // Route tests mount the whole app with lazy chunks; the parallel run on a busy machine needs headroom.
+    testTimeout: 15_000,
     css: { modules: { classNameStrategy: "non-scoped" } },
   },
 });

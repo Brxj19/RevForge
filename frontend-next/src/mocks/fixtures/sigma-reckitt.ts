@@ -2,6 +2,7 @@
 // changesets, refs, the file tree with the changeset that last touched each file, and file sources.
 // Nodes are the prototype's 12-hex short nodes extended to full 40-hex nodes.
 import type { ChangesetSummary, RepositoryRefs } from "~/lib/api/types";
+import { PROTOTYPE_SOURCES } from "./sigma-reckitt-sources";
 
 export const NODE: Record<string, string> = {
   "1c7450e15fcb": "1c7450e15fcbe499620a42a89b43139ca1ea6aa9",
@@ -261,6 +262,8 @@ export const FILES: Record<string, string> = {
   ".github/workflows/ci.yml": "e7930bb0e4574b5b661b85ee7368d7b00b6437d4",
   "migrations/001_init.sql": "628371ad0b325b2985ea419592498e593c581657",
   "bench/results.csv": "628371ad0b325b2985ea419592498e593c581657",
+  "docs/latest.md": "628371ad0b325b2985ea419592498e593c581657",
+  "logs/build-full.log": "e7930bb0e4574b5b661b85ee7368d7b00b6437d4",
 };
 
 export const MODIFIED_IN_TIP: Record<string, "M" | "A" | "R"> = {
@@ -270,24 +273,58 @@ export const MODIFIED_IN_TIP: Record<string, "M" | "A" | "R"> = {
   "src/graph.hpp": "M",
 };
 
+/** File contents (prototype `source`), plus the symlink target for docs/latest.md. */
 export const SOURCES: Record<string, string> = {
-  "main.cpp":
-    '#include<iostream>\n#include "src/binary_tree.hpp"\n#include "src/graph.hpp"\n\nusing namespace std;\n\nint main(){\n    cout << "this is main file"<<endl;\n\n    BinaryTree bt;\n    bt.insert(5);\n    bt.insert(3);\n    bt.insert(7);\n    bt.insert(1);\n    bt.insert(4);\n    cout << "Binary tree inorder: ";\n    bt.inorder_print();\n    cout << endl;\n\n    Graph g(5);\n    g.add_edge(0,1);\n    g.add_edge(0,2);\n    g.add_edge(1,3);\n    g.add_edge(2,4);\n    cout << "Graph adjacency:\\n";\n    g.print_adj();\n    auto order = g.bfs(0);\n    for (int v : order) cout << v << " ";\n    cout << endl;\n    return 0;\n}',
-  "src/graph.hpp":
-    "#pragma once\n#include <vector>\n\nclass Graph {\npublic:\n    explicit Graph(int n);\n    void add_edge(int u, int v);\n    bool has_edge(int u, int v) const;\n    void print_adj() const;\n    std::vector<int> bfs(int start) const;\nprivate:\n    std::vector<std::vector<int>> adj_;\n};",
-  "src/binary_tree.hpp":
-    "#pragma once\n\nstruct Node {\n    int value;\n    Node* left = nullptr;\n    Node* right = nullptr;\n};\n\nclass BinaryTree {\npublic:\n    void insert(int value);\n    bool contains(int value) const;\n    void inorder_print() const;\nprivate:\n    Node* root_ = nullptr;\n};",
-  "src/graph.cpp":
-    '// Graph implementation\n#include "graph.hpp"\n#include <iostream>\n#include <queue>\n\nGraph::Graph(int n) : adj_(n) {}\n\nvoid Graph::add_edge(int u, int v) {\n    adj_[u].push_back(v);\n    adj_[v].push_back(u);\n}\n\nbool Graph::has_edge(int u, int v) const {\n    for (int w : adj_[u]) if (w == v) return true;\n    return false;\n}',
-  "src/binary_tree.cpp":
-    '// BinaryTree implementation\n#include "binary_tree.hpp"\n#include <iostream>\n\nvoid BinaryTree::insert(int value) {\n    Node** cur = &root_;\n    while (*cur) cur = value < (*cur)->value ? &(*cur)->left : &(*cur)->right;\n    *cur = new Node{value};\n}\n\nbool BinaryTree::contains(int value) const {\n    Node* cur = root_;\n    while (cur) {\n        if (value == cur->value) return true;\n        cur = value < cur->value ? cur->left : cur->right;\n    }\n    return false;\n}',
-  "README.md": "# hello from Hg x RevForge\n\n- hello world",
-  "tests/test_graph.cpp":
-    '#include "../src/graph.hpp"\n#include <cassert>\n\nint main() {\n    Graph g(3);\n    g.add_edge(0, 1);\n    assert(g.has_edge(0, 1));\n    assert(!g.has_edge(0, 2));\n    return 0;\n}',
-  "scripts/build.sh":
-    '#!/usr/bin/env bash\nset -euo pipefail\ng++ -std=c++17 -O2 main.cpp src/*.cpp -o main\necho "built ./main"',
-  "config/settings.yaml":
-    "build:\n  standard: c++17\n  optimise: true\ntests:\n  run_on_push: true",
+  ...PROTOTYPE_SOURCES,
+  "docs/latest.md": "architecture.md",
+};
+
+/** Symlinks: content is the link target (hg stores it as the file data). */
+export const SYMLINKS = new Set(["docs/latest.md"]);
+
+/** Text files over the viewer's 1 MB limit (content not sent). */
+export const TOO_LARGE: Record<string, number> = {
+  "logs/build-full.log": 2_400_000,
+};
+
+/** Sizes in bytes for files without text content. */
+export const BINARY_SIZES: Record<string, number> = {
+  main: 1_254_880,
+  "docs/graph-diagram.png": 18_432,
+  "assets/fonts/DepartureMono.woff2": 29_696,
+};
+
+/** Blame groups per file from the prototype's BLAME: [first line, last line, short node]. */
+export const BLAME_SPEC: Record<string, [number, number, string][]> = {
+  "main.cpp": [
+    [1, 1, "2295bc3c1ae5"],
+    [2, 3, "e7930bb0e457"],
+    [4, 8, "2295bc3c1ae5"],
+    [9, 29, "b2b5a019dbcb"],
+    [30, 32, "2295bc3c1ae5"],
+  ],
+  "src/graph.cpp": [
+    [1, 1, "0c3caefe6c87"],
+    [2, 2, "e7930bb0e457"],
+    [3, 11, "0c3caefe6c87"],
+    [12, 16, "0b486fec60de"],
+  ],
+  "src/binary_tree.cpp": [
+    [1, 1, "999d2d17aa87"],
+    [2, 2, "e7930bb0e457"],
+    [3, 9, "999d2d17aa87"],
+    [10, 17, "0b486fec60de"],
+  ],
+  "src/graph.hpp": [
+    [1, 6, "d07879a53207"],
+    [7, 7, "0b486fec60de"],
+    [8, 13, "d07879a53207"],
+  ],
+  "src/binary_tree.hpp": [
+    [1, 11, "3432b1bfb0d1"],
+    [12, 12, "0b486fec60de"],
+    [13, 16, "3432b1bfb0d1"],
+  ],
 };
 
 /** Files the prototype treats as binary. */

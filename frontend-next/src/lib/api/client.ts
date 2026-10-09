@@ -80,6 +80,13 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
   /** JSON body. */
   json?: unknown;
   body?: BodyInit | null;
+  /** "blob" returns the raw body (downloads); errors still parse the JSON envelope. */
+  responseType?: "json" | "blob";
+}
+
+/** Absolute URL for a path relative to /api/v1, for <img src> and download links that bypass request(). */
+export function apiUrl(p: string): string {
+  return `${BASE}${p.startsWith("/api") ? p : `${API_PREFIX}${p}`}`;
 }
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -103,10 +110,10 @@ export async function request<T>(
   p: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { csrf, json, headers: init, ...rest } = options;
+  const { csrf, json, headers: init, responseType, ...rest } = options;
   const method = (rest.method ?? "GET").toUpperCase();
   const headers = new Headers(init);
-  headers.set("Accept", "application/json");
+  headers.set("Accept", responseType === "blob" ? "*/*" : "application/json");
   let body = rest.body;
   if (json !== undefined) {
     headers.set("Content-Type", "application/json");
@@ -159,6 +166,7 @@ export async function request<T>(
     );
   }
 
+  if (responseType === "blob") return (await response.blob()) as T;
   if (response.status === 204 || response.headers.get("Content-Length") === "0")
     return undefined as T;
   const type = response.headers.get("Content-Type") ?? "";

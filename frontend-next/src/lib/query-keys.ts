@@ -19,6 +19,14 @@ export const qk = {
   blame: (o: string, r: string, rev: string, p: string) =>
     ["blame", o, r, rev, p] as const,
   changesets: (o: string, r: string) => ["changesets", o, r] as const,
+  recentChangesets: (o: string, r: string, limit: number) =>
+    ["changesets", o, r, "recent", limit] as const,
+  changeset: (o: string, r: string, node: string) =>
+    ["changeset", o, r, node] as const,
+  stats: (o: string, r: string, rev: string) =>
+    ["repo", o, r, "stats", rev] as const,
+  codeSearch: (o: string, r: string, rev: string, q: string) =>
+    ["code-search", o, r, rev, q] as const,
   fileSearch: (o: string, r: string, rev: string, q: string) =>
     ["file-search", o, r, rev, q] as const,
 };

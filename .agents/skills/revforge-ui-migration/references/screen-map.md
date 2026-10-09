@@ -33,15 +33,15 @@ Scaffold (phase-0-setup.md), tokens, every `ui/` primitive + `/dev/ui` kit, icon
 ## Phase 1 — Repository read path
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Repo layout, header, clone menu, tabs | `#/r/sigma-reckitt` | `repo` | ✅ `GET R` · ✅ `GET R/transport` | — | todo |
-| Overview (file table, README, about, recent) | `#/r/sigma-reckitt` | `repo` | ✅ `GET R/browse` · ✅ `GET R/changesets?limit=6` · 🔁 `GET R/browse` add `last_changeset` per entry · 🆕 `GET R/stats` (languages, contributors, size) | U4 | todo |
-| Revision rail + ref picker | Code page | `repo` | ✅ `GET R/refs` · 🔁 `GET R/changesets/{node}` resolve short hashes ≥ 6 hex | I11 | todo |
-| Code: explorer + file view + not-shown | `#/r/sigma-reckitt/code/main.cpp` | `code` | ✅ `GET R/browse?rev=&path=` · 🔁 file payload: `kind` (text/binary/image/font), `size`, `language`, `too_large` | F7, U3, U5 | todo |
-| Code viewer (CodeMirror) + blame | `…/main.cpp?view=blame` | `code` | ✅ `GET R/blame` | — | todo |
-| Markdown / CSV / JSON previews | `…/README.md`, `…/bench/results.csv`, `…/config/presets.json` | `code` | 🆕 `GET R/raw?rev=&path=` (raw bytes, `Content-Disposition`, CSP `sandbox`) | F8 🔒 | todo |
-| Go to file (palette `~`) | ⌘K `~` | `palette` | ✅ `GET R/search/files` | — | todo |
-| Code search (palette `/`) | ⌘K `/add_edge` | `palette` | 🆕 `GET R/search/code?q=&rev=` | 🔒 (regex/grep injection) | todo |
-| Repo states: provisioning / failed / archived | `#/r/infra-scripts`, `#/r/ml-experiments`, `#/r/legacy-billing` | `repo` | 🔁 `GET R` add `provisioning_error`, `provisioning_started_at` · ✅ `POST R/provision` | I36 | todo |
+| Repo layout, header, clone menu, tabs | `#/r/sigma-reckitt` | `repo` | ✅ `GET R` · 🔁 `GET R/transport` (anonymous on PUBLIC → HTTPS only; no path hint for non-admins) | — | wip |
+| Overview (file table, README, about, recent) | `#/r/sigma-reckitt` | `repo` | ✅ `GET R/browse` · ✅ `GET R/changesets?limit=6` · 🔁 `GET R/browse` add `last_changeset` per entry · 🆕 `GET R/stats` (languages, contributors, size) | — (U4 is the dashboard table → Phase 5) | wip |
+| Revision rail + ref picker | Code page | `repo` | ✅ `GET R/refs` · 🔁 `GET R/changesets/{node}` resolve short hashes ≥ 6 hex | I11 | wip |
+| Code: explorer + file view + not-shown | `#/r/sigma-reckitt/code/main.cpp` | `code` | ✅ `GET R/browse?rev=&path=` · 🔁 file payload: `kind` (text/binary/image/font), `size`, `language`, `too_large` | F7, U3, U5 | wip |
+| Code viewer (CodeMirror) + blame | `…/main.cpp?view=blame` | `code` | 🔁 `GET R/blame` (+ `date`, `origin_line`, `summary`, `is_binary`, `is_too_large`) | — | wip |
+| Markdown / CSV / JSON previews | `…/README.md`, `…/bench/results.csv`, `…/config/presets.json` | `code` | 🆕 `GET R/raw?rev=&path=` (raw bytes, `Content-Disposition`, CSP `sandbox`) | F8 🔒 | wip |
+| Go to file (palette `~`) | ⌘K `~` | `palette` | ✅ `GET R/search/files` | — | wip |
+| Code search (palette `/`) | ⌘K `/add_edge` | `palette` | 🆕 `GET R/search/code?q=&rev=` (literal only) | 🔒 (regex/grep injection) | wip |
+| Repo states: provisioning / failed / archived | `#/r/infra-scripts`, `#/r/ml-experiments`, `#/r/legacy-billing` | `repo` | 🔁 `GET R` add `provisioning_error`, `provisioning_started_at` · ✅ `POST R/provision` | I36 | wip |
 
 ## Phase 2 — History, changesets, refs
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
@@ -83,7 +83,7 @@ Scaffold (phase-0-setup.md), tokens, every `ui/` primitive + `/dev/ui` kit, icon
 ## Phase 5 — Discovery, access, people, notifications
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Home | `#/` | `home` | ✅ `GET /me/contributions` · ✅ `GET /events` · 🆕 `GET /me/attention` | — | todo |
+| Home | `#/` | `home` | ✅ `GET /me/contributions` · ✅ `GET /events` · 🆕 `GET /me/attention` | U4 | todo |
 | Explore / search (signed in + anonymous) | `#/explore?q=graph` | `explore` | 🆕 `GET /search/repositories` · 🆕 `GET /search/organizations` | 🔒 (visibility filtering) | todo |
 | Anonymous repo view | View as anonymous → public repo | `repo` | 🔁 private repo → **404** for anonymous (no existence leak) | 🔒 | todo |
 | No access + request access | `#/r/payments-core` | `repo` | 🆕 `POST R/access-requests` · 🆕 `GET O/access-requests` · 🆕 `POST/DELETE …/{id}` | 🔒 | todo |
@@ -119,9 +119,22 @@ Shapes are the agreed contract for MSW handlers and backend implementation. List
 
 ```ts
 // GET /me/pins  → { items: { org: string; repo: string }[] }      PUT /me/pins  ← same (max 8, order kept)
-// GET R/stats → { languages: { name: string; percent: number; color: string }[]; contributors: number; size_bytes: number }
-// GET R/raw?rev&path → bytes; headers: Content-Type (sniffed, never text/html), Content-Disposition, X-Content-Type-Options: nosniff, CSP: sandbox
+// GET R/stats?rev → { languages: { name: string; percent: number; color: string }[]; contributors: number; contributors_truncated: boolean; size_bytes: number }
+// Phase 1 changes (🔁):
+// GET R → + provisioning_error: 'hg_init_failed'|'hg_verify_failed'|'storage_error'|'storage_conflict'|'provisioning_stale'|'cancelled'|null (enum code only); provisioning_started_at: string|null
+// GET R/transport → anonymous allowed on PUBLIC repos: { https_clone_url } only (ssh fields null); authorized_keys_path_hint only for repo admins
+// GET R/changesets?cursor&limit (1..50)
+// GET R/browse (directory) entries: { name; path; kind: 'directory'|'file'; size: number|null;
+//                last_changeset: { node; short_node; summary; author_name; date } | null }   (null past a 10k-file cap)
+// GET R/browse (file) → + content_kind: 'text'|'binary'|'image'|'font'|'symlink'; size: number|null; language: string|null (friendly, e.g. "C++")
+// GET R/blame → { revision; path; is_binary; is_too_large; lines: { line_number; origin_line; node; short_node; author_name; author_email; date; summary; path; content }[] }
+// Revision resolution: bookmark → tag → branch (tip) → hex prefix ≥6. Unknown → 404 code 'revision_not_found'; ambiguous → 409 'revision_ambiguous' (no candidates).
+// Not browsable → 409 code 'repository_not_ready'. Rate limited → 429 code 'rate_limited' + Retry-After.
+// GET R/raw?rev&path → bytes; Content-Type from server allowlist (text → text/plain; charset=utf-8, else application/octet-stream; never html/svg/xml);
+//     Content-Disposition: attachment; filename*=UTF-8''… (inline only png/jpeg/gif/webp); X-Content-Type-Options: nosniff;
+//     Content-Security-Policy: sandbox; default-src 'none'; Cross-Origin-Resource-Policy: same-origin; Cache-Control: private, no-store. Directory → 404, > max_raw_bytes → 413
 // GET R/search/code?q&rev&limit → { items: { path: string; line: number; text: string; ranges: [number, number][] }[]; truncated: boolean }
+//     literal, case-insensitive; q 2..200 chars, no NUL/CR/LF (else 422); ≤100 matches, 300-char snippets; skips binary/symlink/>1MB
 // GET R/compare?base&head → { base_node: string; head_node: string; merge_base: string; changesets: ChangesetSummary[];
 //                            files: DiffFileSummary[]; conflicts: boolean; identical: boolean }
 // GET /me/pull-requests?filter=review_requested|authored|involved|open|closed&cursor → list of PullRequestSummary (+ repository { org, repo })

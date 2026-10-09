@@ -15,6 +15,27 @@ from app.schemas.errors import ErrorBody, ErrorEnvelope
 logger = structlog.get_logger(__name__)
 
 
+class ApiError(StarletteHTTPException):
+    """HTTP error with a machine-readable ``error.code`` for the envelope.
+
+    Plain ``HTTPException`` keeps the generic ``http_error`` code; raise this when clients
+    branch on the specific failure (e.g. ``revision_not_found``, ``rate_limited``).
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        *,
+        code: str,
+        detail: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        super().__init__(
+            status_code=status_code, detail=detail, headers=dict(headers) if headers else None
+        )
+        self.code = code
+
+
 def _request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
 
@@ -51,7 +72,7 @@ def register_exception_handlers(application: FastAPI) -> None:
         return _error_response(
             request,
             status_code=exc.status_code,
-            code="http_error",
+            code=exc.code if isinstance(exc, ApiError) else "http_error",
             message=str(exc.detail),
             headers=exc.headers,
         )

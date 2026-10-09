@@ -18,6 +18,17 @@ def clear_settings_cache() -> None:
     get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def reset_read_path_state() -> None:
+    # Process-wide read caches, the hg work limiter and the read rate limiter would
+    # otherwise leak between tests that reuse repository paths or client IPs.
+    from app.api.rate_limit import read_rate_limiter
+    from app.mercurial.read_service import reset_read_caches
+
+    reset_read_caches()
+    read_rate_limiter.reset()
+
+
 @pytest.fixture
 def settings_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setenv("REVFORGE_SESSION_SECRET_KEY", "test-session-secret")

@@ -7,6 +7,7 @@ import {
 } from "@solidjs/router";
 import { lazy, Show, type Component, type JSX } from "solid-js";
 import { isReservedSlug } from "~/lib/reserved";
+import { Pane, WsBody } from "~/ui/WorkspaceLayout";
 import { RequireAuth, RequirePlatformAdmin, useAuth } from "./auth";
 
 const Placeholder = lazy(
@@ -15,6 +16,9 @@ const Placeholder = lazy(
 const NotFoundPage = lazy(() => import("~/features/errors/NotFoundPage"));
 const ErrorPage = lazy(() => import("~/features/errors/ErrorPage"));
 const LoginPage = lazy(() => import("~/features/auth/LoginPage"));
+const RepoLayout = lazy(() => import("~/features/repo/RepoLayout"));
+const RepoOverview = lazy(() => import("~/features/repo/OverviewPage"));
+const CodePage = lazy(() => import("~/features/code/CodePage"));
 const UiKitPage = lazy(() => import("~/features/dev-ui/UiKitPage"));
 const IllustrationsPage = lazy(
   () => import("~/features/dev-ui/IllustrationsPage"),
@@ -24,6 +28,22 @@ const IllustrationsPage = lazy(
 const soon = (screen: string, phase: number, prototype?: string): Component =>
   function NotBuiltYet() {
     return <Placeholder screen={screen} phase={phase} prototype={prototype} />;
+  };
+
+/** Not-yet-built repository tab: rendered inside RepoLayout's workspace so the body scrolls. */
+const soonInRepo = (
+  screen: string,
+  phase: number,
+  prototype?: string,
+): Component =>
+  function NotBuiltYetInRepo() {
+    return (
+      <WsBody>
+        <Pane>
+          <Placeholder screen={screen} phase={phase} prototype={prototype} />
+        </Pane>
+      </WsBody>
+    );
   };
 
 const authed =
@@ -160,45 +180,47 @@ export function AppRoutes(): JSX.Element {
         component={LegacyRepoRedirect}
       />
 
-      <Route path="/:org/:repo" matchFilters={repoFilters}>
-        <Route
-          path="/"
-          component={soon("Repository overview", 1, "#/r/sigma-reckitt")}
-        />
-        <Route
-          path="/code/*path"
-          component={soon("Code", 1, "#/r/sigma-reckitt/code/main.cpp")}
-        />
+      <Route
+        path="/:org/:repo"
+        matchFilters={repoFilters}
+        component={RepoLayout}
+      >
+        <Route path="/" component={RepoOverview} />
+        <Route path="/code/*path" component={CodePage} />
         <Route
           path="/history"
-          component={soon("History", 2, "#/r/sigma-reckitt/history")}
+          component={soonInRepo("History", 2, "#/r/sigma-reckitt/history")}
         />
         <Route
           path="/changesets/:node"
-          component={soon("Changeset", 2, "#/r/sigma-reckitt/c/0b486fec60de")}
+          component={soonInRepo(
+            "Changeset",
+            2,
+            "#/r/sigma-reckitt/c/0b486fec60de",
+          )}
         />
         <Route
           path="/pulls"
-          component={soon("Pull requests", 3, "#/r/sigma-reckitt/pulls")}
+          component={soonInRepo("Pull requests", 3, "#/r/sigma-reckitt/pulls")}
         />
         <Route
           path="/pulls/new"
           component={authed(
-            soon("New pull request", 3, "#/r/sigma-reckitt/pulls/new"),
+            soonInRepo("New pull request", 3, "#/r/sigma-reckitt/pulls/new"),
           )}
         />
         <Route
           path="/pulls/:n/:tab?"
-          component={soon("Pull request", 3, "#/r/sigma-reckitt/pulls/7")}
+          component={soonInRepo("Pull request", 3, "#/r/sigma-reckitt/pulls/7")}
         />
         <Route
           path="/refs/:kind?"
-          component={soon("Branches & tags", 2, "#/r/sigma-reckitt/refs")}
+          component={soonInRepo("Branches & tags", 2, "#/r/sigma-reckitt/refs")}
         />
         <Route
           path="/settings/:section?/:id?"
           component={authed(
-            soon(
+            soonInRepo(
               "Repository settings",
               4,
               "#/r/sigma-reckitt/settings/general",

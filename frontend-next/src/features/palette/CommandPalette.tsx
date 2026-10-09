@@ -57,6 +57,8 @@ export interface CommandPaletteProps {
   scope: string | null;
   inRepo: boolean;
   loading?: boolean;
+  /** Code search (/) status: server error message and whether results were capped. */
+  codeSearch?: { error: string | null; truncated: boolean };
   /** Reports mode/term so repo sources can fetch. */
   onQueryChange?: (mode: PaletteModeId, term: string) => void;
 }
@@ -174,16 +176,26 @@ export function CommandPalette(props: CommandPaletteProps) {
         art: "no-members" as const,
         text: "People search isn't available on this forge yet.",
       };
-    if (m.id === "search")
-      return term()
-        ? {
-            art: "no-results" as const,
-            text: "Code search isn't available on this forge yet.",
-          }
-        : {
-            art: "select-file" as const,
-            text: "Type to search inside files at this revision.",
-          };
+    if (m.id === "search") {
+      const t = term().trim();
+      if (!t)
+        return {
+          art: "select-file" as const,
+          text: `Type to search inside files${props.scope?.includes(" @ ") ? ` at ${props.scope.split(" @ ")[1]}` : " at this revision"}.`,
+        };
+      if (t.length < 2)
+        return {
+          art: "select-file" as const,
+          text: "Type at least 2 characters to search the code.",
+        };
+      if (t.length > 200)
+        return {
+          art: "no-results" as const,
+          text: "Search for 200 characters or fewer.",
+        };
+      if (props.codeSearch?.error)
+        return { art: "load-error" as const, text: props.codeSearch.error };
+    }
     return null;
   };
 
@@ -384,6 +396,18 @@ export function CommandPalette(props: CommandPaletteProps) {
                     </>
                   )}
                 </For>
+                <Show
+                  when={
+                    mode() === "search" &&
+                    props.codeSearch?.truncated &&
+                    visible().length > 0
+                  }
+                >
+                  <div class={styles.note} role="status">
+                    Showing the first {visible().length} matches. Add more
+                    characters to narrow the search.
+                  </div>
+                </Show>
               </div>
               <div class={styles.prev} aria-live="polite">
                 <Show

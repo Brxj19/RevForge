@@ -10,6 +10,14 @@ interface MockDb {
   csrf: string;
   pins: Partial<Record<UserKey, PinRef[]>>;
   requestSeq: number;
+  /** Provisioning state changes made through POST R/provision, keyed "org/repo". */
+  provisioning: Record<
+    string,
+    Pick<
+      RepoFixture,
+      "state" | "provisioning_error" | "provisioning_started_at"
+    >
+  >;
 }
 
 function fresh(signedIn: UserKey | null): MockDb {
@@ -24,6 +32,7 @@ function fresh(signedIn: UserKey | null): MockDb {
       ],
     },
     requestSeq: 0,
+    provisioning: {},
   };
 }
 
@@ -56,8 +65,11 @@ export function roleFor(
   return repo.visibility === "public" ? "read" : null;
 }
 
-export function findRepo(org: string, slug: string) {
-  return REPOS.find((r) => r.org === org && r.slug === slug);
+/** The repository fixture with any provisioning changes from this test applied. */
+export function findRepo(org: string, slug: string): RepoFixture | undefined {
+  const r = REPOS.find((x) => x.org === org && x.slug === slug);
+  const patch = r ? db.provisioning[`${r.org}/${r.slug}`] : undefined;
+  return r && patch ? { ...r, ...patch } : r;
 }
 
 export { ORGS, REPOS, USERS };

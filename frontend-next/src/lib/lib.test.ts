@@ -64,6 +64,20 @@ describe("safe", () => {
     ["//evil.example", false],
     ["vbscript:x", false],
     ["", false],
+    // F8: control characters, spaces and C1 controls are rejected before scheme parsing.
+    ["java\x01script:alert(1)", false],
+    ["java\x00script:alert(1)", false],
+    [" javascript:alert(1)", false],
+    ["javascript\x7f:alert(1)", false],
+    ["\u0085javascript:alert(1)", false],
+    ["https://example.com/a b", false],
+    ["JAVASCRIPT:alert(1)", false],
+    ["data:text/html;base64,PHNjcmlwdD4=", false],
+    ["file:///etc/passwd", false],
+    ["\\\\evil.example\\share", false],
+    ["../CHANGELOG.md", true],
+    ["docs/a%20b.md#usage", true],
+    ["http://example.com", true],
   ])("isSafeHref(%j) = %s", (href, ok) => {
     expect(isSafeHref(href)).toBe(ok);
   });

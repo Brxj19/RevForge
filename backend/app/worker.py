@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
+from app.mercurial.provisioning_service import sweep_stale_provisioning
+from app.mercurial.version_check import ensure_mercurial_versions_match
 from app.models.repository_event import EventSpoolEntry
 from app.services.event_service import EventService
 from app.services.event_spool import FileEventSpoolReader
@@ -36,6 +38,7 @@ class RevForgeWorker:
         self._running = False
         self._file_spool: FileEventSpoolReader | None = None
         self._file_spool_counter = 0
+        self._provisioning_sweep_counter = 0
         if event_spool_dir:
             self._file_spool = FileEventSpoolReader(event_spool_dir)
 
@@ -49,6 +52,7 @@ class RevForgeWorker:
         while self._running:
             try:
                 await self._import_file_spool()
+                await self._sweep_stale_provisioning()
                 await self._process_batch()
             except Exception:
                 logger.exception("worker.batch_error")
@@ -65,6 +69,18 @@ class RevForgeWorker:
             if imported:
                 await session.commit()
                 logger.info("worker.file_spool_imported", count=imported)
+
+    async def _sweep_stale_provisioning(self) -> None:
+        # Counter-gated: roughly once a minute at the default 2s poll interval (I36).
+        self._provisioning_sweep_counter += 1
+        if self._provisioning_sweep_counter % 30 != 1:
+            return
+        async with self._session_factory() as session:
+            swept = await sweep_stale_provisioning(
+                session, stale_after_seconds=self._settings.provisioning_stale_after_seconds
+            )
+        if swept:
+            logger.warning("worker.provisioning_stale_swept", count=swept)
 
     async def stop(self) -> None:
         self._running = False
@@ -137,6 +153,7 @@ class RevForgeWorker:
 
 def run_worker() -> None:
     settings = get_settings()
+    asyncio.run(ensure_mercurial_versions_match(settings))
     worker = RevForgeWorker(
         settings=settings,
         session_factory=SessionLocal,

@@ -11,6 +11,7 @@ import { Dialog } from "~/ui/Dialog";
 import { ChangeBadge, DiffBar } from "~/ui/DiffStat";
 import { EmptyState } from "~/ui/EmptyState";
 import { Field, Input, InputGroup, Textarea } from "~/ui/Field";
+import { FileTree, type TreeItem } from "~/ui/FileTree";
 import { Hash } from "~/ui/Hash";
 import { Heatmap } from "~/ui/Heatmap";
 import { IconButton } from "~/ui/IconButton";
@@ -18,6 +19,7 @@ import { Kbd, Shortcut } from "~/ui/Kbd";
 import { Menu } from "~/ui/Menu";
 import { Pager } from "~/ui/Pager";
 import { Pill } from "~/ui/Pill";
+import { Popover } from "~/ui/Popover";
 import { Progress } from "~/ui/Progress";
 import { RadioGroup } from "~/ui/Radio";
 import { Ref } from "~/ui/Ref";
@@ -50,6 +52,7 @@ const SECTIONS = [
   ["k-toggles", "Toggles, checkboxes, radios"],
   ["k-tabs", "Tabs and segmented"],
   ["k-copy", "Copy and code"],
+  ["k-tree", "File tree and popover"],
   ["k-feedback", "Callouts and progress"],
   ["k-states", "Loading, empty, error"],
   ["k-ill", "Illustrations"],
@@ -85,6 +88,27 @@ const Row = (props: { children: JSX.Element }) => (
   <div class={styles.row}>{props.children}</div>
 );
 
+const KIT_TREE: Record<string, TreeItem[]> = {
+  "": [
+    { path: "src", name: "src", dir: true },
+    { path: "tests", name: "tests", dir: true },
+    { path: "CMakeLists.txt", name: "CMakeLists.txt", dir: false },
+    { path: "README.md", name: "README.md", dir: false },
+  ],
+  src: [
+    { path: "src/util", name: "util", dir: true },
+    {
+      path: "src/graph.cpp",
+      name: "graph.cpp",
+      dir: false,
+      status: { label: "M", title: "Modified in this changeset" },
+    },
+    { path: "src/graph.hpp", name: "graph.hpp", dir: false },
+  ],
+  "src/util": [{ path: "src/util/log.hpp", name: "log.hpp", dir: false }],
+  tests: [{ path: "tests/test_graph.cpp", name: "test_graph.cpp", dir: false }],
+};
+
 /** The UI kit (prototype #/ui): every primitive in each of its states. */
 export default function UiKitPage() {
   const [active, setActive] = createSignal<string>(SECTIONS[0][0]);
@@ -105,6 +129,8 @@ export default function UiKitPage() {
       .slice(0, 3);
   });
   const heatDays = kitHeatDays(new Date(2026, 9, 5));
+  const [treeOpen, setTreeOpen] = createSignal(new Set(["src"]));
+  const [treeSel, setTreeSel] = createSignal("src/graph.cpp");
 
   const jump = (id: string) => {
     setActive(id);
@@ -619,6 +645,45 @@ export default function UiKitPage() {
                       text="hg push --new-branch"
                       label="Copy command"
                     />
+                  </Row>
+                </div>
+              </Section>
+
+              <Section id="k-tree" title="File tree and popover">
+                <div class={styles.col}>
+                  <Label>
+                    FileTree: ↑↓ move, → expand, ← collapse or parent, Enter
+                    opens
+                  </Label>
+                  <FileTree
+                    label="Example files"
+                    childrenOf={(d) => KIT_TREE[d]}
+                    isExpanded={(p) => treeOpen().has(p)}
+                    onToggle={(p, open) =>
+                      setTreeOpen((s) => {
+                        const n = new Set(s);
+                        if (open) n.add(p);
+                        else n.delete(p);
+                        return n;
+                      })
+                    }
+                    onOpen={(it) => setTreeSel(it.path)}
+                    selected={treeSel()}
+                  />
+                  <Label>Popover (clone menu, ref picker)</Label>
+                  <Row>
+                    <Popover
+                      trigger={Button}
+                      triggerProps={{ variant: "primary" }}
+                      triggerContent="Clone"
+                      title="Clone sigma-reckitt"
+                      width={420}
+                    >
+                      <CopyLine
+                        text="hg clone ssh://hg@revforge.sigma.dev/sigma/sigma-reckitt"
+                        label="Copy clone command"
+                      />
+                    </Popover>
                   </Row>
                 </div>
               </Section>

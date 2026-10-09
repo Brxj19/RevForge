@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@solidjs/testing-library";
+import { cleanup, configure } from "@solidjs/testing-library";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { resetMockDb } from "~/mocks/db";
 import { server } from "~/mocks/server";
@@ -24,6 +24,22 @@ if (!window.matchMedia)
       removeEventListener: () => undefined,
       dispatchEvent: () => false,
     }) as MediaQueryList;
+
+// Lazy routes (CodeMirror, Markdown) compile on first use; under a parallel run that can take
+// longer than the 1s default.
+configure({ asyncUtilTimeout: 4000 });
+
+// jsdom has no layout: CodeMirror measures text through Range rects.
+if (!Range.prototype.getClientRects) {
+  Range.prototype.getClientRects = () =>
+    ({
+      length: 0,
+      item: () => null,
+      [Symbol.iterator]: [][Symbol.iterator],
+    }) as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
+}
+if (!document.elementFromPoint) document.elementFromPoint = () => null;
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => {

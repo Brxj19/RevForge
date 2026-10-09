@@ -110,6 +110,7 @@ export function PaletteProvider(props: PaletteProviderProps) {
         scope={scope()}
         inRepo={!!props.repoContext()}
         loading={repoSources.loading()}
+        codeSearch={repoSources.codeSearch()}
         onQueryChange={(m, t) => {
           setMode(m);
           setTerm(t);

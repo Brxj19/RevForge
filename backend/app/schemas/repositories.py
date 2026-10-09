@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from app.domain.enums import (
+    ProvisioningErrorCode,
     RepositoryProvisioningState,
     RepositoryRole,
     RepositoryVisibility,
@@ -66,6 +68,9 @@ class RepositorySummary(BaseModel):
 class RepositoryDetailResponse(RepositorySummary):
     organization_slug: str
     phase_status: str
+    # Enum code only; never stderr, paths or exception text (I36).
+    provisioning_error: ProvisioningErrorCode | None = None
+    provisioning_started_at: datetime | None = None
 
 
 class RepositoryProvisionResponse(BaseModel):
@@ -128,10 +133,21 @@ class ChangesetDiffResponse(BaseModel):
     truncation_reason_when_applicable: str | None = None
 
 
+class TreeEntryChangesetResponse(BaseModel):
+    node: str
+    short_node: str
+    summary: str
+    author_name: str
+    date: datetime
+
+
 class RepositoryTreeEntryResponse(BaseModel):
     name: str
     path: str
     kind: str
+    size: int | None = None
+    # Null past the per-directory file cap (REVFORGE_TREE_LAST_CHANGESET_FILE_CAP).
+    last_changeset: TreeEntryChangesetResponse | None = None
 
 
 class RepositoryDirectoryBrowseResponse(BaseModel):
@@ -150,22 +166,59 @@ class RepositoryFileBrowseResponse(BaseModel):
     is_binary: bool
     is_too_large: bool
     size_when_known: int | None = None
+    content_kind: Literal["text", "binary", "image", "font", "symlink"] = "text"
+    size: int | None = None
+    language: str | None = None
 
 
 class RepositoryBlameLineResponse(BaseModel):
     line_number: int
-    revision: str
-    short_revision: str
+    origin_line: int | None = None
+    node: str
+    short_node: str
     author_name: str
-    author_email_when_available: str | None
+    author_email: str | None = None
+    date: datetime | None = None
+    summary: str = ""
     path: str
     content: str
+    # Pre-Phase-1 field names, kept for the frozen React app until cutover.
+    revision: str
+    short_revision: str
+    author_email_when_available: str | None
 
 
 class RepositoryBlameResponse(BaseModel):
     revision: str
     path: str
+    is_binary: bool = False
+    is_too_large: bool = False
     lines: list[RepositoryBlameLineResponse]
+
+
+class RepositoryLanguageShareResponse(BaseModel):
+    name: str
+    percent: float
+    color: str
+
+
+class RepositoryStatsResponse(BaseModel):
+    languages: list[RepositoryLanguageShareResponse]
+    contributors: int
+    contributors_truncated: bool
+    size_bytes: int
+
+
+class CodeSearchMatchResponse(BaseModel):
+    path: str
+    line: int
+    text: str
+    ranges: list[tuple[int, int]]
+
+
+class CodeSearchResponse(BaseModel):
+    items: list[CodeSearchMatchResponse]
+    truncated: bool
 
 
 class RepositoryFileSearchMatchResponse(BaseModel):
@@ -205,8 +258,8 @@ class RepositoryHttpsTransportResponse(BaseModel):
     enabled: bool
     clone_url: str
     clone_command: str
-    username_hint: str
-    password_hint: str
+    username_hint: str | None
+    password_hint: str | None
 
 
 class RepositorySshTransportResponse(BaseModel):
@@ -227,5 +280,6 @@ class RepositoryTransportSetupResponse(BaseModel):
 class RepositoryTransportResponse(BaseModel):
     repository: RepositoryTransportInfo
     https: RepositoryHttpsTransportResponse
-    ssh: RepositorySshTransportResponse
+    # Null for anonymous viewers of public repositories (HTTPS anonymous clone only).
+    ssh: RepositorySshTransportResponse | None
     setup: RepositoryTransportSetupResponse

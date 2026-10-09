@@ -15,9 +15,12 @@ export interface PaletteItem {
   kbd?: string;
   run: () => void;
   preview?: () => JSX.Element;
+  /** Precomputed highlight (server-side matches). */
+  parts?: FuzzyPart[];
+  /** Already matched by the server: skip fuzzy filtering (code search). */
+  serverMatched?: boolean;
 }
 
 export interface ScoredItem extends PaletteItem {
   score: number;
-  parts?: FuzzyPart[];
 }
