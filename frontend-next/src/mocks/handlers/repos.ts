@@ -55,7 +55,7 @@ function detail(r: RepoFixture): RepositoryDetail {
     can_manage: role === "admin",
     inherited_access: !(db.session && r.grants[db.session]),
     phase_status: "ready",
-    // API-GAP: repo-states — provisioning_error / provisioning_started_at (Phase 1 "GET R" change).
+    // Mirrors GET R: provisioning_error / provisioning_started_at.
     provisioning_error:
       r.state === "failed" ? (r.provisioning_error ?? null) : null,
     provisioning_started_at: r.provisioning_started_at ?? null,
@@ -180,7 +180,7 @@ function treeEntries(files: string[], prefix: string): RepositoryTreeEntry[] {
         path: p,
         kind,
         size: kind === "file" ? fileSize(p) : null,
-        // API-GAP: browse-last-changeset — per-entry last changeset (Phase 1 "browse" change).
+        // Per-entry last changeset, as browse returns it.
         last_changeset: lastChangeset(newest),
       };
     });
@@ -237,7 +237,17 @@ export const repoHandlers = [
         roleFor(db.session, r) &&
         (archived || !r.archived),
     ).map((r) => findRepo(r.org, r.slug) ?? r);
-    return HttpResponse.json(list.map(detail));
+    // The list returns RepositorySummary: no organization_slug / phase_status (unlike GET R).
+    return HttpResponse.json(
+      list.map((r) => {
+        const {
+          organization_slug: _o,
+          phase_status: _p,
+          ...summary
+        } = detail(r);
+        return summary;
+      }),
+    );
   }),
   http.get(R, ({ params }) => {
     const r = visible(params);
@@ -298,7 +308,7 @@ export const repoHandlers = [
         username_hint: "Your RevForge email",
         password_hint: "A personal access token",
       },
-      // API-GAP: transport-anonymous — anonymous on PUBLIC gets HTTPS only; path hint for admins only.
+      // Anonymous on PUBLIC gets HTTPS only; path hint for admins only.
       ssh: anonymous
         ? null
         : {
@@ -400,7 +410,7 @@ export const repoHandlers = [
         is_binary: !text,
         is_too_large: tooLarge,
         size_when_known: fileSize(p),
-        // API-GAP: browse-file-fields — content_kind / size / language (Phase 1 "browse" change).
+        // Browse file fields: content_kind / size / language.
         content_kind: kind,
         size: fileSize(p),
         language: text && kind !== "symlink" ? languageOf(p)[1] : null,
@@ -427,7 +437,7 @@ export const repoHandlers = [
     if ("error" in res) return res.error;
     if (!hasData(r) || !FILES[p]) return notFound();
     const kind = contentKind(p);
-    // API-GAP: blame-fields — date / origin_line / summary / is_binary / is_too_large.
+    // Blame fields: date / origin_line / summary / is_binary / is_too_large.
     const base: RepositoryBlame = {
       revision: res.node,
       path: p,
@@ -462,7 +472,7 @@ export const repoHandlers = [
     });
     return HttpResponse.json(base);
   }),
-  // API-GAP: stats — GET R/stats?rev (🆕, screen-map "New endpoint contracts").
+  // GET R/stats?rev (🆕, screen-map "New endpoint contracts").
   http.get(`${R}/stats`, ({ params, request }) => {
     const r = visible(params);
     if (!r) return notFound();
@@ -490,7 +500,7 @@ export const repoHandlers = [
         };
     return HttpResponse.json(body);
   }),
-  // API-GAP: raw — GET R/raw?rev&path (🆕 🔒). Headers follow the contract's security controls.
+  // GET R/raw?rev&path (🆕 🔒). Headers follow the contract's security controls.
   http.get(`${R}/raw`, ({ params, request }) => {
     const r = visible(params);
     if (!r) return notFound();
@@ -525,7 +535,7 @@ export const repoHandlers = [
       },
     );
   }),
-  // API-GAP: search-code — GET R/search/code?q&rev&limit (🆕 🔒), literal and case-insensitive.
+  // GET R/search/code?q&rev&limit (🆕 🔒), literal and case-insensitive.
   http.get(`${R}/search/code`, ({ params, request }) => {
     const r = visible(params);
     if (!r) return notFound();

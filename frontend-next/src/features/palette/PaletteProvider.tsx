@@ -7,7 +7,7 @@ import {
   type Accessor,
   type JSX,
 } from "solid-js";
-import type { OrganizationSummary, RepositoryDetail } from "~/lib/api";
+import type { OrganizationSummary, OrgRepository } from "~/lib/api";
 import { useShortcut } from "~/lib/keyboard";
 import { buildActions, type ActionContext } from "./actions";
 import { CommandPalette } from "./CommandPalette";
@@ -32,7 +32,7 @@ export interface PaletteProviderProps {
   children: JSX.Element;
   anonymous: boolean;
   isPlatformAdmin: boolean;
-  repos: Accessor<readonly RepositoryDetail[]>;
+  repos: Accessor<readonly OrgRepository[]>;
   orgs: Accessor<readonly OrganizationSummary[]>;
   repoContext: Accessor<{ org: string; repo: string; rev?: string } | null>;
   actions: Pick<ActionContext, "copyPermalink" | "showShortcuts" | "signOut">;

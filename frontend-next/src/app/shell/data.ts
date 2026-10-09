@@ -13,7 +13,6 @@ import {
   reposApi,
   request,
   type PinRef,
-  type RepositoryDetail,
 } from "~/lib/api";
 import { qk } from "~/lib/query-keys";
 import { isReservedSlug } from "~/lib/reserved";
@@ -37,12 +36,16 @@ export function createAllReposQuery() {
   return createQuery(() => ({
     queryKey: [...qk.allRepos, (orgs.data ?? []).map((o) => o.slug).join(",")],
     queryFn: async () => {
+      // The list endpoint returns summaries without organization_slug; we know it from the org.
       const lists = await Promise.all(
-        (orgs.data ?? []).map((o) =>
-          reposApi.list(o.slug, { includeArchived: true }),
+        (orgs.data ?? []).map(async (o) =>
+          (await reposApi.list(o.slug, { includeArchived: true })).map((r) => ({
+            ...r,
+            organization_slug: o.slug,
+          })),
         ),
       );
-      return lists.flat() as RepositoryDetail[];
+      return lists.flat();
     },
     enabled: auth.status() === "authenticated" && !!orgs.data,
     staleTime: 60_000,

@@ -43,6 +43,19 @@ describe("file icon matching order (DESIGN.md §4)", () => {
     expect(folderIconSvg('"><script>')).not.toContain("<script>");
   });
 
+  it("ignores Object.prototype keys in hostile repository filenames", () => {
+    for (const n of [
+      "constructor",
+      "__proto__",
+      "x.constructor",
+      "hasOwnProperty",
+    ]) {
+      expect(fileIconSvg(n)).not.toContain("undefined");
+      expect(folderIconSvg(n)).not.toContain("undefined");
+    }
+    expect(fileIconDef("constructor")?.t).toBe("binary");
+  });
+
   it("uses a coloured folder with emblem, and an open variant", () => {
     expect(folderIconSvg("src")).toContain("#4caf50");
     expect(folderIconSvg("src", true)).toContain('opacity=".72"');

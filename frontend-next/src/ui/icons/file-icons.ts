@@ -42,12 +42,13 @@ interface FolderSpec {
   cat: string;
 }
 
-const FOLDER_BY: Record<string, FolderSpec> = {};
+// Null-prototype maps: repository filenames like "constructor" must not hit Object.prototype.
+const FOLDER_BY: Record<string, FolderSpec> = Object.create(null);
 for (const [names, c, e, cat] of FOLDER_DEFS)
   for (const n of names.split(" ")) FOLDER_BY[n] = { c, e, cat };
 
-const FILE_EXACT: Record<string, FileIconSpec> = {};
-const FILE_EXT: Record<string, FileIconSpec> = {};
+const FILE_EXACT: Record<string, FileIconSpec> = Object.create(null);
+const FILE_EXT: Record<string, FileIconSpec> = Object.create(null);
 const FILE_SUFFIX: [string, FileIconSpec][] = [];
 for (const [tokens, k, c, t, cat] of FILE_DEFS)
   for (const tok of tokens.split(" ")) {

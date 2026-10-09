@@ -99,7 +99,8 @@ export function FileView(props: FileViewProps) {
   const blame = createBlameQuery(
     repo.org,
     repo.repo,
-    repo.rev,
+    // Blame the node the file resolved to, so a moving branch can't mismatch the two.
+    () => props.file.revision || repo.rev(),
     path,
     () => view() === "blame",
   );

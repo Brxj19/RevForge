@@ -132,7 +132,7 @@ export type ProvisioningErrorCode =
 export interface RepositoryDetail extends RepositorySummary {
   organization_slug: string;
   phase_status: string;
-  /** API-GAP: repo-states (Phase 1) — optional until the backend returns it. */
+  /** Absent from older servers. */
   provisioning_error?: ProvisioningErrorCode | null;
   provisioning_started_at?: string | null;
 }
@@ -261,7 +261,7 @@ export interface RepositoryBlame {
   lines: RepositoryBlameLine[];
 }
 
-/** GET R/stats?rev (🆕, API-GAP: stats). */
+/** GET R/stats?rev. */
 export interface RepositoryStats {
   languages: { name: string; percent: number; color: string }[];
   contributors: number;
@@ -269,7 +269,7 @@ export interface RepositoryStats {
   size_bytes: number;
 }
 
-/** GET R/search/code?q&rev&limit (🆕, API-GAP: search-code). Literal, case-insensitive. */
+/** GET R/search/code?q&rev&limit. Literal, case-insensitive. */
 export interface CodeSearchMatch {
   path: string;
   line: number;
@@ -527,3 +527,6 @@ export interface PinList {
 export interface Viewer extends CurrentUser {
   is_platform_admin?: boolean;
 }
+
+/** A repository from an organization's list (RepositorySummary) with the org slug it was listed under. */
+export type OrgRepository = RepositorySummary & { organization_slug: string };

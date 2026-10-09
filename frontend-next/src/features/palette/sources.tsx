@@ -12,7 +12,7 @@ import {
   reposApi,
   type CodeSearchMatch,
   type OrganizationSummary,
-  type RepositoryDetail,
+  type OrgRepository,
 } from "~/lib/api";
 import { fuzzy } from "~/lib/fuzzy";
 import { qk } from "~/lib/query-keys";
@@ -22,7 +22,7 @@ import { rangeParts } from "./ranges";
 import type { PaletteItem, ScoredItem } from "./types";
 
 export function repoItems(
-  repos: readonly RepositoryDetail[],
+  repos: readonly OrgRepository[],
   orgs: readonly OrganizationSummary[],
   navigate: (to: string) => void,
 ): PaletteItem[] {
@@ -128,7 +128,7 @@ export function createRepoSources(
     staleTime: 60_000,
   }));
 
-  // API-GAP: search-code — literal, case-insensitive, at the revision in the URL (?rev).
+  // Literal, case-insensitive, at the revision in the URL (?rev).
   const code = createQuery(() => ({
     queryKey: qk.codeSearch(
       repo()?.org ?? "",

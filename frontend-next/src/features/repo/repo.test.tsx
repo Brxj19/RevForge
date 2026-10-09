@@ -318,6 +318,39 @@ describe("repository states", () => {
     ).toBeInTheDocument();
   });
 
+  it("provisioning with no start time (stuck before migration 0008): admins can retry", async () => {
+    server.use(
+      http.get("*/api/v1/organizations/sigma/repositories/infra-scripts", () =>
+        HttpResponse.json({
+          id: "x",
+          organization_id: "o",
+          organization_slug: "sigma",
+          slug: "infra-scripts",
+          display_name: "infra-scripts",
+          description: null,
+          visibility: "private",
+          created_by_user_id: "u",
+          created_at: "2026-07-13T20:00:00.000Z",
+          updated_at: "2026-07-13T20:00:00.000Z",
+          archived_at: null,
+          provisioning_state: "provisioning",
+          provisioned_at: null,
+          is_browsable: false,
+          viewer_role: "admin",
+          can_manage: true,
+          inherited_access: false,
+          phase_status: "ready",
+          provisioning_error: null,
+          provisioning_started_at: null,
+        }),
+      ),
+    );
+    renderApp("/sigma/infra-scripts");
+    expect(
+      await screen.findByRole("button", { name: "Retry provisioning" }),
+    ).toBeInTheDocument();
+  });
+
   it("failed: non-admins are told who can retry", async () => {
     server.use(
       http.get(

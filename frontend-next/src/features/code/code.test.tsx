@@ -106,6 +106,21 @@ describe("code page", () => {
     );
   });
 
+  it("blames the node the file resolved to, not the moving ref", async () => {
+    const revs: (string | null)[] = [];
+    server.events.on("request:start", ({ request }) => {
+      const u = new URL(request.url);
+      if (u.pathname.endsWith("/blame"))
+        revs.push(u.searchParams.get("rev") ?? u.searchParams.get("revision"));
+    });
+    renderApp("/sigma/sigma-reckitt/code/main.cpp?view=blame&rev=default");
+    const file = await viewer();
+    await within(file).findByText(/changesets? by 1 author shaped this file/);
+    expect(revs.length).toBeGreaterThan(0);
+    for (const r of revs) expect(r).toMatch(/^[0-9a-f]{40}$/);
+    server.events.removeAllListeners();
+  });
+
   it("switches views through the URL (push) and keeps the line range in ?L= (replace)", async () => {
     stubClipboard();
     renderApp("/sigma/sigma-reckitt/code/main.cpp?L=9-12");

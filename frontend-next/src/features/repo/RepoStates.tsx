@@ -38,9 +38,10 @@ export function RepoNotReady() {
   const provision = createProvisionMutation(repo.org, repo.repo);
   const d = () => repo.detail();
   const isAdmin = () => d().viewer_role === "admin";
+  // No start time = a row stuck before migration 0008; the backend reclaims those too.
   const stale = () => {
     const started = d().provisioning_started_at;
-    return !!started && Date.now() - new Date(started).getTime() > STALE_MS;
+    return !started || Date.now() - new Date(started).getTime() > STALE_MS;
   };
   const code = () => d().provisioning_error ?? null;
   const retry = (label = "Retry provisioning") => (

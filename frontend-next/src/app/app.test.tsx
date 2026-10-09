@@ -210,6 +210,32 @@ describe("app shell", () => {
   });
 });
 
+describe("repository list contract", () => {
+  // GET /organizations/{org}/repositories returns summaries without organization_slug.
+  it("counts and links repositories even though the list omits organization_slug", async () => {
+    renderApp("/");
+    const nav = await screen.findByRole("navigation", { name: "Primary" });
+    await waitFor(() =>
+      expect(
+        within(nav).getByRole("link", { name: /Repositories/ }),
+      ).toHaveTextContent(/Repositories\s*6/),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Search or run a command" }),
+    );
+    const input = await screen.findByRole("combobox", {
+      name: "Search or run a command",
+    });
+    await userEvent.type(input, ":design-tokens");
+    await userEvent.click(
+      await screen.findByRole("option", { name: /design-tokens/ }),
+    );
+    await waitFor(() =>
+      expect(window.location.pathname).toBe("/sigma/design-tokens"),
+    );
+  });
+});
+
 describe("command palette", () => {
   it("opens with ⌘K, filters actions with a prefix chip and runs with Enter", async () => {
     renderApp("/");

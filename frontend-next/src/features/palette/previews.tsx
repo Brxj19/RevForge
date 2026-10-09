@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import type { CodeSearchMatch, RepositoryDetail } from "~/lib/api";
+import type { CodeSearchMatch, OrgRepository } from "~/lib/api";
 import { Highlight } from "~/ui/Menu";
 import { Pill } from "~/ui/Pill";
 import { Shortcut } from "~/ui/Kbd";
@@ -14,7 +14,7 @@ const STATE_TONE = {
   unprovisioned: "neutral",
 } as const;
 
-export function RepoPreview(props: { repo: RepositoryDetail }) {
+export function RepoPreview(props: { repo: OrgRepository }) {
   return (
     <>
       <div class={styles.prevTitle}>

@@ -148,20 +148,20 @@ export const reposApi = {
         }),
       ),
     ),
-  /** API-GAP: stats — GET R/stats?rev. */
+  /** GET R/stats?rev. */
   stats: (org: string, repo: string, opts: { rev?: string } = {}) =>
     request<RepositoryStats>(
       withQuery(`${R(org, repo)}/stats`, { rev: opts.rev }),
     ),
   /**
-   * API-GAP: raw — URL of GET R/raw?rev&path. Used for <img src> (server sends PNG/JPEG/GIF/WebP
+   * URL of GET R/raw?rev&path. Used for <img src> (server sends PNG/JPEG/GIF/WebP
    * inline, everything else as an attachment) and for downloads.
    */
   rawUrl: (org: string, repo: string, opts: { path: string; rev?: string }) =>
     apiUrl(
       withQuery(`${R(org, repo)}/raw`, { rev: opts.rev, path: opts.path }),
     ),
-  /** API-GAP: raw — the file's bytes (downloads). */
+  /** The file's bytes (downloads). */
   rawBlob: (org: string, repo: string, opts: { path: string; rev?: string }) =>
     request<Blob>(
       withQuery(`${R(org, repo)}/raw`, { rev: opts.rev, path: opts.path }),
@@ -179,7 +179,7 @@ export const reposApi = {
         limit: opts.limit,
       }),
     ),
-  /** API-GAP: search-code — literal, case-insensitive (q 2..200 chars, no NUL/CR/LF). */
+  /** GET R/search/code: literal, case-insensitive (q 2..200 chars, no NUL/CR/LF). */
   searchCode: (
     org: string,
     repo: string,
