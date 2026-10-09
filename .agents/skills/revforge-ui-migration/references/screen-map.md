@@ -33,15 +33,15 @@ Scaffold (phase-0-setup.md), tokens, every `ui/` primitive + `/dev/ui` kit, icon
 ## Phase 1 — Repository read path
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Repo layout, header, clone menu, tabs | `#/r/sigma-reckitt` | `repo` | ✅ `GET R` · 🔁 `GET R/transport` (anonymous on PUBLIC → HTTPS only; no path hint for non-admins) | — | wip |
-| Overview (file table, README, about, recent) | `#/r/sigma-reckitt` | `repo` | ✅ `GET R/browse` · ✅ `GET R/changesets?limit=6` · 🔁 `GET R/browse` add `last_changeset` per entry · 🆕 `GET R/stats` (languages, contributors, size) | — (U4 is the dashboard table → Phase 5) | wip |
-| Revision rail + ref picker | Code page | `repo` | ✅ `GET R/refs` · 🔁 `GET R/changesets/{node}` resolve short hashes ≥ 6 hex | I11 | wip |
-| Code: explorer + file view + not-shown | `#/r/sigma-reckitt/code/main.cpp` | `code` | ✅ `GET R/browse?rev=&path=` · 🔁 file payload: `kind` (text/binary/image/font), `size`, `language`, `too_large` | F7, U3, U5 | wip |
-| Code viewer (CodeMirror) + blame | `…/main.cpp?view=blame` | `code` | 🔁 `GET R/blame` (+ `date`, `origin_line`, `summary`, `is_binary`, `is_too_large`) | — | wip |
-| Markdown / CSV / JSON previews | `…/README.md`, `…/bench/results.csv`, `…/config/presets.json` | `code` | 🆕 `GET R/raw?rev=&path=` (raw bytes, `Content-Disposition`, CSP `sandbox`) | F8 🔒 | wip |
-| Go to file (palette `~`) | ⌘K `~` | `palette` | ✅ `GET R/search/files` | — | wip |
-| Code search (palette `/`) | ⌘K `/add_edge` | `palette` | 🆕 `GET R/search/code?q=&rev=` (literal only) | 🔒 (regex/grep injection) | wip |
-| Repo states: provisioning / failed / archived | `#/r/infra-scripts`, `#/r/ml-experiments`, `#/r/legacy-billing` | `repo` | 🔁 `GET R` add `provisioning_error`, `provisioning_started_at` · ✅ `POST R/provision` | I36 | wip |
+| Repo layout, header, clone menu, tabs | `#/r/sigma-reckitt` | `repo` | ✅ `GET R` · 🔁 `GET R/transport` (anonymous on PUBLIC → HTTPS only; no path hint for non-admins) | — | done |
+| Overview (file table, README, about, recent) | `#/r/sigma-reckitt` | `repo` | ✅ `GET R/browse` · ✅ `GET R/changesets?limit=6` · 🔁 `GET R/browse` add `last_changeset` per entry · 🆕 `GET R/stats` (languages, contributors, size) | — (U4 is the dashboard table → Phase 5) | done |
+| Revision rail + ref picker | Code page | `repo` | ✅ `GET R/refs` · 🔁 `GET R/changesets/{node}` resolve short hashes ≥ 6 hex | I11 | done |
+| Code: explorer + file view + not-shown | `#/r/sigma-reckitt/code/main.cpp` | `code` | ✅ `GET R/browse?rev=&path=` · 🔁 file payload: `kind` (text/binary/image/font), `size`, `language`, `too_large` | F7, U3, U5 | done |
+| Code viewer (CodeMirror) + blame | `…/main.cpp?view=blame` | `code` | 🔁 `GET R/blame` (+ `date`, `origin_line`, `summary`, `is_binary`, `is_too_large`) | — | done |
+| Markdown / CSV / JSON previews | `…/README.md`, `…/bench/results.csv`, `…/config/presets.json` | `code` | 🆕 `GET R/raw?rev=&path=` (raw bytes, `Content-Disposition`, CSP `sandbox`) | F8 🔒 | done |
+| Go to file (palette `~`) | ⌘K `~` | `palette` | ✅ `GET R/search/files` | — | done |
+| Code search (palette `/`) | ⌘K `/add_edge` | `palette` | 🆕 `GET R/search/code?q=&rev=` (literal only) | 🔒 (regex/grep injection) | done |
+| Repo states: provisioning / failed / archived | `#/r/infra-scripts`, `#/r/ml-experiments`, `#/r/legacy-billing` | `repo` | 🔁 `GET R` add `provisioning_error`, `provisioning_started_at` · ✅ `POST R/provision` | I36 | done |
 
 ## Phase 2 — History, changesets, refs
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
