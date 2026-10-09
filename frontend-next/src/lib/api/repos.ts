@@ -149,9 +149,7 @@ export const reposApi = {
     ),
   /** Structured diff against the first parent (files[].hunks) plus the legacy text. */
   changesetDiff: (org: string, repo: string, node: string) =>
-    request<ChangesetDiff>(
-      `${R(org, repo)}${path`/changesets/${node}/diff`}`,
-    ),
+    request<ChangesetDiff>(`${R(org, repo)}${path`/changesets/${node}/diff`}`),
   /** A full node or a hex prefix of at least 6 digits (I11). */
   changeset: (org: string, repo: string, node: string) =>
     request<ChangesetDetail>(`${R(org, repo)}${path`/changesets/${node}`}`),

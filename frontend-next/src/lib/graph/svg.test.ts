@@ -60,7 +60,11 @@ describe("graphGeometry", () => {
   it("continues edges to parents that aren't loaded yet when more history exists", () => {
     const g = graphGeometry([cs("b", ["a"])], { openEnded: true });
     expect(g.paths).toEqual([
-      { d: `M20 ${GRAPH_ROW_HEIGHT / 2}V${GRAPH_ROW_HEIGHT}`, lane: 0, firstParent: true },
+      {
+        d: `M20 ${GRAPH_ROW_HEIGHT / 2}V${GRAPH_ROW_HEIGHT}`,
+        lane: 0,
+        firstParent: true,
+      },
     ]);
     expect(graphGeometry([cs("b", ["a"])]).paths).toEqual([]);
   });

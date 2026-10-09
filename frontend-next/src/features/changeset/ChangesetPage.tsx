@@ -74,7 +74,11 @@ export default function ChangesetPage() {
           {(d) => <Changeset detail={d()} diff={diff} />}
         </Match>
         <Match when={true}>
-          <Card class={styles.head} role="status" aria-label="Loading changeset">
+          <Card
+            class={styles.head}
+            role="status"
+            aria-label="Loading changeset"
+          >
             <Skeleton width="55%" height={20} />
             <Skeleton width="70%" height={12} />
           </Card>
@@ -104,8 +108,7 @@ function Changeset(props: {
   const d = () => props.detail;
   const merge = () => d().parents.length > 1;
   // Reading .data while pending would suspend the route instead of showing the skeletons.
-  const diffData = () =>
-    props.diff.isSuccess ? props.diff.data : undefined;
+  const diffData = () => (props.diff.isSuccess ? props.diff.data : undefined);
   const files = () => diffData()?.files;
   const totals = () => {
     const f = files() ?? [];
@@ -155,7 +158,10 @@ function Changeset(props: {
             <Avatar name={d().author_name} size={20} decorative />
             <span>
               <b class={styles.author}>{d().author_name}</b> committed{" "}
-              <time datetime={d().timestamp} title={absoluteTime(d().timestamp)}>
+              <time
+                datetime={d().timestamp}
+                title={absoluteTime(d().timestamp)}
+              >
                 {relativeTime(d().timestamp)}
               </time>
             </span>
@@ -218,7 +224,10 @@ function Changeset(props: {
           <Panes columns="250px minmax(0,1fr)">
             <Pane flush>
               <Card class={styles.fileList}>
-                <SkeletonText lines={["80%", "65%", "75%"]} label="Loading files" />
+                <SkeletonText
+                  lines={["80%", "65%", "75%"]}
+                  label="Loading files"
+                />
               </Card>
             </Pane>
             <Pane flush>
@@ -306,8 +315,8 @@ function Changeset(props: {
                   </Show>
                   <Show when={diffData()?.files_truncated}>
                     <Callout tone="warn">
-                      This changeset touches more files than can be shown.
-                      Only the first {list().length} are listed.
+                      This changeset touches more files than can be shown. Only
+                      the first {list().length} are listed.
                     </Callout>
                   </Show>
                 </div>

@@ -4,7 +4,8 @@ import type { JSX } from "solid-js";
  * Characters that change how text displays without being visible: bidi embeddings/overrides and
  * isolates (Trojan Source), zero-width spaces/joiners, soft hyphen, word joiner, BOM.
  */
-const HIDDEN = /[\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+const HIDDEN =
+  /[\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
 const BIDI = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
 
 const NAMES: Record<string, string> = {

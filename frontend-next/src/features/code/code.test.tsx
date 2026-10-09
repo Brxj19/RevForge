@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@solidjs/testing-library";
+import { fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -148,6 +148,14 @@ describe("code page", () => {
         name: /Blame the file as it was before/,
       }).length,
     ).toBe(5);
+    // The blame message opens the commit hover card (DESIGN.md §7.6).
+    fireEvent.pointerEnter(groups[0]!, { pointerType: "mouse" });
+    const card = await screen.findByRole("group", {
+      name: "Changeset b2b5a019dbcb",
+    });
+    expect(
+      await within(card).findByText("Use BinaryTree and Graph in main.cpp"),
+    ).toBeInTheDocument();
   });
 
   it("renders README.md as Markdown by default and offers Code and Blame", async () => {

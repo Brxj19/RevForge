@@ -199,7 +199,7 @@ const headNodes = new Set(
 );
 
 /**
- * API-GAP: history-row-fields — the Phase 2 row fields (refs per row, head/merge/binary flags) and
+ * the Phase 2 row fields (refs per row, head/merge/binary flags) and
  * stats computed from the shared diff model against p1, as GET R/changesets will return them.
  */
 function summaryRow(c: ChangesetSummary): ChangesetSummary {
@@ -230,7 +230,7 @@ function changesetDetail(c: ChangesetSummary): ChangesetDetail {
     bookmarks: row.bookmarks ?? [],
     message: fullMessage(c),
     files_changed: files.map((f) => f.path),
-    // API-GAP: changeset-diff-files — binary / old_mode / new_mode per changed file.
+    // binary / old_mode / new_mode per changed file.
     changed_files: files.map((f) => ({
       path: f.path,
       status: f.status,
@@ -347,7 +347,7 @@ function ancestors(node: string): Set<string> {
   return seen;
 }
 
-/** API-GAP: refs-state — updated_at / summary per ref, state per branch, include_closed. */
+/** Refs carry updated_at / summary per ref, state per branch, include_closed. */
 function refsBody(includeClosed: boolean): RepositoryRefs {
   const tip = REFS.branches.find((b) => b.name === "default")?.node ?? "";
   const merged = ancestors(tip);
@@ -365,7 +365,10 @@ function refsBody(includeClosed: boolean): RepositoryRefs {
   }));
   if (includeClosed)
     branches.push(
-      ...CLOSED_BRANCHES.map((b) => ({ ...extra(b), state: "closed" as const })),
+      ...CLOSED_BRANCHES.map((b) => ({
+        ...extra(b),
+        state: "closed" as const,
+      })),
     );
   return {
     branches,
@@ -519,7 +522,7 @@ export const repoHandlers = [
         "limit must be between 1 and 50.",
         "validation_error",
       );
-    // API-GAP: history-filters — branch/author/path/q evaluated server-side, 40-hex node cursor
+    // Branch/author/path/q evaluated server-side, 40-hex node cursor
     // (exclusive, newest first), scan budget → partial page + scan_truncated (F4, F6).
     const invalid = historyFilterError(url);
     if (invalid) return invalid;
@@ -579,7 +582,7 @@ export const repoHandlers = [
     const c = byNode.get(res.node);
     return c ? HttpResponse.json(changesetDetail(c)) : notFound();
   }),
-  // API-GAP: changeset-diff-files — `files` (hunks, rename/binary/mode flags, caps) and
+  // Diff `files` (hunks, rename/binary/mode flags, caps) and
   // `files_truncated` next to the legacy `content`.
   http.get(`${R}/changesets/:node/diff`, ({ params }) => {
     const r = visible(params);

@@ -9,6 +9,8 @@ import { ConfirmDialog } from "~/ui/ConfirmDialog";
 import { CopyButton, CopyLine } from "~/ui/CopyButton";
 import { Dialog } from "~/ui/Dialog";
 import { ChangeBadge, DiffBar } from "~/ui/DiffStat";
+import { DiffView } from "~/ui/DiffView";
+import { HoverCard, HoverCardSection } from "~/ui/HoverCard";
 import { EmptyState } from "~/ui/EmptyState";
 import { Field, Input, InputGroup, Textarea } from "~/ui/Field";
 import { FileTree, type TreeItem } from "~/ui/FileTree";
@@ -41,6 +43,7 @@ import {
   KIT_MEMBERS,
   KIT_SPARKS,
   kitHeatDays,
+  KIT_DIFF,
 } from "./kit-data";
 import styles from "./dev-ui.module.css";
 
@@ -52,6 +55,7 @@ const SECTIONS = [
   ["k-toggles", "Toggles, checkboxes, radios"],
   ["k-tabs", "Tabs and segmented"],
   ["k-copy", "Copy and code"],
+  ["k-diff", "Diff and hover card"],
   ["k-tree", "File tree and popover"],
   ["k-feedback", "Callouts and progress"],
   ["k-states", "Loading, empty, error"],
@@ -647,6 +651,31 @@ export default function UiKitPage() {
                       text="hg push --new-branch"
                       label="Copy command"
                     />
+                  </Row>
+                </div>
+              </Section>
+
+              <Section id="k-diff" title="Diff and hover card">
+                <div class={styles.col}>
+                  <DiffView
+                    files={KIT_DIFF}
+                    fileId={(_, i) => `kit-diff-${i}`}
+                    langFor={(p) => (p.endsWith(".cpp") ? "cpp" : null)}
+                  />
+                  <Row>
+                    <HoverCard
+                      trigger="button"
+                      triggerProps={{ type: "button", class: styles.tipDemo }}
+                      triggerContent="Hover or focus for a card"
+                      label="Hover card demo"
+                    >
+                      <HoverCardSection>
+                        <b>Merge feature/data-structures-improvements</b>
+                      </HoverCardSection>
+                      <HoverCardSection tone="actions">
+                        <Hash node="1c7450e15fcbe499620a42a89b43139ca1ea6aa9" />
+                      </HoverCardSection>
+                    </HoverCard>
                   </Row>
                 </div>
               </Section>

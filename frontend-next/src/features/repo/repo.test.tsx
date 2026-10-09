@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@solidjs/testing-library";
+import { fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
@@ -401,5 +401,49 @@ describe("repository states", () => {
     expect(
       screen.getByText(/pushes and new pull requests are\s+rejected/),
     ).toBeInTheDocument();
+  });
+});
+
+describe("ref picker choices", () => {
+  it("never offers closed branches, even from an include_closed response", async () => {
+    const { refChoices } = await import("./RefPicker");
+    const ref = (name: string, state?: "open" | "closed" | "merged") => ({
+      name,
+      node: "a".repeat(40),
+      short_node: "a".repeat(12),
+      state,
+    });
+    const groups = refChoices({
+      branches: [
+        ref("default", "open"),
+        ref("experiment/avl-tree", "closed"),
+        ref("feature/x", "merged"),
+        ref("legacy"),
+      ],
+      bookmarks: [],
+      tags: [],
+    });
+    expect(groups[0]?.items.map((i) => i.label)).toEqual([
+      "default",
+      "feature/x",
+      "legacy",
+    ]);
+  });
+});
+
+describe("overview recent changesets", () => {
+  it("shows the commit hover card on a recent changeset", async () => {
+    renderApp("/sigma/sigma-reckitt");
+    const about = await screen.findByRole("complementary", {
+      name: "About this repository",
+    });
+    const link = await within(about).findByRole("link", {
+      name: /Improvements: add BinaryTree::contains/,
+    });
+    fireEvent.pointerEnter(link, { pointerType: "mouse" });
+    const card = await screen.findByRole("group", {
+      name: "Changeset 0b486fec60de",
+    });
+    expect(await within(card).findByText("src/graph.cpp")).toBeInTheDocument();
   });
 });

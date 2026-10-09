@@ -206,7 +206,9 @@ function Changes(props: { c: ChangesetSummary }) {
   const files = () => props.c.files_changed_count_when_available ?? 0;
   return (
     <Switch>
-      <Match when={s().kind === "clean-merge"}>None beyond the merge itself</Match>
+      <Match when={s().kind === "clean-merge"}>
+        None beyond the merge itself
+      </Match>
       <Match when={s().kind === "binary"}>
         {files() === 1 ? "1 binary file" : `${plural(files(), "file")}, binary`}
       </Match>
@@ -219,7 +221,8 @@ function Changes(props: { c: ChangesetSummary }) {
             x() as Extract<ReturnType<typeof rowStat>, { kind: "counts" }>;
           return (
             <>
-              {plural(files(), "file")}, <span class="add">+{v().insertions}</span>{" "}
+              {plural(files(), "file")},{" "}
+              <span class="add">+{v().insertions}</span>{" "}
               <span class="del">−{v().deletions}</span>
             </>
           );

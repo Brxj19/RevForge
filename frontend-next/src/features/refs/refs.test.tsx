@@ -35,7 +35,10 @@ describe("branches & tags", () => {
     ).toHaveTextContent("feature/data-structures-improvements");
     // State is a word plus an icon, not colour alone.
     const merged = within(feature).getByText("merged");
-    expect(merged.closest("[data-tone]")).toHaveAttribute("data-tone", "purple");
+    expect(merged.closest("[data-tone]")).toHaveAttribute(
+      "data-tone",
+      "purple",
+    );
     expect(merged.closest("[data-tone]")?.querySelector("svg")).not.toBeNull();
     expect(feature).toHaveTextContent(
       "Improvements: add BinaryTree::contains and Graph::has_edge",
@@ -63,23 +66,19 @@ describe("branches & tags", () => {
     ).toHaveAttribute("href", "/sigma/sigma-reckitt/code");
     // Counts on the tabs.
     const tabs = screen.getByRole("radiogroup", { name: "Kind of ref" });
-    expect(within(tabs).getByText("Branches").closest("label")).toHaveTextContent(
-      "Branches 3",
-    );
+    expect(
+      within(tabs).getByText("Branches").closest("label"),
+    ).toHaveTextContent("Branches 3");
   });
 
   it("switches kinds through the URL", async () => {
     renderApp(REFS);
     await table();
     await userEvent.click(screen.getByRole("radio", { name: /Tags/ }));
-    await waitFor(() =>
-      expect(window.location.pathname).toBe(`${REFS}/tags`),
-    );
+    await waitFor(() => expect(window.location.pathname).toBe(`${REFS}/tags`));
     expect(await screen.findByTitle("v0.1.0")).toBeInTheDocument();
     expect(screen.queryByText("Status")).toBeNull();
-    expect(
-      screen.getByRole("link", { name: "Changeset" }),
-    ).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Changeset" })).toHaveAttribute(
       "href",
       "/sigma/sigma-reckitt/changesets/628371ad0b325b2985ea419592498e593c581657",
     );

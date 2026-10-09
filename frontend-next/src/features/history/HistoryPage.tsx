@@ -1,12 +1,5 @@
 import { useNavigate } from "@solidjs/router";
-import {
-  createMemo,
-  For,
-  Match,
-  Show,
-  Switch,
-  type JSX,
-} from "solid-js";
+import { createMemo, For, Match, Show, Switch, type JSX } from "solid-js";
 import {
   createRefsQuery,
   createTransportQuery,
@@ -45,6 +38,10 @@ const VIEWS = ["graph", "list"] as const;
  * /:org/:repo/history?branch=&q=&author=&path=&view=&node= (DESIGN.md §7.5–7.6). Every filter is URL
  * state and is evaluated server-side; typing uses replace + debounce (F5).
  */
+// Kobalte treats "" as no selection, so "All branches" needs a real option value;
+// Mercurial labels can't contain ":", so this never collides with a branch name.
+const ALL_BRANCHES = ":all";
+
 export default function HistoryPage() {
   const repo = useRepo();
   const navigate = useNavigate();
@@ -74,9 +71,7 @@ export default function HistoryPage() {
   const history = createHistoryQuery(repo.org, repo.repo, filters);
   // Reading .data while pending would suspend the route instead of showing the skeleton.
   const pages = () => (history.isSuccess ? history.data.pages : []);
-  const rows = createMemo(
-    () => pages().flatMap((p) => p.changesets),
-  );
+  const rows = createMemo(() => pages().flatMap((p) => p.changesets));
   const lastPage = () => pages().at(-1);
   const showGraph = () => url.view === "graph" && !filtered();
   const geometry = createMemo(() =>
@@ -168,7 +163,7 @@ export default function HistoryPage() {
       .map((b) => b.name);
     if (url.branch && !names.includes(url.branch)) names.push(url.branch);
     return [
-      { value: "", label: "All branches", icon: "branch" },
+      { value: ALL_BRANCHES, label: "All branches", icon: "branch" },
       ...names.map((n) => ({ value: n, label: n })),
     ];
   });
@@ -182,8 +177,9 @@ export default function HistoryPage() {
           label="Branch"
           class={styles.branch}
           options={branchOptions()}
-          value={url.branch}
-          onChange={(v) => {
+          value={url.branch || ALL_BRANCHES}
+          onChange={(value) => {
+            const v = value === ALL_BRANCHES ? "" : value;
             // Kobalte can re-emit the current value when the options load.
             if (v !== url.branch) setUrl({ branch: v, node: "" });
           }}
@@ -258,16 +254,14 @@ export default function HistoryPage() {
       </div>
       <Show when={url.view === "graph" && filtered()}>
         <Callout tone="info">
-          The graph is hidden while filters are on, because filtered history
-          has gaps between parents.{" "}
+          The graph is hidden while filters are on, because filtered history has
+          gaps between parents.{" "}
           <button type="button" class="link" onClick={clearFilters}>
             Clear filters
           </button>
         </Callout>
       </Show>
-      <Panes
-        columns={showDetail() ? "minmax(0,1fr) 360px" : "minmax(0,1fr)"}
-      >
+      <Panes columns={showDetail() ? "minmax(0,1fr) 360px" : "minmax(0,1fr)"}>
         <Pane flush as="section" aria-label="Changesets">
           <Switch>
             <Match when={history.isPending}>
@@ -325,7 +319,9 @@ export default function HistoryPage() {
                   on:keydown={onListKey}
                 >
                   <Show when={geometry()}>
-                    {(g) => <GraphColumn geometry={g()} selected={selected()} />}
+                    {(g) => (
+                      <GraphColumn geometry={g()} selected={selected()} />
+                    )}
                   </Show>
                   <For each={rows()}>
                     {(c) => (
@@ -410,7 +406,11 @@ function ListFooter(props: {
         </span>
       </Show>
       <Show when={props.hasMore}>
-        <Button size="sm" loading={props.loading} onClick={() => props.onMore()}>
+        <Button
+          size="sm"
+          loading={props.loading}
+          onClick={() => props.onMore()}
+        >
           {props.loading
             ? props.truncated
               ? "Searching…"
@@ -477,4 +477,3 @@ function HistorySkeleton() {
     </Card>
   );
 }
-

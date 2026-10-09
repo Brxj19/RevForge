@@ -75,8 +75,20 @@ describe("DiffView", () => {
         insertions: 0,
         deletions: 0,
       }),
-      file({ path: "main", status: "added", binary: true, hunks: [], new_mode: "100755" }),
-      file({ path: "big.sql", too_large: true, hunks: [], insertions: 4000, deletions: 1 }),
+      file({
+        path: "main",
+        status: "added",
+        binary: true,
+        hunks: [],
+        new_mode: "100755",
+      }),
+      file({
+        path: "big.sql",
+        too_large: true,
+        hunks: [],
+        insertions: 4000,
+        deletions: 1,
+      }),
       file({ path: "cut.cpp", truncated: true }),
     ]);
     const renamed = screen.getByRole("region", {
@@ -87,10 +99,9 @@ describe("DiffView", () => {
     const bin = screen.getByRole("region", { name: "main" });
     expect(bin).toHaveTextContent("Binary file not shown.");
     expect(bin).toHaveTextContent("new mode 100755");
-    expect(within(bin).getByRole("link", { name: "View file" })).toHaveAttribute(
-      "href",
-      "/code/main",
-    );
+    expect(
+      within(bin).getByRole("link", { name: "View file" }),
+    ).toHaveAttribute("href", "/code/main");
     expect(screen.getByRole("region", { name: "big.sql" })).toHaveTextContent(
       "This diff is too large to show (4,001 changed lines).",
     );
@@ -136,7 +147,9 @@ describe("DiffView", () => {
       ),
     ).toHaveTextContent("U+202E");
     expect(
-      within(section).getByLabelText("hidden character U+200B, zero-width space"),
+      within(section).getByLabelText(
+        "hidden character U+200B, zero-width space",
+      ),
     ).toBeInTheDocument();
     expect(section.textContent).not.toContain(RLO);
     expect(section.textContent).not.toContain(ZWSP);
@@ -154,8 +167,21 @@ describe("DiffView", () => {
 
   it("explains mode-only and empty-file changes", () => {
     mount([
-      file({ path: "run.sh", hunks: [], old_mode: "100644", new_mode: "100755", insertions: 0, deletions: 0 }),
-      file({ path: "empty", status: "added", hunks: [], insertions: 0, deletions: 0 }),
+      file({
+        path: "run.sh",
+        hunks: [],
+        old_mode: "100644",
+        new_mode: "100755",
+        insertions: 0,
+        deletions: 0,
+      }),
+      file({
+        path: "empty",
+        status: "added",
+        hunks: [],
+        insertions: 0,
+        deletions: 0,
+      }),
     ]);
     const mode = screen.getByRole("region", { name: "run.sh" });
     expect(mode).toHaveTextContent("mode 100644 → 100755");

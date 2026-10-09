@@ -231,9 +231,7 @@ function DiffFileView(props: {
                     <tr class={styles.hunk}>
                       <td class={styles.ln} />
                       <td class={styles.ln} />
-                      <td class={styles.code}>
-                        {visibleText(h.header, MARK)}
-                      </td>
+                      <td class={styles.code}>{visibleText(h.header, MARK)}</td>
                     </tr>
                     <For each={h.lines}>
                       {(l, li) => (
@@ -287,10 +285,7 @@ function LineText(props: { text: string; tokens?: CodeToken[] }) {
       ? props.tokens
       : undefined;
   return (
-    <Show
-      when={usable()}
-      fallback={visibleText(props.text, MARK)}
-    >
+    <Show when={usable()} fallback={visibleText(props.text, MARK)}>
       {(toks) => (
         <For each={toks()}>
           {(t) =>

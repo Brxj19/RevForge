@@ -38,6 +38,8 @@
   position: absolute;
   left: 0;
   top: 0;
+  /* Above the rows, so a hovered/selected row background doesn't hide its lane. */
+  z-index: 1;
   pointer-events: none;
 }
 .row {

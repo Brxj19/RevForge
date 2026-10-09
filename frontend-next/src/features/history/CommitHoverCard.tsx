@@ -1,4 +1,11 @@
-import { For, Match, Show, Switch, type JSX, type ValidComponent } from "solid-js";
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  type JSX,
+  type ValidComponent,
+} from "solid-js";
 import type { ChangesetSummary } from "~/lib/api";
 import { absoluteTime, relativeTime } from "~/lib/format";
 import { Avatar } from "~/ui/Avatar";
@@ -184,7 +191,10 @@ function CommitCard(props: {
       </Match>
       <Match when={true}>
         <HoverCardSection>
-          <SkeletonText lines={["60%", "90%", "40%"]} label="Loading changeset" />
+          <SkeletonText
+            lines={["60%", "90%", "40%"]}
+            label="Loading changeset"
+          />
         </HoverCardSection>
       </Match>
     </Switch>

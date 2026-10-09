@@ -1,9 +1,4 @@
-import {
-  fireEvent,
-  screen,
-  waitFor,
-  within,
-} from "@solidjs/testing-library";
+import { fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
@@ -224,6 +219,14 @@ describe("history list", () => {
     await waitFor(() => expect(search().get("author")).toBeNull());
   });
 
+  it("shows All branches in the branch picker when no branch is chosen", async () => {
+    renderApp(HISTORY);
+    await listbox();
+    const search = screen.getByRole("search", { name: "Filter history" });
+    const trigger = within(search).getAllByRole("button")[0]!;
+    await waitFor(() => expect(trigger).toHaveTextContent("All branches"));
+  });
+
   it("uses example placeholders for the filters (U2)", async () => {
     renderApp(HISTORY);
     await listbox();
@@ -287,7 +290,9 @@ describe("history selection and keyboard", () => {
       ),
     ).toBeInTheDocument();
     expect(await within(pane).findByText(/Refs: RF-41/)).toBeInTheDocument();
-    expect(within(pane).getByTitle("Branch feature/data-structures-improvements"));
+    expect(
+      within(pane).getByTitle("Branch feature/data-structures-improvements"),
+    );
     const files = await within(pane).findByRole("list", {
       name: "Changed files",
     });

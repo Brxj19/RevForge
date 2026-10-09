@@ -14,7 +14,8 @@ const MERGE1 = "628371ad0b325b2985ea419592498e593c581657";
 const BINARY = "e0c8db2ddfe6b6df66d78476c48be90e4d6070b0";
 const INCLUDES = "e7930bb0e4574b5b661b85ee7368d7b00b6437d4";
 const CS = "/sigma/sigma-reckitt/changesets";
-const DETAIL = "*/api/v1/organizations/:org/repositories/:repo/changesets/:node";
+const DETAIL =
+  "*/api/v1/organizations/:org/repositories/:repo/changesets/:node";
 const DIFF = `${DETAIL}/diff`;
 
 const title = () =>
@@ -127,9 +128,7 @@ describe("changeset page", () => {
     const spy = vi.spyOn(Element.prototype, "scrollIntoView");
     await userEvent.click(within(nav).getByTitle("Modified: src/graph.cpp"));
     expect(spy).toHaveBeenCalled();
-    expect(spy.mock.contexts.at(-1)).toBe(
-      document.getElementById("diff-3"),
-    );
+    expect(spy.mock.contexts.at(-1)).toBe(document.getElementById("diff-3"));
     spy.mockRestore();
   });
 
@@ -180,7 +179,12 @@ describe("changeset page", () => {
         deletions: 0,
       }),
       file({ path: "gone.txt", status: "removed" }),
-      file({ path: "copy.cpp", status: "copied", old_path: "a.cpp", hunks: [] }),
+      file({
+        path: "copy.cpp",
+        status: "copied",
+        old_path: "a.cpp",
+        hunks: [],
+      }),
     ]);
     renderApp(`${CS}/${IMPROV}`);
     expect(await fileSection("big.sql")).toHaveTextContent(
@@ -248,13 +252,17 @@ describe("changeset page", () => {
     ]);
     renderApp(`${CS}/${IMPROV}`);
     expect(await title()).toHaveTextContent(evil);
-    expect(screen.getByText("<script>window.__xss=2</script>")).toBeInTheDocument();
+    expect(
+      screen.getByText("<script>window.__xss=2</script>"),
+    ).toBeInTheDocument();
     expect(screen.getByText("<b>Mallory</b>")).toBeInTheDocument();
     const section = await fileSection('<svg onload="x">.cpp');
     expect(section).toHaveTextContent(evil);
     expect(document.querySelector('img[src="x"]')).toBeNull();
     expect(document.querySelector("svg[onload]")).toBeNull();
-    expect(document.querySelector("main script, [role=main] script")).toBeNull();
+    expect(
+      document.querySelector("main script, [role=main] script"),
+    ).toBeNull();
     // Trojan Source: the override is shown as a labelled marker, never emitted raw.
     expect(
       within(section).getByLabelText(
@@ -324,9 +332,7 @@ describe("changeset states", () => {
 
   it("says when a short hash is ambiguous", async () => {
     server.use(
-      http.get(DETAIL, () =>
-        apiError(409, "ambiguous", "revision_ambiguous"),
-      ),
+      http.get(DETAIL, () => apiError(409, "ambiguous", "revision_ambiguous")),
     );
     renderApp(`${CS}/0b486f`);
     expect(

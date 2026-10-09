@@ -46,24 +46,26 @@ const EXAMPLE: Record<Kind, string> = {
   bookmarks: "@",
   tags: "v0.1.0",
 };
-const EMPTY: Record<Kind, { art: IllustrationId; title: string; body: string }> =
-  {
-    branches: {
-      art: "empty-repo",
-      title: "No branches yet",
-      body: "Push a changeset and the branch it was made on shows up here.",
-    },
-    bookmarks: {
-      art: "no-bookmarks",
-      title: "No bookmarks yet",
-      body: "Create one with hg bookmark <name>, then push it with hg push -B <name>.",
-    },
-    tags: {
-      art: "no-tags",
-      title: "No tags yet",
-      body: "Tag a release with hg tag <name> and push the changeset that records it.",
-    },
-  };
+const EMPTY: Record<
+  Kind,
+  { art: IllustrationId; title: string; body: string }
+> = {
+  branches: {
+    art: "empty-repo",
+    title: "No branches yet",
+    body: "Push a changeset and the branch it was made on shows up here.",
+  },
+  bookmarks: {
+    art: "no-bookmarks",
+    title: "No bookmarks yet",
+    body: "Create one with hg bookmark <name>, then push it with hg push -B <name>.",
+  },
+  tags: {
+    art: "no-tags",
+    title: "No tags yet",
+    body: "Tag a release with hg tag <name> and push the changeset that records it.",
+  },
+};
 
 /** Branch state with an icon and a word, never colour alone. */
 const STATE: Record<
@@ -200,7 +202,9 @@ export default function RefsPage() {
                 title={`No ${kind()} match “${url.q.trim()}”`}
                 body="Check the spelling: names are case-sensitive in Mercurial, but this filter isn't."
                 actions={
-                  <Button onClick={() => setUrl({ q: "" })}>Clear filter</Button>
+                  <Button onClick={() => setUrl({ q: "" })}>
+                    Clear filter
+                  </Button>
                 }
               />
             </Match>
