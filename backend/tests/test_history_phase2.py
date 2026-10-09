@@ -392,7 +392,7 @@ def test_over_budget_rows_report_stats_too_large_without_diffing(
         raise AssertionError("over-budget rows must not be diffed")
 
     monkeypatch.setattr(read_service_module, "_STATS_ROW_INPUT_BYTES", 1)
-    monkeypatch.setattr(read_service_module.patch, "diffstatdata", no_diff)
+    monkeypatch.setattr(read_service_module, "build_file_diffs", no_diff)
     rows = _history(client, q=seeded["c0"][:12]).json()["changesets"]
     assert [item["node"] for item in rows] == [seeded["c0"]]
     row = rows[0]
@@ -666,8 +666,14 @@ def test_pr_create_rejects_revsets_and_pins_full_nodes(
     assert created.status_code == 201, created.text
     assert created.json()["source_revision"] == seeded["rename"]
     assert created.json()["target_revision"] == seeded["c1"]
-    by_branch = _create_pr(client, "feature", "default")
+    by_branch = _create_pr(client, "feature", "v1.0")
     assert by_branch.json()["source_revision"] == seeded["feature"]
+
+    # Nothing to review: source equal to, or already contained in, the target (L1).
+    for source, target in ((seeded["c1"], seeded["c1"]), ("feature", "default"), ("v1.0", "bm")):
+        rejected = _create_pr(client, source, target)
+        assert rejected.status_code == 422, (source, target, rejected.text)
+        assert rejected.json()["error"]["code"] == "invalid_revision"
 
 
 def test_pr_diff_uses_merge_base_and_reports_flags(
@@ -734,25 +740,66 @@ def test_pr_diff_rate_limit(
     assert int(limited.headers["retry-after"]) >= 1
 
 
-def test_pr_merge_resolves_in_process(client: Any, seeded: dict[str, str]) -> None:
+def test_pr_merge_records_the_branch_head_after_the_merge_is_pushed(
+    client: Any, session_factory: Any
+) -> None:
+    """L1: open PR -> merge refused until the merge is pushed -> recorded at the real head."""
+    register(client, OWNER)
+    create_org(client, ORG)
+    create_repo(client, ORG, "flow", "public")
+    assert provision(client, ORG, "flow").status_code == 200
+    root = repository_path(session_factory, "flow")
+    _write(root, "a.txt", "a\n")
+    base = commit(root, "base")
+    hg(root, "branch", "-q", "topic")
+    _write(root, "topic.txt", "t\n")
+    topic = commit(root, "topic work")
+    hg(root, "update", "-q", "default")
+    _write(root, "a.txt", "a2\n")
+    target = commit(root, "default moves on")
+
     reviewer = "reviewer@example.com"
     register(client, reviewer)
     login(client, OWNER)
     add_member(client, ORG, reviewer)
-    grant(client, ORG, REPO, reviewer, "write")
-    pr_id = _create_pr(client, seeded["feature"], "default").json()["id"]
+    grant(client, ORG, "flow", reviewer, "write")
+    base_url = url(ORG, "flow", "/pull-requests")
+    created = client.post(
+        base_url,
+        json={"title": "Topic", "source_revision": "topic", "target_revision": "default"},
+        headers=csrf(client),
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["target_revision"] == target
+    pr_id = created.json()["id"]
     login(client, reviewer)
     review = client.post(
-        _pr_url(f"/{pr_id}/reviews"), json={"decision": "approved"}, headers=csrf(client)
+        f"{base_url}/{pr_id}/reviews", json={"decision": "approved"}, headers=csrf(client)
     )
     assert review.status_code in (200, 201), review.text
-    merged = client.post(_pr_url(f"/{pr_id}/merge"), headers=csrf(client))
+
+    early = client.post(f"{base_url}/{pr_id}/merge", headers=csrf(client))
+    assert early.status_code == 409, early.text
+
+    # The client merges and pushes; default's head moves past the pinned target.
+    hg(root, "merge", "-q", "topic")
+    merge_node = commit(root, "Merge topic")
+    _write(root, "after.txt", "later\n")
+    head = commit(root, "after merge")
+    merged = client.post(f"{base_url}/{pr_id}/merge", headers=csrf(client))
     assert merged.status_code == 200, merged.text
-    # The target was pinned at creation (the default head then), which contains feature.
-    assert merged.json()["merged_revision"] == seeded["merge"]
+    assert merged.json()["merged_revision"] == head
+    assert {base, topic, merge_node}.isdisjoint({merged.json()["merged_revision"]})
 
 
 # ---------------------------------------------------------------- authorization matrix
+
+
+def _add_topic(root: Path) -> None:
+    hg(root, "branch", "-q", "topic")
+    _write(root, "topic.txt", "t\n")
+    commit(root, "topic seed")
+    hg(root, "update", "-q", "default")
 
 
 def _matrix_requests(client: Any, repo: str, pr_id: str | None) -> dict[str, int]:
@@ -775,21 +822,23 @@ def test_phase2_read_authorization_matrix(client: Any, session_factory: Any) -> 
     root = repository_path(session_factory, "private-repo")
     _write(root, "README.md", "seed\n")
     commit(root, "seed")
+    _add_topic(root)
     create_repo(client, ORG, "public-repo", "public")
     assert provision(client, ORG, "public-repo").status_code == 200
     public_root = repository_path(session_factory, "public-repo")
     _write(public_root, "README.md", "seed\n")
     commit(public_root, "seed")
+    _add_topic(public_root)
     create_repo(client, ORG, "pending", "public")
 
     pr_private = client.post(
         f"{API_REPO('private-repo')}/pull-requests",
-        json={"title": "t", "source_revision": "default", "target_revision": "default"},
+        json={"title": "t", "source_revision": "topic", "target_revision": "default"},
         headers=csrf(client),
     ).json()["id"]
     pr_public = client.post(
         f"{API_REPO('public-repo')}/pull-requests",
-        json={"title": "t", "source_revision": "default", "target_revision": "default"},
+        json={"title": "t", "source_revision": "topic", "target_revision": "default"},
         headers=csrf(client),
     ).json()["id"]
 
@@ -1058,3 +1107,198 @@ def test_spool_data_error_is_dropped_and_next_file_imported(
     events = run_async(run())
     assert [event.request_id for event in events] == ["b-good"]
     assert list(spool.glob("*.json")) == []  # poison file dropped, not retried forever
+
+
+# ---------------------------------------------------------------- H1 copy tracing bounds
+
+_BIG = 2 * 1024 * 1024
+
+
+def _guard_large_revisions(monkeypatch: pytest.MonkeyPatch, cap: int) -> list[int]:
+    """Make any full read of a file revision larger than ``cap`` fail loudly."""
+    from mercurial import revlog as revlogmod
+
+    oversized: list[int] = []
+    original = revlogmod.revlog.revision
+
+    def guarded(self: Any, nodeorrev: Any, *args: Any, **kwargs: Any) -> Any:
+        rev = nodeorrev if isinstance(nodeorrev, int) else self.rev(nodeorrev)
+        if rev >= 0 and self.rawsize(rev) > cap:
+            oversized.append(rev)
+            raise AssertionError("oversized file revision decompressed")
+        return original(self, nodeorrev, *args, **kwargs)
+
+    monkeypatch.setattr(revlogmod.revlog, "revision", guarded)
+    return oversized
+
+
+def _bomb_repo(client: Any, session_factory: Any) -> dict[str, str]:
+    register(client, OWNER)
+    create_org(client, ORG)
+    create_repo(client, ORG, "bomb", "public")
+    assert provision(client, ORG, "bomb").status_code == 200
+    root = repository_path(session_factory, "bomb")
+    nodes: dict[str, str] = {}
+    _write(root, "small.txt", "s\n")
+    nodes["base"] = commit(root, "base")
+    # Side branch: a file whose ancestor revision is large, later shrunk.
+    hg(root, "branch", "-q", "side")
+    _write(root, "grown.txt", "x" * _BIG)
+    commit(root, "side: big ancestor")
+    _write(root, "grown.txt", "tiny\n")
+    commit(root, "side: shrink")
+    hg(root, "update", "-q", "default")
+    _write(root, "big.txt", "y" * _BIG)
+    nodes["added"] = commit(root, "add big")
+    hg(root, "cp", "big.txt", "big-copy.txt")
+    nodes["copied"] = commit(root, "copy big")
+    hg(root, "merge", "-q", "side")
+    nodes["merge"] = commit(root, "merge side")
+    return nodes
+
+
+def test_copy_tracing_never_decompresses_oversized_revisions(
+    client: Any, session_factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    nodes = _bomb_repo(client, session_factory)
+    monkeypatch.setenv("REVFORGE_DIFF_MAX_FILE_INPUT_BYTES", "1024")
+    get_settings.cache_clear()
+    oversized = _guard_large_revisions(monkeypatch, 1024 * 1024)
+
+    for key in ("added", "copied"):
+        node = nodes[key]
+        detail = client.get(url(ORG, "bomb", f"/changesets/{node}"))
+        assert detail.status_code == 200, (key, detail.text)
+        assert detail.json()["stats_too_large"] is True
+        diff = client.get(url(ORG, "bomb", f"/changesets/{node}/diff"))
+        assert diff.status_code == 200, (key, diff.text)
+        files = {item["path"]: item for item in diff.json()["files"]}
+        big = "big.txt" if key == "added" else "big-copy.txt"
+        assert files[big]["too_large"] is True
+
+    merge = client.get(url(ORG, "bomb", f"/changesets/{nodes['merge']}"))
+    assert merge.status_code == 200, merge.text
+    assert {item["path"] for item in merge.json()["changed_files"]} == {"grown.txt"}
+
+    rows = {
+        row["node"]: row
+        for row in client.get(url(ORG, "bomb", "/changesets"), params={"limit": 50}).json()[
+            "changesets"
+        ]
+    }
+    assert rows[nodes["added"]]["stats_too_large"] is True
+    assert rows[nodes["copied"]]["stats_too_large"] is True
+    assert rows[nodes["merge"]]["stats_too_large"] is False
+    assert rows[nodes["merge"]]["files_changed_count_when_available"] == 1
+
+    pr = client.post(
+        url(ORG, "bomb", "/pull-requests"),
+        json={"title": "t", "source_revision": nodes["merge"], "target_revision": nodes["base"]},
+        headers=csrf(client),
+    )
+    assert pr.status_code == 201, pr.text
+    pr_diff = client.get(url(ORG, "bomb", f"/pull-requests/{pr.json()['id']}/diff"))
+    assert pr_diff.status_code == 200, pr_diff.text
+    pr_files = {item["path"]: item for item in pr_diff.json()["changed_files"]}
+    assert pr_files["big.txt"]["too_large"] is True
+    assert pr_files["big-copy.txt"]["too_large"] is True
+    assert oversized == []
+
+
+def test_copy_tracing_is_bounded_by_the_file_cap(
+    client: Any, session_factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from mercurial import filelog as filelogmod
+
+    register(client, OWNER)
+    create_org(client, ORG)
+    create_repo(client, ORG, "many", "public")
+    assert provision(client, ORG, "many").status_code == 200
+    root = repository_path(session_factory, "many")
+    _write(root, "seed.txt", "s\n")
+    commit(root, "seed")
+    for index in range(6):
+        hg(root, "cp", "seed.txt", f"copy-{index}.txt")
+    node = commit(root, "six copies")
+
+    calls: list[bytes] = []
+    original = filelogmod.filelog.renamed
+
+    def counting(self: Any, filenode: bytes) -> Any:
+        calls.append(filenode)
+        return original(self, filenode)
+
+    monkeypatch.setattr(filelogmod.filelog, "renamed", counting)
+    monkeypatch.setattr(diff_model, "DEFAULT_MAX_FILES", 2)
+    body = client.get(url(ORG, "many", f"/changesets/{node}/diff")).json()
+    assert body["files_truncated"] is True and len(body["files"]) == 2
+    assert all(item["status"] == "copied" for item in body["files"])
+    assert len(calls) <= 2, len(calls)
+
+
+# ---------------------------------------------------------------- I1 / I2 hidden revisions
+
+
+def _hidden_run_repo(client: Any, session_factory: Any) -> dict[str, str]:
+    register(client, OWNER)
+    create_org(client, ORG)
+    create_repo(client, ORG, "hidden", "public")
+    assert provision(client, ORG, "hidden").status_code == 200
+    root = repository_path(session_factory, "hidden")
+    nodes: dict[str, str] = {}
+    _write(root, "a.txt", "a\n")
+    nodes["root"] = commit(root, "root")
+    for index in range(6):
+        _write(root, f"s{index}.txt", "s\n")
+        hg(root, "commit", "-A", "-q", "--secret", "-u", "Eve <eve@example.com>", "-m", "s")
+    nodes["secret_tip"] = _node(root)
+    hg(root, "bookmark", "-q", "-r", nodes["secret_tip"], "release")
+    hg(root, "update", "-q", "-r", nodes["root"])
+    hg(root, "branch", "-q", "release")
+    _write(root, "r.txt", "r\n")
+    nodes["release"] = commit(root, "release work", user="Bob <bob@example.com>")
+    return nodes
+
+
+def test_hidden_revisions_count_against_the_scan_budget(
+    client: Any, session_factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    nodes = _hidden_run_repo(client, session_factory)
+    monkeypatch.setenv("REVFORGE_HISTORY_SCAN_MAX_REVISIONS", "2")
+    get_settings.cache_clear()
+    history = url(ORG, "hidden", "/changesets")
+    first = client.get(history, params={"author": "alice"}).json()
+    assert first["changesets"] == [] and first["scan_truncated"] is True
+    assert first["next_cursor"] == nodes["release"]
+    second = client.get(history, params={"author": "alice", "cursor": first["next_cursor"]})
+    body = second.json()
+    # The run of six hidden revisions is not scanned under one request's budget; the
+    # page steps to the next served revision and resumes from there.
+    assert [row["node"] for row in body["changesets"]] == [nodes["root"]]
+    assert body["next_cursor"] in (None, nodes["root"])
+    assert nodes["secret_tip"] not in second.text
+
+
+def test_hidden_bookmark_does_not_shadow_a_served_branch(client: Any, session_factory: Any) -> None:
+    nodes = _hidden_run_repo(client, session_factory)
+    response = client.get(url(ORG, "hidden", "/changesets/release"))
+    assert response.status_code == 200, response.text
+    assert response.json()["node"] == nodes["release"]
+    browse = client.get(url(ORG, "hidden", "/browse"), params={"rev": "release"})
+    assert browse.status_code == 200
+    assert browse.json()["revision"] == nodes["release"]
+
+
+# ---------------------------------------------------------------- L2 refs rate limit
+
+
+def test_refs_rate_limit(
+    client: Any, seeded: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("REVFORGE_READ_RATE_LIMIT_MAX_REQUESTS", "1")
+    get_settings.cache_clear()
+    assert client.get(url(ORG, REPO, "/refs")).status_code == 200
+    limited = client.get(url(ORG, REPO, "/refs"))
+    assert limited.status_code == 429
+    assert limited.json()["error"]["code"] == "rate_limited"
+    assert int(limited.headers["retry-after"]) >= 1

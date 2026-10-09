@@ -1258,6 +1258,7 @@ async def get_refs_route(
     organization_slug: str,
     repository_slug: str,
     include_closed: bool = Query(default=False),
+    _rate_limit: None = Depends(rate_limited("refs")),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),

@@ -40,7 +40,7 @@ async def verify_landed_merge(
     source_revision: str,
     target_revision: str,
 ) -> str:
-    """Return the full target node if source is contained in target's history.
+    """Return the target branch's current head if it contains source and the pinned target.
 
     Raises ValidationFailure if a revision is unknown, invalid or ambiguous, or
     ConflictError if the source has not been merged into the target.
@@ -51,11 +51,11 @@ async def verify_landed_merge(
     target_node = await _resolve_single_node(
         read_service, repository_path=repository_path, revision=target_revision
     )
-    landed = await read_service.is_ancestor(
-        repository_path, ancestor=source_node, descendant=target_node
-    )
-    if not landed:
+    # The pinned target is where the PR branched off; the merge lands on a later head of
+    # that branch, which must contain both the source and the pinned target (I34/L1).
+    head = await read_service.landed_head(repository_path, source=source_node, target=target_node)
+    if head is None:
         raise ConflictError(
             "Source has not been merged into the target branch; push the merge first."
         )
-    return target_node
+    return head

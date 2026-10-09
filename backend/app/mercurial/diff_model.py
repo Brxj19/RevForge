@@ -14,7 +14,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from mercurial import copies as copiesmod
 from mercurial import patch, scmutil
 
 DiffStatus = Literal["added", "modified", "removed", "renamed", "copied"]
@@ -82,6 +81,8 @@ class DiffCaps:
 class DiffResult:
     files: list[DiffFile]
     files_truncated: bool
+    total_files: int = 0
+    input_bytes: int = 0
     content: str = ""
     content_truncated: bool = False
 
@@ -127,20 +128,46 @@ def _size_in(ctx: Any, path: bytes) -> int:
         return 0
 
 
-def _plan_entries(ctx1: Any, ctx2: Any) -> list[_Entry]:
-    """One entry per reported file, from the manifest status plus copy tracing."""
-    status = ctx1.status(ctx2)
+def _direct_copy_source(ctx1: Any, ctx2: Any, path: bytes, caps: DiffCaps) -> bytes | None:
+    """Copy source recorded on ``path``'s revision in ``ctx2`` if it exists in ``ctx1``.
+
+    Bounded replacement for ``copies.pathcopies`` (H1): no ancestor walk, and the copy
+    metadata (which lives in the file revision text) is only read when that revision's
+    uncompressed size is within the per-file input cap. Renames made in an intermediate
+    changeset of a multi-changeset span are therefore reported as add + remove.
+    """
+    try:
+        fctx = ctx2[path]
+        if stored_size(fctx) > caps.max_file_input_bytes:
+            return None
+        # The file revision's own copy metadata (filelog level): filectx.renamed() would
+        # hide it when ctx2 did not itself touch the file (multi-changeset spans).
+        renamed = fctx.filelog().renamed(fctx.filenode())
+    except Exception:
+        return None
+    if not renamed:
+        return None
+    source = bytes(renamed[0])
+    return source if source in ctx1 else None
+
+
+def _plan_entries(
+    ctx1: Any, ctx2: Any, status: Any, caps: DiffCaps, deadline: float
+) -> tuple[list[_Entry], int]:
+    """(entries for the first ``max_files`` changes, total change count).
+
+    Copy tracing runs only for added files inside the file cap and before the deadline.
+    """
     modified = list(status.modified)
-    added = list(status.added)
+    added = sorted(status.added)
     removed = set(status.removed)
     copy_map: dict[bytes, bytes] = {}
-    if added:
-        added_set = set(added)
-        copy_map = {
-            bytes(dst): bytes(src)
-            for dst, src in copiesmod.pathcopies(ctx1, ctx2).items()
-            if dst in added_set
-        }
+    for path in added[: caps.max_files]:
+        if time.monotonic() > deadline:
+            break
+        source = _direct_copy_source(ctx1, ctx2, path, caps)
+        if source is not None:
+            copy_map[bytes(path)] = source
     consumed: set[bytes] = set()
     entries: list[_Entry] = []
     for path in modified:
@@ -189,7 +216,7 @@ def _plan_entries(ctx1: Any, ctx2: Any) -> list[_Entry]:
             )
         )
     entries.sort(key=lambda entry: entry.path)
-    return entries
+    return entries, len(entries)
 
 
 def _placeholder(
@@ -298,8 +325,9 @@ def _parse_hunk(
 def build_file_diffs(repo: Any, ctx1: Any, ctx2: Any, caps: DiffCaps) -> DiffResult:
     """Diff ``ctx1`` -> ``ctx2`` within ``repo`` (a served view) under ``caps``."""
     deadline = time.monotonic() + caps.timeout_seconds
-    entries = _plan_entries(ctx1, ctx2)
-    files_truncated = len(entries) > caps.max_files
+    status = ctx1.status(ctx2)
+    entries, total_files = _plan_entries(ctx1, ctx2, status, caps, deadline)
+    files_truncated = total_files > caps.max_files
     entries = entries[: caps.max_files]
 
     budget = _Budget(caps)
@@ -315,6 +343,12 @@ def build_file_diffs(repo: Any, ctx1: Any, ctx2: Any, caps: DiffCaps) -> DiffRes
             continue
         input_total += entry.input_size
         included.append(entry)
+    if time.monotonic() > deadline:
+        # Copy tracing / planning used up the time: list everything, diff nothing.
+        for entry in included:
+            placeholders[entry.path] = _placeholder(entry, ctx1, ctx2, truncated=True)
+        included = []
+        files_truncated = True
 
     results: dict[bytes, DiffFile] = dict(placeholders)
     if included:
@@ -327,7 +361,11 @@ def build_file_diffs(repo: Any, ctx1: Any, ctx2: Any, caps: DiffCaps) -> DiffRes
             if entry.old_path is not None and entry.status in {"renamed", "copied"}
         }
         opts = patch.diffallopts(repo.ui, {b"git": True, b"nobinary": True})
-        generator = patch.diffhunks(repo, ctx1, ctx2, match=matcher, opts=opts, copy=copy)
+        # copy= is always explicit: with copy=None, diffhunks runs copies.pathcopies, which
+        # walks file ancestors and decompresses whole revisions before any cap (H1).
+        generator = patch.diffhunks(
+            repo, ctx1, ctx2, match=matcher, opts=opts, copy=copy, copysourcematch=None
+        )
         timed_out = False
         for fctx1, fctx2, header, hunks in generator:
             key = bytes(fctx2.path()) if fctx2 is not None else bytes(fctx1.path())
@@ -366,6 +404,8 @@ def build_file_diffs(repo: Any, ctx1: Any, ctx2: Any, caps: DiffCaps) -> DiffRes
     return DiffResult(
         files=ordered,
         files_truncated=files_truncated,
+        total_files=total_files,
+        input_bytes=input_total,
         content="".join(budget.content_parts),
         content_truncated=budget.content_truncated or files_truncated,
     )

@@ -41,7 +41,13 @@ async def resolve_pull_request_revisions(
             raise ValidationFailure(f"{label} is an ambiguous revision prefix.") from exc
         except RevisionNotFoundError as exc:
             raise ValidationFailure(f"{label} was not found.") from exc
-    return nodes[0], nodes[1]
+    source_node, target_node = nodes
+    # Nothing to review or merge: the source is the target or already in its history.
+    if await read_service.is_ancestor(
+        repository_path, ancestor=source_node, descendant=target_node
+    ):
+        raise ValidationFailure("source_revision is already contained in target_revision.")
+    return source_node, target_node
 
 
 async def compute_diff(

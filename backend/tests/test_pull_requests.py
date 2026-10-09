@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from repo_fixtures import commit, repository_path
+from repo_fixtures import commit, hg, repository_path
 
 ORIGIN_HEADERS = {"Origin": "http://localhost:5173"}
 PASSWORD = "StrongPassword123"
@@ -29,6 +29,10 @@ def _provision_and_seed(client, organization_slug: str, slug: str) -> None:
     root = repository_path(_FACTORY["factory"], slug)  # type: ignore[arg-type]
     (root / "README.md").write_text("seed\n", encoding="utf-8")
     commit(root, "Seed")
+    # A source branch the PR can propose (source == target is rejected since I34).
+    hg(root, "branch", "-q", "topic")
+    (root / "topic.txt").write_text("topic\n", encoding="utf-8")
+    commit(root, "Topic work")
 
 
 def _csrf_headers(client) -> dict[str, str]:
@@ -88,7 +92,7 @@ def _create_owner_repository(client) -> None:
 def _create_pull_request(client, base: str = PR_BASE) -> str:
     response = client.post(
         base,
-        json={"title": "Add feature", "source_revision": "default", "target_revision": "default"},
+        json={"title": "Add feature", "source_revision": "topic", "target_revision": "default"},
         headers=_csrf_headers(client),
     )
     assert response.status_code == 201
@@ -270,7 +274,7 @@ def test_write_role_user_can_create_pull_request(client) -> None:
     _login(client, "writer@example.com")
     created = client.post(
         _pr_base("review", "project"),
-        json={"title": "From writer", "source_revision": "default", "target_revision": "default"},
+        json={"title": "From writer", "source_revision": "topic", "target_revision": "default"},
         headers=_csrf_headers(client),
     )
     assert created.status_code == 201, created.text
@@ -324,7 +328,7 @@ def test_read_only_user_cannot_create_pull_request(client) -> None:
     _login(client, "reader@example.com")
     denied = client.post(
         _pr_base("review", "project"),
-        json={"title": "nope", "source_revision": "default", "target_revision": "default"},
+        json={"title": "nope", "source_revision": "topic", "target_revision": "default"},
         headers=_csrf_headers(client),
     )
     assert denied.status_code == 403, denied.text

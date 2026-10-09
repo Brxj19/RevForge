@@ -1,86 +1,16 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.repository_event import EventSpoolEntry, RepositoryEvent
-from app.services.audit import record_audit_event
 
 
 class EventService:
-    async def enqueue_push_event(
-        self,
-        session: AsyncSession,
-        *,
-        repository_id: UUID,
-        actor_user_id: UUID | None,
-        authentication_method: str | None,
-        credential_id: UUID | None,
-        source_ip: str | None,
-        request_id: str | None,
-        pushed_nodes: list[str],
-        pushed_count: int | None = None,
-    ) -> None:
-        now = datetime.now(UTC)
-        count = pushed_count if pushed_count is not None else len(pushed_nodes)
-        truncated = count > len(pushed_nodes)
-        idempotency_key = f"push:{repository_id}:{request_id or str(uuid4())}"
-
-        spool_entry = EventSpoolEntry(
-            repository_id=repository_id,
-            event_type="repository.push.accepted",
-            payload_json={
-                "actor_user_id": str(actor_user_id) if actor_user_id else None,
-                "authentication_method": authentication_method,
-                "credential_id": str(credential_id) if credential_id else None,
-                "source_ip": source_ip,
-                "request_id": request_id,
-                "pushed_nodes": pushed_nodes,
-                "pushed_count": count,
-                "pushed_nodes_truncated": truncated,
-            },
-            idempotency_key=idempotency_key,
-            status="pending",
-            retry_count=0,
-            scheduled_for=now,
-            created_at=now,
-        )
-        session.add(spool_entry)
-
-        repository_event = RepositoryEvent(
-            repository_id=repository_id,
-            event_type="repository.push.accepted",
-            actor_user_id=actor_user_id,
-            authentication_method=authentication_method,
-            credential_id=credential_id,
-            source_ip=source_ip,
-            request_id=request_id,
-            payload_json={
-                "pushed_nodes": pushed_nodes,
-                "pushed_count": count,
-                "pushed_nodes_truncated": truncated,
-            },
-            occurred_at=now,
-        )
-        session.add(repository_event)
-
-        await record_audit_event(
-            session,
-            event_type="repository.push.accepted",
-            actor_user_id=actor_user_id,
-            repository_id=repository_id,
-            request_id=request_id,
-            metadata_json={
-                "pushed_node_count": count,
-                "authentication_method": authentication_method or "unknown",
-            },
-        )
-        await session.commit()
-
     async def claim_events(
         self,
         session: AsyncSession,

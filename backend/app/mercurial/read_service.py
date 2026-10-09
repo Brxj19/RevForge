@@ -15,12 +15,10 @@ from mercurial import (
     encoding,
     hg,
     initialization,
-    patch,
     revset,
     revsetlang,
     scmutil,
     smartset,
-    util,
 )
 from mercurial import error as hgerror
 from mercurial import ui as uimod
@@ -319,40 +317,62 @@ class MercurialReadService:
         budget = self._settings.history_scan_max_revisions
         deadline = time.monotonic() + self._settings.history_scan_timeout_seconds
 
-        # Scan newest -> oldest in windows. The budget counts served revisions only, so a
-        # run of hidden revisions can neither end the page early nor leak as a cursor; a
-        # cursor is always the lowest *served* revision actually scanned.
+        def accepts(revision: int) -> bool:
+            if hex_query is None:
+                return True
+            candidate = repo[revision]
+            return bool(
+                candidate.hex().startswith(hex_query)
+                or lowered_query in encoding.lower(candidate.description())
+            )
+
+        # Scan newest -> oldest in windows. Every scanned revision number, hidden or not,
+        # counts against the budget and the deadline (checked after the first window), so
+        # a long run of secret/hidden revisions cannot make the scan unbounded (I1).
         matches: list[int] = []
         lowest_scanned: int | None = None
         truncated = False
         high = start_revision
+        first_window = True
         while high >= 0:
-            if budget <= 0 or (lowest_scanned is not None and time.monotonic() > deadline):
+            if budget <= 0 or (not first_window and time.monotonic() > deadline):
                 truncated = True
                 break
+            first_window = False
             low = max(0, high - _HISTORY_WINDOW + 1, high - budget + 1)
             subset = smartset.spanset(repo, low, high + 1)
             subset.reverse()
-            served_in_window = len(subset)
-            window_low = subset.min() if served_in_window else None
+            window_low = subset.min() if subset else None
             revisions = matcher(repo, subset) if matcher is not None else subset
             for revision in revisions:
-                if hex_query is not None:
-                    candidate = repo[revision]
-                    if not (
-                        candidate.hex().startswith(hex_query)
-                        or lowered_query in encoding.lower(candidate.description())
-                    ):
-                        continue
+                if not accepts(int(revision)):
+                    continue
                 matches.append(int(revision))
                 if len(matches) > page_size:
                     break
             if len(matches) > page_size:
                 break
-            budget -= served_in_window
+            budget -= high - low + 1
             if window_low is not None:
                 lowest_scanned = int(window_low)
             high = low - 1
+
+        if truncated and lowest_scanned is None and len(matches) <= page_size:
+            # Only hidden revisions were scanned: a cursor must be a served node and is
+            # exclusive, so step (index lookups only, no changeset reads) to the next served
+            # revision and evaluate just that one.
+            filtered = changelog.filteredrevs
+            revision = high
+            while revision >= 0 and revision in filtered:
+                revision -= 1
+            if revision < 0:
+                truncated = False
+            else:
+                lowest_scanned = revision
+                single = smartset.baseset([revision])
+                hit = matcher(repo, single) if matcher is not None else single
+                if revision in hit and accepts(revision):
+                    matches.append(revision)
 
         next_cursor: str | None = None
         if len(matches) > page_size:
@@ -375,7 +395,9 @@ class MercurialReadService:
             changeset = self._parse_changeset_context(ctx, include_files=True)
             changeset.is_branch_head = bytes(ctx.node()) in branch_heads
             changeset.is_merge = len([p for p in ctx.parents() if p.rev() >= 0]) > 1
-            self._attach_row_stats(repository_path, repo, ctx, changeset, page_input_budget)
+            self._attach_row_stats(
+                repository_path, repo, ctx, changeset, page_input_budget, deadline
+            )
             changesets.append(changeset)
         return HgChangesetPage(
             changesets=changesets, next_cursor=next_cursor, scan_truncated=truncated
@@ -388,15 +410,20 @@ class MercurialReadService:
         ctx: Any,
         changeset: HgChangeset,
         page_input_budget: list[int],
+        deadline: float,
     ) -> None:
         """Diffstat against p1, in-process, after bounding the input from stored sizes."""
         cache_key = (str(repository_path), changeset.node)
         cached = _ROW_STATS_CACHE.get(cache_key)
         if cached is None:
             files_changed, insertions, deletions, has_binary = _compute_row_stats(
-                repo, ctx, page_input_budget
+                repo,
+                ctx,
+                page_input_budget,
+                max_file_input_bytes=self._settings.diff_max_file_input_bytes,
+                deadline=deadline,
             )
-            if insertions is not None and deletions is not None:
+            if files_changed is not None and insertions is not None and deletions is not None:
                 # Only exact results are cached; over-budget depends on the page budget.
                 _ROW_STATS_CACHE.put(cache_key, (files_changed, insertions, deletions, has_binary))
         else:
@@ -497,6 +524,41 @@ class MercurialReadService:
         first = self._resolve_context(repo, ancestor)
         second = self._resolve_context(repo, descendant)
         return bool(repo.changelog.isancestorrev(first.rev(), second.rev()))
+
+    async def landed_head(self, repository_path: Path, *, source: str, target: str) -> str | None:
+        """Current served head of ``target``'s named branch containing both revisions.
+
+        Used to record a PR merge: the pinned target is the branch point at creation; the
+        merge lands on a later head of the same branch. Returns None when no open head of
+        that branch has both ``source`` and ``target`` as ancestors.
+        """
+        return await self._in_thread(
+            repository_path, self._sync_landed_head, repository_path, source, target
+        )
+
+    def _sync_landed_head(self, repository_path: Path, source: str, target: str) -> str | None:
+        repo = self._open_repository(repository_path)
+        source_ctx = self._resolve_context(repo, source)
+        target_ctx = self._resolve_context(repo, target)
+        branchmap = repo.branchmap()
+        branch = target_ctx.branch()
+        if not branchmap.hasbranch(branch):
+            return None
+        changelog = repo.changelog
+        head_revs = sorted(
+            (
+                rev
+                for head in branchmap.branchheads(branch, closed=False)
+                if (rev := _served_rev(repo, head)) is not None
+            ),
+            reverse=True,
+        )
+        for head_rev in head_revs:
+            if changelog.isancestorrev(source_ctx.rev(), head_rev) and changelog.isancestorrev(
+                target_ctx.rev(), head_rev
+            ):
+                return _decode_ascii_bytes(hg_hex(changelog.node(head_rev)))
+        return None
 
     def _diff_caps(self, *, include_lines: bool, include_content: bool = False) -> DiffCaps:
         return DiffCaps(
@@ -1130,12 +1192,14 @@ class MercurialReadService:
             raise InvalidRevisionError()
 
         name = revision.encode("utf-8")
+        # A bookmark or tag whose target is hidden (secret/obsolete) does not exist for
+        # this view: skip it and keep resolving, rather than 404 on a served branch (I2).
         bookmark_node = repo._bookmarks.get(name)
-        if bookmark_node is not None:
+        if bookmark_node is not None and _is_served(repo, bookmark_node):
             return self._context_for_node(repo, bookmark_node)
 
         tag_node = repo.tags().get(name)
-        if tag_node is not None:
+        if tag_node is not None and _is_served(repo, tag_node):
             return self._context_for_node(repo, tag_node)
 
         branch_tip = repo.branchtip(name, ignoremissing=True)
@@ -1298,6 +1362,19 @@ def _language_shares(
 # ---------------------------------------------------------------------- input validation
 
 
+def _served_rev(repo: Any, node: bytes) -> int | None:
+    if node in (wdirid, nullid):
+        return None
+    try:
+        return int(repo.changelog.rev(node))
+    except (hgerror.LookupError, hgerror.RepoLookupError, IndexError):
+        return None
+
+
+def _is_served(repo: Any, node: bytes) -> bool:
+    return _served_rev(repo, node) is not None
+
+
 def _has_control_characters(value: str) -> bool:
     return any(ord(character) < 32 or ord(character) == 127 for character in value)
 
@@ -1374,14 +1451,24 @@ def _history_matcher(filters: HistoryFilters) -> Callable[..., Any] | None:
 
 
 def _compute_row_stats(
-    repo: Any, ctx: Any, page_input_budget: list[int]
-) -> tuple[int, int | None, int | None, bool]:
+    repo: Any,
+    ctx: Any,
+    page_input_budget: list[int],
+    *,
+    max_file_input_bytes: int,
+    deadline: float,
+) -> tuple[int | None, int | None, int | None, bool]:
     """(files, insertions, deletions, has_binary) vs p1; line counts None when over budget.
 
     The file list and stored sizes are checked before any file content is read, so a
-    huge changeset never gets decompressed for a history row. The file count comes from
-    the manifest status and is always known.
+    huge changeset never gets decompressed for a history row. The counts then come from
+    the shared diff model, whose copy tracing is bounded (never ``ctx.diff()``, which runs
+    ``copies.pathcopies`` and walks file ancestors; H1). Past the scan deadline, rows are
+    reported as too large without any work.
     """
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return None, None, None, False
     parent = ctx.p1()
     status = parent.status(ctx)
     modified = list(status.modified)
@@ -1397,14 +1484,26 @@ def _compute_row_stats(
             total += _stored_size(side[path])
             if total > limit:
                 return file_count, None, None, False
-    page_input_budget[0] -= total
-    opts = patch.diffallopts(repo.ui, {b"git": True, b"nobinary": True})
-    data = patch.diffstatdata(util.iterlines(ctx.diff(opts=opts)))
+    result = build_file_diffs(
+        repo,
+        parent,
+        ctx,
+        DiffCaps(
+            max_files=_STATS_MAX_FILES,
+            max_file_input_bytes=min(max_file_input_bytes, limit),
+            max_total_input_bytes=limit,
+            timeout_seconds=remaining,
+            include_lines=False,
+        ),
+    )
+    page_input_budget[0] -= result.input_bytes
+    if not result.complete:
+        return result.total_files, None, None, False
     return (
-        len(data),
-        sum(int(entry[1]) for entry in data),
-        sum(int(entry[2]) for entry in data),
-        any(bool(entry[3]) for entry in data),
+        result.total_files,
+        sum(item.insertions for item in result.files),
+        sum(item.deletions for item in result.files),
+        any(item.binary for item in result.files),
     )
 
 
