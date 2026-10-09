@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from threading import Lock
 from time import monotonic
 from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from mercurial import hg, initialization
 from mercurial import ui as uimod
@@ -18,6 +18,7 @@ from mercurial.wireprotoserver import sshserver
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.core.request_id import safe_request_id
 from app.core.security import validate_slug
 from app.mercurial.errors import RepositoryStorageError
 from app.mercurial.storage_locator import RepositoryStorageLocator
@@ -118,7 +119,7 @@ class MercurialSshGateway:
         request = parse_ssh_original_command(original_command)
         # A stable request id per session keeps spooled push events attributable even
         # when the environment supplies none (audit C8).
-        request_id = os.environ.get("REVFORGE_REQUEST_ID") or str(uuid4())
+        request_id = safe_request_id(os.environ.get("REVFORGE_REQUEST_ID"))
         limiter_key = f"ssh:{self._key_id}"
         if not self._rate_limiter.allow(limiter_key):
             raise ForbiddenError("Rate limit exceeded.")

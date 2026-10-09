@@ -3,10 +3,32 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from repo_fixtures import commit, repository_path
 
 ORIGIN_HEADERS = {"Origin": "http://localhost:5173"}
 PASSWORD = "StrongPassword123"
 PR_BASE = "/api/v1/organizations/review/repositories/project/pull-requests"
+
+
+_FACTORY: dict[str, object] = {}
+
+
+@pytest.fixture(autouse=True)
+def _capture_session_factory(session_factory) -> None:
+    # PR revisions are pinned to real served nodes at creation (I34), so every repository
+    # these tests open PRs against is provisioned and holds one changeset.
+    _FACTORY["factory"] = session_factory
+
+
+def _provision_and_seed(client, organization_slug: str, slug: str) -> None:
+    response = client.post(
+        f"/api/v1/organizations/{organization_slug}/repositories/{slug}/provision",
+        headers=_csrf_headers(client),
+    )
+    assert response.status_code == 200, response.text
+    root = repository_path(_FACTORY["factory"], slug)  # type: ignore[arg-type]
+    (root / "README.md").write_text("seed\n", encoding="utf-8")
+    commit(root, "Seed")
 
 
 def _csrf_headers(client) -> dict[str, str]:
@@ -54,6 +76,7 @@ def _create_repository(client, organization_slug: str, slug: str) -> None:
         headers=_csrf_headers(client),
     )
     assert response.status_code == 201
+    _provision_and_seed(client, organization_slug, slug)
 
 
 def _create_owner_repository(client) -> None:
@@ -65,7 +88,7 @@ def _create_owner_repository(client) -> None:
 def _create_pull_request(client, base: str = PR_BASE) -> str:
     response = client.post(
         base,
-        json={"title": "Add feature", "source_revision": "abc123", "target_revision": "def456"},
+        json={"title": "Add feature", "source_revision": "default", "target_revision": "default"},
         headers=_csrf_headers(client),
     )
     assert response.status_code == 201
@@ -247,7 +270,7 @@ def test_write_role_user_can_create_pull_request(client) -> None:
     _login(client, "writer@example.com")
     created = client.post(
         _pr_base("review", "project"),
-        json={"title": "From writer", "source_revision": "abc123", "target_revision": "def456"},
+        json={"title": "From writer", "source_revision": "default", "target_revision": "default"},
         headers=_csrf_headers(client),
     )
     assert created.status_code == 201, created.text
@@ -267,6 +290,7 @@ def test_anonymous_can_read_public_repo_pull_request(client) -> None:
         },
         headers=_csrf_headers(client),
     )
+    _provision_and_seed(client, "review", "project")
     pull_request_id = _create_pull_request(client, _pr_base("review", "project"))
 
     client.cookies.clear()  # become anonymous
@@ -300,7 +324,7 @@ def test_read_only_user_cannot_create_pull_request(client) -> None:
     _login(client, "reader@example.com")
     denied = client.post(
         _pr_base("review", "project"),
-        json={"title": "nope", "source_revision": "abc123", "target_revision": "def456"},
+        json={"title": "nope", "source_revision": "default", "target_revision": "default"},
         headers=_csrf_headers(client),
     )
     assert denied.status_code == 403, denied.text

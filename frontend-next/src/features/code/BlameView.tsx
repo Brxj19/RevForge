@@ -9,6 +9,7 @@ import {
 import { tokenize } from "~/lib/codemirror/highlight";
 import { absoluteTime, shortAge } from "~/lib/format";
 import { qk } from "~/lib/query-keys";
+import { CommitHoverCard } from "~/features/history";
 import { Avatar } from "~/ui/Avatar";
 import { Hash } from "~/ui/Hash";
 import { Icon } from "~/ui/icons";
@@ -83,6 +84,8 @@ export interface BlameViewProps {
   repo: string;
   langId: string;
   changesetHref: (node: string) => string;
+  /** Repository base path ("/sigma/sigma-reckitt") for the commit hover card's links. */
+  base: string;
   /** Code route for this file at another revision, blame view. */
   blameAt: (rev: string) => string;
 }
@@ -152,13 +155,19 @@ export function BlameView(props: BlameViewProps) {
                               size={16}
                               decorative
                             />
-                            <a
-                              class={styles.biMsg}
-                              href={props.changesetHref(g.node)}
-                              title={first().summary}
+                            <CommitHoverCard
+                              org={props.org}
+                              repo={props.repo}
+                              base={props.base}
+                              node={g.node}
+                              trigger="a"
+                              triggerProps={{
+                                class: styles.biMsg,
+                                href: props.changesetHref(g.node),
+                              }}
                             >
                               {first().summary || g.short}
-                            </a>
+                            </CommitHoverCard>
                             <Hash node={g.node} length={7} />
                             <Show when={first().date}>
                               {(d) => (

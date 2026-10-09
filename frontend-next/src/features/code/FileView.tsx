@@ -393,6 +393,7 @@ export function FileView(props: FileViewProps) {
                   blame={b()}
                   org={repo.org()}
                   repo={repo.repo()}
+                  base={repo.base()}
                   langId={langId()}
                   changesetHref={(n) =>
                     repo.href(`changesets/${encodeURIComponent(n)}`)

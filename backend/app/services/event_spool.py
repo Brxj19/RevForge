@@ -8,13 +8,33 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.repository import Repository
 from app.models.repository_event import EventSpoolEntry, RepositoryEvent
 
 logger = structlog.get_logger(__name__)
+
+
+MAX_PUSHED_NODES = 1000
+
+
+def push_payload(data: dict[str, object]) -> dict[str, object]:
+    """Normalized push fields (I13): nodes oldest->newest (capped), true count, truncated.
+
+    Spool files written before I13 carry only ``pushed_nodes``; the count falls back to it.
+    """
+    raw_nodes = data.get("pushed_nodes", [])
+    nodes = [str(item) for item in raw_nodes] if isinstance(raw_nodes, list) else []
+    raw_count = data.get("pushed_count")
+    count = raw_count if isinstance(raw_count, int) and raw_count >= len(nodes) else len(nodes)
+    truncated = bool(data.get("pushed_nodes_truncated")) or len(nodes) > MAX_PUSHED_NODES
+    return {
+        "pushed_nodes": nodes[:MAX_PUSHED_NODES],
+        "pushed_count": count,
+        "pushed_nodes_truncated": truncated,
+    }
 
 
 class FileEventSpoolReader:
@@ -109,12 +129,13 @@ class FileEventSpoolReader:
                 # than retry forever (poison file).
                 logger.warning("event_spool.malformed_event_dropped", key=idempotency_key)
                 return "dropped"
+            pushed = push_payload(data)
             session.add(
                 EventSpoolEntry(
                     repository_id=repo_id,
                     event_type=event_type,
                     payload_json={
-                        "pushed_nodes": data.get("pushed_nodes", []),
+                        **pushed,
                         "actor_user_id": data.get("actor_user_id"),
                         "authentication_method": data.get("authentication_method"),
                         "credential_id": data.get("credential_id"),
@@ -139,12 +160,18 @@ class FileEventSpoolReader:
                     credential_id=credential_id,
                     source_ip=str(data.get("source_ip")) if data.get("source_ip") else None,
                     request_id=str(data.get("request_id")) if data.get("request_id") else None,
-                    payload_json={"pushed_nodes": data.get("pushed_nodes", [])},
+                    payload_json=pushed,
                     occurred_at=occurred_at,
                 )
             )
             await session.commit()
             return "imported"
+        except DataError:
+            # A value the column cannot hold (e.g. oversized request id from an older
+            # gateway) will never import: drop the poison file instead of retrying forever.
+            await session.rollback()
+            logger.warning("event_spool.data_error_dropped", key=idempotency_key)
+            return "dropped"
         except IntegrityError:
             # Duplicate idempotency key (race) or other constraint violation: the
             # event is already represented or cannot be stored. Drop the file.

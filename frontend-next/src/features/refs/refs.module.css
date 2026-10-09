@@ -1,0 +1,74 @@
+.tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.filter {
+  width: 260px;
+  max-width: 100%;
+}
+.explain {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.loading {
+  padding: 16px;
+}
+.name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 13px var(--mono);
+  max-width: 100%;
+  min-width: 0;
+  color: var(--text);
+}
+.name > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+/* Case-sensitive names stay in true case and truncate with the full name in the title (U1). */
+.nameText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
+}
+.target {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  color: var(--text-2);
+}
+.target:hover .summary {
+  text-decoration: underline;
+}
+.summary {
+  color: var(--muted);
+  font-size: 12.5px;
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 860px) {
+  .filter {
+    width: 100%;
+  }
+  .right {
+    width: 100%;
+  }
+}

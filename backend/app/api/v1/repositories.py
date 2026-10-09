@@ -18,17 +18,20 @@ from app.api.deps import (
     get_session,
     require_csrf,
 )
-from app.api.rate_limit import rate_limited
+from app.api.rate_limit import history_rate_limited, rate_limited
 from app.core.config import Settings, get_settings
 from app.core.errors import ApiError
 from app.domain.enums import PROVISIONING_ERROR_CODES, RepositoryRole, RepositoryVisibility
 from app.mercurial.command_runner import HgCommandRunner
+from app.mercurial.diff_model import DiffFile
 from app.mercurial.errors import (
     ContentTooLargeError,
     HgBusyError,
     HgCommandFailedError,
     HgCommandOutputLimitError,
     HgCommandTimeoutError,
+    InvalidCursorError,
+    InvalidHistoryFilterError,
     InvalidRepositoryPathError,
     InvalidRevisionError,
     InvalidSearchQueryError,
@@ -44,13 +47,18 @@ from app.mercurial.provisioning_service import (
     provision_repository,
     public_provisioning_error,
 )
-from app.mercurial.read_service import MercurialReadService, classify_raw_content
+from app.mercurial.read_service import (
+    MercurialReadService,
+    classify_raw_content,
+    validate_history_filters,
+)
 from app.mercurial.schemas import (
     HgBlame,
     HgChangeset,
     HgCodeSearchResult,
     HgDirectoryBrowse,
     HgFileBrowse,
+    HgReference,
     HgRepositoryStats,
 )
 from app.mercurial.storage_locator import RepositoryStorageLocator
@@ -68,6 +76,9 @@ from app.schemas.repositories import (
     ChangesetSummaryResponse,
     CodeSearchMatchResponse,
     CodeSearchResponse,
+    DiffFileResponse,
+    DiffHunkResponse,
+    DiffLineResponse,
     RepositoryBlameLineResponse,
     RepositoryBlameResponse,
     RepositoryCreateRequest,
@@ -117,6 +128,8 @@ from app.services.transport_metadata import (
 
 _KNOWN_READ_ERRORS = (
     ContentTooLargeError,
+    InvalidCursorError,
+    InvalidHistoryFilterError,
     HgBusyError,
     InvalidSearchQueryError,
     RevisionAmbiguousError,
@@ -239,6 +252,57 @@ def _serialize_changeset_summary(changeset: HgChangeset) -> ChangesetSummaryResp
         ),
         insertions_when_available=changeset.stats.insertions if changeset.stats else None,
         deletions_when_available=changeset.stats.deletions if changeset.stats else None,
+        tags=changeset.tags,
+        bookmarks=changeset.bookmarks,
+        is_branch_head=changeset.is_branch_head,
+        is_merge=changeset.is_merge,
+        has_binary=changeset.has_binary,
+        stats_too_large=changeset.stats_too_large,
+    )
+
+
+def _serialize_diff_file(item: DiffFile) -> DiffFileResponse:
+    return DiffFileResponse(
+        path=item.path,
+        old_path=item.old_path,
+        status=item.status,
+        binary=item.binary,
+        old_mode=item.old_mode,
+        new_mode=item.new_mode,
+        insertions=item.insertions,
+        deletions=item.deletions,
+        too_large=item.too_large,
+        truncated=item.truncated,
+        hunks=[
+            DiffHunkResponse(
+                header=hunk.header,
+                old_start=hunk.old_start,
+                old_lines=hunk.old_lines,
+                new_start=hunk.new_start,
+                new_lines=hunk.new_lines,
+                lines=[
+                    DiffLineResponse(
+                        kind=line.kind,
+                        old_line=line.old_line,
+                        new_line=line.new_line,
+                        text=line.text,
+                    )
+                    for line in hunk.lines
+                ],
+            )
+            for hunk in item.hunks
+        ],
+    )
+
+
+def _serialize_ref(ref: HgReference) -> RepositoryRefResponse:
+    return RepositoryRefResponse(
+        name=ref.name,
+        node=ref.node,
+        short_node=ref.short_node,
+        updated_at=ref.updated_at,
+        summary=ref.summary,
+        state=ref.state,
     )
 
 
@@ -267,9 +331,15 @@ def _serialize_changeset_detail(changeset: HgChangeset) -> ChangesetDetailRespon
                 insertions=changed_file.insertions,
                 deletions=changed_file.deletions,
                 old_path=changed_file.old_path,
+                binary=changed_file.binary,
+                old_mode=changed_file.old_mode,
+                new_mode=changed_file.new_mode,
             )
             for changed_file in (changeset.stats.changed_files if changeset.stats else [])
         ],
+        is_merge=changeset.is_merge,
+        has_binary=changeset.has_binary,
+        stats_too_large=changeset.stats_too_large,
     )
 
 
@@ -374,6 +444,14 @@ def _pick_revision(rev: str | None, revision: str | None) -> str | None:
 
 
 def _raise_read_error(exc: Exception) -> None:
+    if isinstance(exc, InvalidCursorError):
+        raise ApiError(
+            422, code="invalid_cursor", detail="Cursor must be a full changeset node."
+        ) from exc
+    if isinstance(exc, InvalidHistoryFilterError):
+        raise ApiError(
+            422, code="validation_error", detail=f"History filter '{exc.field}' is invalid."
+        ) from exc
     if isinstance(exc, RevisionNotFoundError):
         raise ApiError(404, code="revision_not_found", detail="Revision not found.") from exc
     if isinstance(exc, RevisionAmbiguousError):
@@ -804,12 +882,18 @@ async def list_changesets_route(
     repository_slug: str,
     cursor: str | None = Query(default=None, max_length=120),
     limit: int | None = Query(default=None, ge=1, le=50),
+    branch: str | None = Query(default=None, max_length=255),
+    author: str | None = Query(default=None, max_length=100),
+    path: str | None = Query(default=None, max_length=1024),
+    q: str | None = Query(default=None, max_length=200),
+    _rate_limit: None = Depends(history_rate_limited),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
     read_service: MercurialReadService = Depends(get_mercurial_read_service),
 ) -> ChangesetListResponse:
     try:
+        filters = validate_history_filters(branch=branch, author=author, path=path, q=q)
         (
             _organization,
             _repository,
@@ -824,13 +908,16 @@ async def list_changesets_route(
             actor=identity.user if identity is not None else None,
             storage_locator=storage_locator,
         )
-        page = await read_service.list_changesets(repository_path, cursor=cursor, limit=limit)
+        page = await read_service.list_changesets(
+            repository_path, cursor=cursor, limit=limit, filters=filters
+        )
     except _KNOWN_READ_ERRORS as exc:
         _raise_read_error(exc)
 
     return ChangesetListResponse(
         changesets=[_serialize_changeset_summary(changeset) for changeset in page.changesets],
         next_cursor=page.next_cursor,
+        scan_truncated=page.scan_truncated,
     )
 
 
@@ -839,6 +926,7 @@ async def get_changeset_route(
     organization_slug: str,
     repository_slug: str,
     node: str,
+    _rate_limit: None = Depends(rate_limited("changeset")),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
@@ -871,6 +959,7 @@ async def get_changeset_diff_route(
     organization_slug: str,
     repository_slug: str,
     node: str,
+    _rate_limit: None = Depends(rate_limited("changeset_diff")),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
@@ -899,6 +988,8 @@ async def get_changeset_diff_route(
         content=diff.content,
         is_truncated=diff.is_truncated,
         truncation_reason_when_applicable=diff.truncation_reason,
+        files=[_serialize_diff_file(item) for item in diff.files],
+        files_truncated=diff.files_truncated,
     )
 
 
@@ -1166,6 +1257,7 @@ async def get_repository_raw_route(
 async def get_refs_route(
     organization_slug: str,
     repository_slug: str,
+    include_closed: bool = Query(default=False),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
@@ -1186,23 +1278,14 @@ async def get_refs_route(
             actor=identity.user if identity is not None else None,
             storage_locator=storage_locator,
         )
-        refs = await read_service.list_refs(repository_path)
+        refs = await read_service.list_refs(repository_path, include_closed=include_closed)
     except _KNOWN_READ_ERRORS as exc:
         _raise_read_error(exc)
 
     return RepositoryRefsResponse(
-        branches=[
-            RepositoryRefResponse(name=ref.name, node=ref.node, short_node=ref.short_node)
-            for ref in refs.branches
-        ],
-        tags=[
-            RepositoryRefResponse(name=ref.name, node=ref.node, short_node=ref.short_node)
-            for ref in refs.tags
-        ],
-        bookmarks=[
-            RepositoryRefResponse(name=ref.name, node=ref.node, short_node=ref.short_node)
-            for ref in refs.bookmarks
-        ],
+        branches=[_serialize_ref(ref) for ref in refs.branches],
+        tags=[_serialize_ref(ref) for ref in refs.tags],
+        bookmarks=[_serialize_ref(ref) for ref in refs.bookmarks],
     )
 
 

@@ -2,6 +2,7 @@ import { createQuery } from "@tanstack/solid-query";
 import { createMemo, For, Match, Show, Switch } from "solid-js";
 import { useAuth } from "~/app/auth";
 import { FileTable, isReadme, MarkdownPreview } from "~/features/code";
+import { CommitHoverCard } from "~/features/history";
 import { reposApi } from "~/lib/api";
 import { absoluteTime, bytes, shortAge } from "~/lib/format";
 import { qk } from "~/lib/query-keys";
@@ -394,7 +395,15 @@ export default function OverviewPage() {
                         <For each={r().changesets}>
                           {(c) => (
                             <li>
-                              <a href={changesetHref(c.node)}>
+                              <CommitHoverCard
+                                org={repo.org()}
+                                repo={repo.repo()}
+                                base={repo.base()}
+                                node={c.node}
+                                summary={c}
+                                trigger="a"
+                                triggerProps={{ href: changesetHref(c.node) }}
+                              >
                                 <span class={styles.recentMsg}>
                                   {c.message.split("\n")[0]}
                                 </span>
@@ -416,7 +425,7 @@ export default function OverviewPage() {
                                     {shortAge(c.timestamp)} ago
                                   </time>
                                 </span>
-                              </a>
+                              </CommitHoverCard>
                             </li>
                           )}
                         </For>

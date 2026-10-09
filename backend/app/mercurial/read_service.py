@@ -9,21 +9,35 @@ from collections import OrderedDict
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Literal
 
+from mercurial import (
+    encoding,
+    hg,
+    initialization,
+    patch,
+    revset,
+    revsetlang,
+    scmutil,
+    smartset,
+    util,
+)
 from mercurial import error as hgerror
-from mercurial import hg, initialization, scmutil
 from mercurial import ui as uimod
 from mercurial.node import hex as hg_hex
-from mercurial.node import nullid, wdirid
+from mercurial.node import nullid, nullrev, wdirid
 
 from app.core.config import Settings
 
+from . import diff_model
 from .command_runner import HgCommandRunner
+from .diff_model import DiffCaps, DiffResult, build_file_diffs
 from .errors import (
     ContentTooLargeError,
     HgCommandFailedError,
     HgCommandOutputLimitError,
+    InvalidCursorError,
+    InvalidHistoryFilterError,
     InvalidRepositoryPathError,
     InvalidRevisionError,
     InvalidSearchQueryError,
@@ -63,14 +77,29 @@ SAFE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
 # name is rejected (422) rather than guessed at; decimal revision numbers are never used.
 HEX_PREFIX_RE = re.compile(r"^[0-9a-f]{6,39}$")
 SHORT_HEX_RE = re.compile(r"^[0-9a-f]{1,5}$")
-DIFFSTAT_SUMMARY_RE = re.compile(
-    r"^\s*(?P<files>\d+)\s+files?\s+changed"
-    r"(?:,\s*(?P<insertions>\d+)\s+insertions?\(\+\))?"
-    r"(?:,\s*(?P<deletions>\d+)\s+deletions?\(-\))?\s*$"
+HEX_QUERY_RE = re.compile(r"^[0-9a-fA-F]{6,40}$")
+# hg file-pattern kinds; a history path filter that starts with one is rejected (never a
+# pattern, even though it is passed as `path:` anyway).
+_PATTERN_PREFIX_RE = re.compile(
+    r"^(?:re|glob|relglob|path|filepath|relpath|rootfilesin|rootglob|relre|set|listfile0?"
+    r"|include|subinclude|kind):"
 )
-DIFFSTAT_PER_FILE_FALLBACK_LIMIT = 200
-# `{diffstat}` renders as "<files>: +<insertions>/-<deletions>".
-DIFFSTAT_TEMPLATE_RE = re.compile(r"^(?P<files>\d+):\s*\+(?P<insertions>\d+)/-(?P<deletions>\d+)$")
+
+# History scan windows and per-row diffstat bounds (Phase 2).
+_HISTORY_WINDOW = 256
+_STATS_MAX_FILES = 300
+_STATS_ROW_INPUT_BYTES = 2 * 1024 * 1024
+_STATS_PAGE_INPUT_BYTES = 10 * 1024 * 1024
+# Above this many branches the "merged" state is not computed (reported as "open").
+_REFS_MERGED_BRANCH_CAP = 500
+# changed_files[].status keeps its pre-Phase-2 vocabulary for the frozen React app.
+_LEGACY_STATUS = {
+    "added": "added",
+    "modified": "modified",
+    "removed": "deleted",
+    "renamed": "renamed",
+    "copied": "copied",
+}
 
 CODE_SEARCH_MAX_MATCHES = 100
 CODE_SEARCH_SNIPPET_CHARS = 300
@@ -118,6 +147,7 @@ class _LRUCache[K: Hashable, V]:
 
 _TREE_CACHE: _LRUCache[tuple[str, str, str], tuple[HgTreeEntry, ...]] = _LRUCache(256)
 _STATS_CACHE: _LRUCache[tuple[str, str], HgRepositoryStats] = _LRUCache(128)
+_ROW_STATS_CACHE: _LRUCache[tuple[str, str], tuple[int, int, int, bool]] = _LRUCache(4096)
 
 _limiter_lock = threading.Lock()
 _work_limiter: HgWorkLimiter | None = None
@@ -141,8 +171,34 @@ def reset_read_caches() -> None:
     global _work_limiter
     _TREE_CACHE.clear()
     _STATS_CACHE.clear()
+    _ROW_STATS_CACHE.clear()
     with _limiter_lock:
         _work_limiter = None
+
+
+@dataclass(slots=True, frozen=True)
+class HistoryFilters:
+    """Validated, literal history filters (see ``validate_history_filters``)."""
+
+    branch: str | None = None
+    author: str | None = None
+    path: str | None = None
+    q: str | None = None
+
+    @property
+    def active(self) -> bool:
+        return any(value is not None for value in (self.branch, self.author, self.path, self.q))
+
+    @property
+    def scans_content(self) -> bool:
+        """Filters that inspect every scanned changeset (separate rate-limit bucket)."""
+        return any(value is not None for value in (self.author, self.path, self.q))
+
+    @property
+    def hex_query(self) -> bytes | None:
+        if self.q is not None and HEX_QUERY_RE.fullmatch(self.q):
+            return self.q.lower().encode("ascii")
+        return None
 
 
 @dataclass(slots=True)
@@ -207,77 +263,254 @@ class MercurialReadService:
     # ------------------------------------------------------------------ history
 
     async def list_changesets(
-        self, repository_path: Path, *, cursor: str | None, limit: int | None = None
+        self,
+        repository_path: Path,
+        *,
+        cursor: str | None,
+        limit: int | None = None,
+        filters: HistoryFilters | None = None,
     ) -> HgChangesetPage:
+        """One page of served history, newest first, with optional literal filters.
+
+        Everything (filters, per-row refs and diffstats) is evaluated in-process on the
+        served view under one work slot; no revset built from input ever reaches the CLI,
+        which would evaluate it on the visible view and could match secret changesets.
+        """
         page_size = limit if limit is not None else self._settings.max_history_page_size
-        changesets = await self._in_thread(
-            repository_path, self._sync_list_changesets, repository_path, cursor, page_size
+        cursor_node = validate_history_cursor(cursor)
+        return await self._in_thread(
+            repository_path,
+            self._sync_list_changesets,
+            repository_path,
+            cursor_node,
+            page_size,
+            filters or HistoryFilters(),
         )
-        page = changesets[:page_size]
-        next_cursor = changesets[page_size - 1].node if len(changesets) > page_size else None
-        # Summary diffstats for the shown page in a single `hg log` call (audit C10).
-        summaries = await self._load_diffstat_summaries(
-            repository_path, [changeset.node for changeset in page]
-        )
-        for changeset in page:
-            changeset.stats = summaries.get(changeset.node)
-        return HgChangesetPage(changesets=page, next_cursor=next_cursor)
 
     def _sync_list_changesets(
-        self, repository_path: Path, cursor: str | None, page_size: int
-    ) -> list[HgChangeset]:
+        self,
+        repository_path: Path,
+        cursor_node: bytes | None,
+        page_size: int,
+        filters: HistoryFilters,
+    ) -> HgChangesetPage:
         repo = self._open_repository(repository_path)
         changelog = repo.changelog
         tiprev = changelog.tiprev()
+        empty = HgChangesetPage(changesets=[], next_cursor=None, scan_truncated=False)
         if tiprev < 0:
-            return []
-        if cursor is None:
-            start_revision = tiprev
-        else:
-            start_revision = self._resolve_context(repo, cursor).rev() - 1
+            if cursor_node is not None:
+                raise RevisionNotFoundError()
+            return empty
+        start_revision = tiprev
+        if cursor_node is not None:
+            start_revision = int(self._context_for_node(repo, cursor_node).rev()) - 1
         if start_revision < 0:
-            return []
-        # `changelog.revs(start, stop)` yields nonexistent revisions when start > tiprev.
-        start_revision = min(start_revision, tiprev)
-        result: list[HgChangeset] = []
-        for revision in changelog.revs(start=start_revision, stop=0):
-            result.append(self._parse_changeset_context(repo[revision], include_files=True))
-            if len(result) > page_size:
+            return empty
+        if filters.branch is not None and not repo.branchmap().hasbranch(
+            filters.branch.encode("utf-8")
+        ):
+            # `branch(literal:x)` raises for unknown names; an unknown branch is an empty page.
+            return empty
+
+        matcher = _history_matcher(filters)
+        hex_query = filters.hex_query
+        lowered_query = encoding.lower(filters.q.encode("utf-8")) if filters.q else b""
+        budget = self._settings.history_scan_max_revisions
+        deadline = time.monotonic() + self._settings.history_scan_timeout_seconds
+
+        # Scan newest -> oldest in windows. The budget counts served revisions only, so a
+        # run of hidden revisions can neither end the page early nor leak as a cursor; a
+        # cursor is always the lowest *served* revision actually scanned.
+        matches: list[int] = []
+        lowest_scanned: int | None = None
+        truncated = False
+        high = start_revision
+        while high >= 0:
+            if budget <= 0 or (lowest_scanned is not None and time.monotonic() > deadline):
+                truncated = True
                 break
-        return result
+            low = max(0, high - _HISTORY_WINDOW + 1, high - budget + 1)
+            subset = smartset.spanset(repo, low, high + 1)
+            subset.reverse()
+            served_in_window = len(subset)
+            window_low = subset.min() if served_in_window else None
+            revisions = matcher(repo, subset) if matcher is not None else subset
+            for revision in revisions:
+                if hex_query is not None:
+                    candidate = repo[revision]
+                    if not (
+                        candidate.hex().startswith(hex_query)
+                        or lowered_query in encoding.lower(candidate.description())
+                    ):
+                        continue
+                matches.append(int(revision))
+                if len(matches) > page_size:
+                    break
+            if len(matches) > page_size:
+                break
+            budget -= served_in_window
+            if window_low is not None:
+                lowest_scanned = int(window_low)
+            high = low - 1
+
+        next_cursor: str | None = None
+        if len(matches) > page_size:
+            matches = matches[:page_size]
+            next_cursor = _decode_ascii_bytes(hg_hex(changelog.node(matches[-1])))
+            truncated = False
+        elif truncated and lowest_scanned is not None:
+            next_cursor = _decode_ascii_bytes(hg_hex(changelog.node(lowest_scanned)))
+        else:
+            truncated = False
+
+        branchmap = repo.branchmap()
+        branch_heads = {
+            bytes(head) for name in branchmap for head in branchmap.branchheads(name, closed=True)
+        }
+        page_input_budget = [_STATS_PAGE_INPUT_BYTES]
+        changesets: list[HgChangeset] = []
+        for revision in matches:
+            ctx = repo[revision]
+            changeset = self._parse_changeset_context(ctx, include_files=True)
+            changeset.is_branch_head = bytes(ctx.node()) in branch_heads
+            changeset.is_merge = len([p for p in ctx.parents() if p.rev() >= 0]) > 1
+            self._attach_row_stats(repository_path, repo, ctx, changeset, page_input_budget)
+            changesets.append(changeset)
+        return HgChangesetPage(
+            changesets=changesets, next_cursor=next_cursor, scan_truncated=truncated
+        )
+
+    def _attach_row_stats(
+        self,
+        repository_path: Path,
+        repo: Any,
+        ctx: Any,
+        changeset: HgChangeset,
+        page_input_budget: list[int],
+    ) -> None:
+        """Diffstat against p1, in-process, after bounding the input from stored sizes."""
+        cache_key = (str(repository_path), changeset.node)
+        cached = _ROW_STATS_CACHE.get(cache_key)
+        if cached is None:
+            files_changed, insertions, deletions, has_binary = _compute_row_stats(
+                repo, ctx, page_input_budget
+            )
+            if insertions is not None and deletions is not None:
+                # Only exact results are cached; over-budget depends on the page budget.
+                _ROW_STATS_CACHE.put(cache_key, (files_changed, insertions, deletions, has_binary))
+        else:
+            files_changed, insertions, deletions, has_binary = cached
+        changeset.stats = HgChangesetStats(
+            files_changed=files_changed,
+            insertions=insertions,
+            deletions=deletions,
+            changed_files=[],
+        )
+        changeset.has_binary = has_binary
+        changeset.stats_too_large = insertions is None
 
     async def get_changeset(self, repository_path: Path, revision: str) -> HgChangeset:
-        changeset = await self._in_thread(
+        return await self._in_thread(
             repository_path, self._sync_get_changeset, repository_path, revision
         )
-        changeset.stats = await self._load_changeset_stats(repository_path, changeset.node)
-        return changeset
 
     def _sync_get_changeset(self, repository_path: Path, revision: str) -> HgChangeset:
         repo = self._open_repository(repository_path)
-        return self._parse_changeset_context(
-            self._resolve_context(repo, revision), include_files=True
+        ctx = self._resolve_context(repo, revision)
+        changeset = self._parse_changeset_context(ctx, include_files=True)
+        changeset.is_merge = len([p for p in ctx.parents() if p.rev() >= 0]) > 1
+        result = build_file_diffs(repo, ctx.p1(), ctx, self._diff_caps(include_lines=False))
+        changed_files = [
+            HgChangedFile(
+                path=item.path,
+                status=_LEGACY_STATUS[item.status],
+                insertions=None if item.too_large or item.truncated else item.insertions,
+                deletions=None if item.too_large or item.truncated else item.deletions,
+                old_path=item.old_path,
+                binary=item.binary,
+                old_mode=item.old_mode,
+                new_mode=item.new_mode,
+            )
+            for item in result.files
+        ]
+        changeset.has_binary = any(item.binary for item in result.files)
+        complete = result.complete
+        changeset.stats = HgChangesetStats(
+            files_changed=len(changed_files) if not result.files_truncated else None,
+            insertions=sum(item.insertions for item in result.files) if complete else None,
+            deletions=sum(item.deletions for item in result.files) if complete else None,
+            changed_files=changed_files,
         )
+        changeset.stats_too_large = not complete
+        return changeset
 
     async def get_diff(self, repository_path: Path, revision: str) -> HgDiff:
-        node = await self.resolve_revision(repository_path, revision)
-        try:
-            result = await self._run(
-                ["diff", "--git", "-c", node],
-                repository_path=repository_path,
-                stdout_limit=self._settings.max_diff_bytes,
-            )
-            return HgDiff(
-                content=result.stdout.decode("utf-8", errors="replace"),
-                is_truncated=False,
-                truncation_reason=None,
-            )
-        except HgCommandOutputLimitError as exc:
-            return HgDiff(
-                content=exc.stdout.decode("utf-8", errors="replace"),
-                is_truncated=True,
-                truncation_reason="diff_too_large",
-            )
+        return await self._in_thread(
+            repository_path, self._sync_get_diff, repository_path, revision
+        )
+
+    def _sync_get_diff(self, repository_path: Path, revision: str) -> HgDiff:
+        repo = self._open_repository(repository_path)
+        ctx = self._resolve_context(repo, revision)
+        result = build_file_diffs(
+            repo, ctx.p1(), ctx, self._diff_caps(include_lines=True, include_content=True)
+        )
+        return HgDiff(
+            content=result.content,
+            is_truncated=result.content_truncated,
+            truncation_reason="diff_too_large" if result.content_truncated else None,
+            files=result.files,
+            files_truncated=result.files_truncated,
+        )
+
+    async def diff_against_merge_base(
+        self, repository_path: Path, *, base: str, head: str
+    ) -> tuple[str, str, DiffResult]:
+        """Diff ``ancestor(base, head)`` -> ``head`` (served view). Returns resolved nodes."""
+        return await self._in_thread(
+            repository_path, self._sync_diff_against_merge_base, repository_path, base, head
+        )
+
+    def _sync_diff_against_merge_base(
+        self, repository_path: Path, base: str, head: str
+    ) -> tuple[str, str, DiffResult]:
+        repo = self._open_repository(repository_path)
+        base_ctx = self._resolve_context(repo, base)
+        head_ctx = self._resolve_context(repo, head)
+        ancestor = repo.revs(b"ancestor(%n, %n)", base_ctx.node(), head_ctx.node()).first()
+        # Unrelated histories have no common ancestor: diff from the empty revision.
+        ancestor_ctx = repo[ancestor] if ancestor is not None else repo[nullrev]
+        result = build_file_diffs(
+            repo, ancestor_ctx, head_ctx, self._diff_caps(include_lines=False)
+        )
+        return _decode_ascii_bytes(base_ctx.hex()), _decode_ascii_bytes(head_ctx.hex()), result
+
+    async def is_ancestor(self, repository_path: Path, *, ancestor: str, descendant: str) -> bool:
+        """True when the served full node ``ancestor`` is in ``descendant``'s history."""
+        return await self._in_thread(
+            repository_path, self._sync_is_ancestor, repository_path, ancestor, descendant
+        )
+
+    def _sync_is_ancestor(self, repository_path: Path, ancestor: str, descendant: str) -> bool:
+        repo = self._open_repository(repository_path)
+        first = self._resolve_context(repo, ancestor)
+        second = self._resolve_context(repo, descendant)
+        return bool(repo.changelog.isancestorrev(first.rev(), second.rev()))
+
+    def _diff_caps(self, *, include_lines: bool, include_content: bool = False) -> DiffCaps:
+        return DiffCaps(
+            max_files=diff_model.DEFAULT_MAX_FILES,
+            max_lines_per_file=diff_model.DEFAULT_MAX_LINES_PER_FILE,
+            max_total_lines=diff_model.DEFAULT_MAX_TOTAL_LINES,
+            max_line_chars=diff_model.DEFAULT_MAX_LINE_CHARS,
+            max_bytes=self._settings.max_diff_bytes,
+            max_file_input_bytes=self._settings.diff_max_file_input_bytes,
+            max_total_input_bytes=self._settings.diff_max_total_input_bytes,
+            timeout_seconds=self._settings.diff_timeout_seconds,
+            include_lines=include_lines,
+            include_content=include_content,
+        )
 
     # ------------------------------------------------------------------ browse
 
@@ -774,10 +1007,14 @@ class MercurialReadService:
 
     # ------------------------------------------------------------------ refs
 
-    async def list_refs(self, repository_path: Path) -> HgReferences:
-        return await self._in_thread(repository_path, self._sync_list_refs, repository_path)
+    async def list_refs(
+        self, repository_path: Path, *, include_closed: bool = False
+    ) -> HgReferences:
+        return await self._in_thread(
+            repository_path, self._sync_list_refs, repository_path, include_closed
+        )
 
-    def _sync_list_refs(self, repository_path: Path) -> HgReferences:
+    def _sync_list_refs(self, repository_path: Path, include_closed: bool = False) -> HgReferences:
         """Branches, tags and bookmarks from the served view (secret changesets hidden)."""
         repo = self._open_repository(repository_path)
         changelog = repo.changelog
@@ -788,19 +1025,44 @@ class MercurialReadService:
             except (hgerror.LookupError, hgerror.RepoLookupError, IndexError):
                 return None
 
-        def reference(name: bytes, node: bytes) -> HgReference:
+        def reference(name: bytes, node: bytes, rev: int) -> HgReference:
             hex_node = _decode_ascii_bytes(hg_hex(node))
-            return HgReference(name=_decode_display(name), node=hex_node, short_node=hex_node[:12])
+            target = repo[rev]
+            return HgReference(
+                name=_decode_display(name),
+                node=hex_node,
+                short_node=hex_node[:12],
+                updated_at=mercurial_timestamp(list(target.date())),
+                summary=_first_line(_decode_display(target.description())),
+            )
 
         branchmap = repo.branchmap()
+        branch_infos = list(branchmap.branches_info(repo))
+        default_tip = (
+            served_rev(branchmap.branchtip(b"default")) if branchmap.hasbranch(b"default") else None
+        )
+        compute_merged = len(branch_infos) <= _REFS_MERGED_BRANCH_CAP
         branches: list[tuple[int, HgReference]] = []
-        for name in branchmap:
-            if not branchmap.branchheads(name, closed=False):
-                continue  # closed branches are hidden, as in `hg branches`
+        for name, _tiprev, _active, is_open in branch_infos:
+            if not is_open and not include_closed:
+                continue  # closed branches are hidden by default, as in `hg branches`
             tip = branchmap.branchtip(name)
             rev = served_rev(tip)
-            if rev is not None:
-                branches.append((rev, reference(name, tip)))
+            if rev is None:
+                continue
+            ref = reference(name, tip, rev)
+            state: Literal["open", "closed", "merged"] = "open" if is_open else "closed"
+            if is_open and compute_merged and name != b"default" and default_tip is not None:
+                open_heads = [
+                    served_rev(head) for head in branchmap.branchheads(name, closed=False)
+                ]
+                if open_heads and all(
+                    head_rev is not None and changelog.isancestorrev(head_rev, default_tip)
+                    for head_rev in open_heads
+                ):
+                    state = "merged"
+            ref.state = state
+            branches.append((rev, ref))
 
         tags: list[tuple[int, HgReference]] = []
         for name, tag_node in repo.tagslist():
@@ -808,12 +1070,13 @@ class MercurialReadService:
                 continue
             rev = served_rev(tag_node)
             if rev is not None:
-                tags.append((rev, reference(name, tag_node)))
+                tags.append((rev, reference(name, tag_node, rev)))
 
         bookmarks: list[HgReference] = []
         for name, bookmark_node in sorted(repo._bookmarks.items()):
-            if served_rev(bookmark_node) is not None:
-                bookmarks.append(reference(name, bookmark_node))
+            rev = served_rev(bookmark_node)
+            if rev is not None:
+                bookmarks.append(reference(name, bookmark_node, rev))
 
         return HgReferences(
             branches=[ref for _rev, ref in sorted(branches, key=lambda item: -item[0])],
@@ -953,166 +1216,6 @@ class MercurialReadService:
             revision_number=int(ctx.rev()),
         )
 
-    # ------------------------------------------------------------------ diffstats
-
-    async def _load_diffstat_summaries(
-        self, repository_path: Path, nodes: list[str]
-    ) -> dict[str, HgChangesetStats]:
-        """Summary (files/insertions/deletions) for several changesets in one hg call."""
-        if not nodes:
-            return {}
-        if not all(FULL_NODE_RE.fullmatch(node) for node in nodes):
-            return {}
-        revset = " or ".join(nodes)  # concrete 40-hex nodes only; nothing user-supplied
-        try:
-            result = await self._run(
-                ["log", "-r", revset, "-T", "{node} {diffstat}\n"],
-                repository_path=repository_path,
-                stdout_limit=self._settings.hg_max_stdout_bytes,
-            )
-        except (HgCommandFailedError, HgCommandOutputLimitError):
-            # Rare: the whole page falls back to file-count-only stats rather than
-            # failing the history view.
-            return {}
-        summaries: dict[str, HgChangesetStats] = {}
-        for line in result.stdout.decode("utf-8", errors="replace").splitlines():
-            node, _, diffstat = line.partition(" ")
-            match = DIFFSTAT_TEMPLATE_RE.match(diffstat.strip())
-            if not node or match is None:
-                continue
-            summaries[node] = HgChangesetStats(
-                files_changed=int(match.group("files")),
-                insertions=int(match.group("insertions")),
-                deletions=int(match.group("deletions")),
-                changed_files=[],
-            )
-        return summaries
-
-    async def _load_changeset_stats(
-        self,
-        repository_path: Path,
-        node: str,
-    ) -> HgChangesetStats | None:
-        try:
-            status_payload = await self._run_json(
-                ["status", "--change", node, "--copies", "-Tjson"],
-                repository_path=repository_path,
-                stdout_limit=self._settings.hg_max_stdout_bytes,
-            )
-            diffstat_result = await self._run(
-                ["diff", "--stat", "-c", node],
-                repository_path=repository_path,
-                stdout_limit=self._settings.hg_max_stdout_bytes,
-            )
-        except (HgCommandFailedError, HgCommandOutputLimitError):
-            return None
-
-        status_by_path: dict[str, tuple[str, str | None]] = {}
-        for entry in status_payload:
-            path = str(entry.get("path", ""))
-            if not path:
-                continue
-            status = str(entry.get("status", "M")).lower()
-            copy_source = entry.get("source")
-            normalized_status = {
-                "a": "added",
-                "m": "modified",
-                "r": "deleted",
-                "!": "deleted",
-                "?": "unknown",
-                "c": "clean",
-            }.get(status, "modified")
-            if copy_source:
-                normalized_status = "copied"
-            status_by_path[path] = (
-                normalized_status,
-                str(copy_source) if copy_source is not None else None,
-            )
-
-        diffstat = _parse_diffstat_output(diffstat_result.stdout.decode("utf-8", errors="replace"))
-
-        changed_files: list[HgChangedFile] = []
-        try:
-            diff_result = await self._run(
-                ["diff", "--git", "-c", node],
-                repository_path=repository_path,
-                stdout_limit=self._settings.max_diff_bytes,
-            )
-        except (HgCommandFailedError, HgCommandOutputLimitError):
-            diff_result = None
-
-        if diff_result is not None:
-            changed_files = _parse_changed_files_from_diff(
-                diff_result.stdout.decode("utf-8", errors="replace")
-            )
-
-        for changed_file in changed_files:
-            if changed_file.path in status_by_path:
-                status, old_path = status_by_path[changed_file.path]
-                changed_file.status = status
-                changed_file.old_path = old_path
-            elif changed_file.old_path and changed_file.old_path in status_by_path:
-                status, _ = status_by_path[changed_file.old_path]
-                changed_file.status = "renamed" if status == "deleted" else status
-
-        if not changed_files and status_by_path:
-            exact_file_stats: dict[str, tuple[int | None, int | None]] = {}
-            if len(status_by_path) <= DIFFSTAT_PER_FILE_FALLBACK_LIMIT:
-                exact_file_stats = await self._load_per_file_diffstats(
-                    repository_path,
-                    node=node,
-                    paths=list(status_by_path.keys()),
-                )
-            changed_files = [
-                HgChangedFile(
-                    path=path,
-                    status=status,
-                    insertions=exact_file_stats.get(path, (None, None))[0],
-                    deletions=exact_file_stats.get(path, (None, None))[1],
-                    old_path=old_path,
-                )
-                for path, (status, old_path) in status_by_path.items()
-                if status != "clean"
-            ]
-
-        files_changed = diffstat.files_changed
-        if files_changed is None and changed_files:
-            files_changed = len(changed_files)
-
-        return HgChangesetStats(
-            files_changed=files_changed,
-            insertions=diffstat.insertions,
-            deletions=diffstat.deletions,
-            changed_files=changed_files,
-        )
-
-    async def _load_per_file_diffstats(
-        self,
-        repository_path: Path,
-        *,
-        node: str,
-        paths: list[str],
-    ) -> dict[str, tuple[int | None, int | None]]:
-        stats_by_path: dict[str, tuple[int | None, int | None]] = {}
-
-        for path in paths:
-            try:
-                result = await self._run(
-                    ["diff", "--stat", "-c", node, "--", _literal_pathspec(path)],
-                    repository_path=repository_path,
-                    stdout_limit=self._settings.hg_max_stdout_bytes,
-                )
-            except (HgCommandFailedError, HgCommandOutputLimitError):
-                continue
-
-            diffstat = _parse_diffstat_output(result.stdout.decode("utf-8", errors="replace"))
-            if diffstat.files_changed is None:
-                continue
-
-            stats_by_path[path] = (diffstat.insertions, diffstat.deletions)
-
-        return stats_by_path
-
 
 # ---------------------------------------------------------------------- stats computation
 
@@ -1193,6 +1296,116 @@ def _language_shares(
 
 
 # ---------------------------------------------------------------------- input validation
+
+
+def _has_control_characters(value: str) -> bool:
+    return any(ord(character) < 32 or ord(character) == 127 for character in value)
+
+
+def validate_history_filters(
+    *,
+    branch: str | None = None,
+    author: str | None = None,
+    path: str | None = None,
+    q: str | None = None,
+) -> HistoryFilters:
+    """Validate history filters. Values are only ever used as literals (never patterns)."""
+    branch = branch if branch not in (None, "") else None
+    author = author if author not in (None, "") else None
+    q = q if q not in (None, "") else None
+    if branch is not None and (
+        not 1 <= len(branch.encode("utf-8", errors="surrogatepass")) <= 255
+        or _has_control_characters(branch)
+    ):
+        raise InvalidHistoryFilterError("branch")
+    if author is not None and (not 1 <= len(author) <= 100 or _has_control_characters(author)):
+        raise InvalidHistoryFilterError("author")
+    if q is not None and (
+        not 2 <= len(q) <= 200 or any(character in q for character in ("\x00", "\r", "\n"))
+    ):
+        raise InvalidHistoryFilterError("q")
+    normalized_path: str | None = None
+    if path not in (None, ""):
+        assert path is not None
+        if path.startswith("/") or _PATTERN_PREFIX_RE.match(path):
+            raise InvalidRepositoryPathError()
+        normalized_path = validate_repository_relative_path(path) or None
+        if normalized_path is not None and len(normalized_path.encode("utf-8")) > 1024:
+            raise InvalidRepositoryPathError()
+    for value in (branch, author, q):
+        if value is not None:
+            try:
+                value.encode("utf-8")
+            except UnicodeEncodeError as exc:
+                raise InvalidHistoryFilterError("encoding") from exc
+    return HistoryFilters(branch=branch, author=author, path=normalized_path, q=q)
+
+
+def validate_history_cursor(cursor: str | None) -> bytes | None:
+    """History cursors are full 40-hex nodes only (never refs, prefixes or revsets)."""
+    if cursor is None or cursor == "":
+        return None
+    if not FULL_NODE_RE.fullmatch(cursor):
+        raise InvalidCursorError()
+    return bytes.fromhex(cursor)
+
+
+def _history_matcher(filters: HistoryFilters) -> Callable[..., Any] | None:
+    """A revset matcher built only with formatspec and literal:/path: prefixes."""
+    parts: list[bytes] = []
+    args: list[bytes] = []
+    if filters.branch is not None:
+        parts.append(b"branch(%s)")
+        args.append(b"literal:" + filters.branch.encode("utf-8"))
+    if filters.author is not None:
+        parts.append(b"user(%s)")
+        args.append(b"literal:" + filters.author.encode("utf-8"))
+    if filters.q is not None and filters.hex_query is None:
+        parts.append(b"desc(%s)")
+        args.append(b"literal:" + filters.q.encode("utf-8"))
+    if filters.path is not None:
+        parts.append(b"file(%s)")
+        args.append(b"path:" + filters.path.encode("utf-8"))
+    if not parts:
+        return None
+    spec = revsetlang.formatspec(b" and ".join(parts), *args)
+    # ui=None: no [revsetalias] from any hgrc can rewrite the expression.
+    return revset.match(None, spec)  # type: ignore[no-any-return]
+
+
+def _compute_row_stats(
+    repo: Any, ctx: Any, page_input_budget: list[int]
+) -> tuple[int, int | None, int | None, bool]:
+    """(files, insertions, deletions, has_binary) vs p1; line counts None when over budget.
+
+    The file list and stored sizes are checked before any file content is read, so a
+    huge changeset never gets decompressed for a history row. The file count comes from
+    the manifest status and is always known.
+    """
+    parent = ctx.p1()
+    status = parent.status(ctx)
+    modified = list(status.modified)
+    added = list(status.added)
+    removed = list(status.removed)
+    file_count = len(modified) + len(added) + len(removed)
+    if file_count > _STATS_MAX_FILES:
+        return file_count, None, None, False
+    limit = min(_STATS_ROW_INPUT_BYTES, page_input_budget[0])
+    total = 0
+    for side, paths in ((parent, modified), (ctx, modified), (ctx, added), (parent, removed)):
+        for path in paths:
+            total += _stored_size(side[path])
+            if total > limit:
+                return file_count, None, None, False
+    page_input_budget[0] -= total
+    opts = patch.diffallopts(repo.ui, {b"git": True, b"nobinary": True})
+    data = patch.diffstatdata(util.iterlines(ctx.diff(opts=opts)))
+    return (
+        len(data),
+        sum(int(entry[1]) for entry in data),
+        sum(int(entry[2]) for entry in data),
+        any(bool(entry[3]) for entry in data),
+    )
 
 
 def validate_code_search_query(query: str) -> str:
@@ -1364,112 +1577,3 @@ def _bounded_size(fctx: Any, cap: int) -> int:
 
 def _looks_binary(value: bytes) -> bool:
     return b"\x00" in value
-
-
-def _parse_changed_files_from_diff(content: str) -> list[HgChangedFile]:
-    changed_files: list[HgChangedFile] = []
-    current: HgChangedFile | None = None
-    saw_binary_marker = False
-
-    for raw_line in content.splitlines():
-        if raw_line.startswith("diff -r "):
-            if current is not None:
-                if saw_binary_marker:
-                    current.insertions = None
-                    current.deletions = None
-                changed_files.append(current)
-            current = HgChangedFile(
-                path="unknown",
-                status="modified",
-                insertions=0,
-                deletions=0,
-                old_path=None,
-            )
-            saw_binary_marker = False
-            continue
-
-        if current is None:
-            continue
-
-        if raw_line.startswith("rename from "):
-            current.old_path = raw_line.removeprefix("rename from ").strip()
-            current.status = "renamed"
-            continue
-
-        if raw_line.startswith("rename to "):
-            current.path = raw_line.removeprefix("rename to ").strip()
-            current.status = "renamed"
-            continue
-
-        if raw_line.startswith("copy from "):
-            current.old_path = raw_line.removeprefix("copy from ").strip()
-            current.status = "copied"
-            continue
-
-        if raw_line.startswith("copy to "):
-            current.path = raw_line.removeprefix("copy to ").strip()
-            current.status = "copied"
-            continue
-
-        if raw_line.startswith("--- ") or raw_line.startswith("+++ "):
-            if raw_line.endswith("/dev/null"):
-                if raw_line.startswith("--- "):
-                    current.status = "added"
-                else:
-                    current.status = "deleted"
-                continue
-            next_path = raw_line.replace("+++ b/", "").replace("--- a/", "").strip()
-            if next_path and next_path != raw_line:
-                current.path = next_path
-            continue
-
-        if raw_line.startswith("Binary file ") or raw_line.startswith("GIT binary patch"):
-            saw_binary_marker = True
-            continue
-
-        if raw_line.startswith("+") and not raw_line.startswith("+++"):
-            if current.insertions is not None:
-                current.insertions += 1
-            continue
-
-        if raw_line.startswith("-") and not raw_line.startswith("---"):
-            if current.deletions is not None:
-                current.deletions += 1
-
-    if current is not None:
-        if saw_binary_marker:
-            current.insertions = None
-            current.deletions = None
-        changed_files.append(current)
-
-    return [file for file in changed_files if file.path != "unknown"]
-
-
-@dataclass(slots=True)
-class _HgDiffStat:
-    files_changed: int | None
-    insertions: int | None
-    deletions: int | None
-
-
-def _parse_diffstat_output(content: str) -> _HgDiffStat:
-    files_changed: int | None = None
-    insertions: int | None = None
-    deletions: int | None = None
-
-    for raw_line in content.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        match = DIFFSTAT_SUMMARY_RE.match(line)
-        if not match:
-            continue
-        files_changed = int(match.group("files"))
-        insertions = int(match.group("insertions") or 0)
-        deletions = int(match.group("deletions") or 0)
-
-    return _HgDiffStat(
-        files_changed=files_changed,
-        insertions=insertions,
-        deletions=deletions,
-    )

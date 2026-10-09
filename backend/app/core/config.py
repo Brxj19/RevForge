@@ -89,6 +89,20 @@ class Settings(BaseSettings):
     code_search_timeout_seconds: float = Field(
         default=5.0, alias="REVFORGE_CODE_SEARCH_TIMEOUT_SECONDS"
     )
+    # Phase 2 history/diff bounds (in-process Mercurial work).
+    history_scan_max_revisions: int = Field(
+        default=20_000, alias="REVFORGE_HISTORY_SCAN_MAX_REVISIONS"
+    )
+    history_scan_timeout_seconds: float = Field(
+        default=5.0, alias="REVFORGE_HISTORY_SCAN_TIMEOUT_SECONDS"
+    )
+    diff_max_file_input_bytes: int = Field(
+        default=4 * 1024 * 1024, alias="REVFORGE_DIFF_MAX_FILE_INPUT_BYTES"
+    )
+    diff_max_total_input_bytes: int = Field(
+        default=32 * 1024 * 1024, alias="REVFORGE_DIFF_MAX_TOTAL_INPUT_BYTES"
+    )
+    diff_timeout_seconds: float = Field(default=10.0, alias="REVFORGE_DIFF_TIMEOUT_SECONDS")
     read_rate_limit_window_seconds: int = Field(
         default=60, alias="REVFORGE_READ_RATE_LIMIT_WINDOW_SECONDS"
     )
@@ -206,6 +220,9 @@ class Settings(BaseSettings):
         "code_search_max_files",
         "code_search_max_total_bytes",
         "code_search_max_file_bytes",
+        "history_scan_max_revisions",
+        "diff_max_file_input_bytes",
+        "diff_max_total_input_bytes",
         "read_rate_limit_window_seconds",
         "read_rate_limit_max_requests",
         "provisioning_stale_after_seconds",
@@ -218,7 +235,9 @@ class Settings(BaseSettings):
             raise ValueError("Mercurial limits must be positive integers.")
         return value
 
-    @field_validator("code_search_timeout_seconds")
+    @field_validator(
+        "code_search_timeout_seconds", "history_scan_timeout_seconds", "diff_timeout_seconds"
+    )
     @classmethod
     def validate_positive_float(cls, value: float) -> float:
         if value <= 0:

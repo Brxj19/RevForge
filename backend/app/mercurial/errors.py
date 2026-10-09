@@ -73,3 +73,15 @@ class HgBusyError(MercurialError):
 
 class InvalidSearchQueryError(MercurialError):
     """Code search query is empty, too long, or contains control characters."""
+
+
+class InvalidCursorError(MercurialError):
+    """A history cursor is not a full 40-hex changeset node."""
+
+
+class InvalidHistoryFilterError(MercurialError):
+    """A history filter value is outside its accepted length or character set."""
+
+    def __init__(self, field: str) -> None:
+        super().__init__(field)
+        self.field = field

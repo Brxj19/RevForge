@@ -247,7 +247,9 @@ export default function UiKitPage() {
                   />
                   <ChangeBadge kind="M" />
                   <ChangeBadge kind="A" />
+                  <ChangeBadge kind="D" />
                   <ChangeBadge kind="R" />
+                  <ChangeBadge kind="C" />
                   <DiffBar additions={9} deletions={1} />
                 </Row>
               </Section>

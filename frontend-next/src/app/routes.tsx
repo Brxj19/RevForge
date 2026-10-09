@@ -19,6 +19,9 @@ const LoginPage = lazy(() => import("~/features/auth/LoginPage"));
 const RepoLayout = lazy(() => import("~/features/repo/RepoLayout"));
 const RepoOverview = lazy(() => import("~/features/repo/OverviewPage"));
 const CodePage = lazy(() => import("~/features/code/CodePage"));
+const HistoryPage = lazy(() => import("~/features/history/HistoryPage"));
+const ChangesetPage = lazy(() => import("~/features/changeset/ChangesetPage"));
+const RefsPage = lazy(() => import("~/features/refs/RefsPage"));
 const UiKitPage = lazy(() => import("~/features/dev-ui/UiKitPage"));
 const IllustrationsPage = lazy(
   () => import("~/features/dev-ui/IllustrationsPage"),
@@ -76,6 +79,16 @@ function LegacyRepoRedirect() {
   return (
     <Navigate
       href={`/${encodeURIComponent(params.org)}/${encodeURIComponent(params.repo)}${rest()}${location.search}`}
+    />
+  );
+}
+
+/** Short changeset links (/:org/:repo/c/:node, the prototype's form) go to the changeset route. */
+function ShortChangesetRedirect() {
+  const params = useParams<{ org: string; repo: string; node: string }>();
+  return (
+    <Navigate
+      href={`/${params.org}/${params.repo}/changesets/${params.node}`}
     />
   );
 }
@@ -187,18 +200,9 @@ export function AppRoutes(): JSX.Element {
       >
         <Route path="/" component={RepoOverview} />
         <Route path="/code/*path" component={CodePage} />
-        <Route
-          path="/history"
-          component={soonInRepo("History", 2, "#/r/sigma-reckitt/history")}
-        />
-        <Route
-          path="/changesets/:node"
-          component={soonInRepo(
-            "Changeset",
-            2,
-            "#/r/sigma-reckitt/c/0b486fec60de",
-          )}
-        />
+        <Route path="/history" component={HistoryPage} />
+        <Route path="/changesets/:node" component={ChangesetPage} />
+        <Route path="/c/:node" component={ShortChangesetRedirect} />
         <Route
           path="/pulls"
           component={soonInRepo("Pull requests", 3, "#/r/sigma-reckitt/pulls")}
@@ -213,10 +217,7 @@ export function AppRoutes(): JSX.Element {
           path="/pulls/:n/:tab?"
           component={soonInRepo("Pull request", 3, "#/r/sigma-reckitt/pulls/7")}
         />
-        <Route
-          path="/refs/:kind?"
-          component={soonInRepo("Branches & tags", 2, "#/r/sigma-reckitt/refs")}
-        />
+        <Route path="/refs/:kind?" component={RefsPage} />
         <Route
           path="/settings/:section?/:id?"
           component={authed(

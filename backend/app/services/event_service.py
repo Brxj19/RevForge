@@ -23,8 +23,11 @@ class EventService:
         source_ip: str | None,
         request_id: str | None,
         pushed_nodes: list[str],
+        pushed_count: int | None = None,
     ) -> None:
         now = datetime.now(UTC)
+        count = pushed_count if pushed_count is not None else len(pushed_nodes)
+        truncated = count > len(pushed_nodes)
         idempotency_key = f"push:{repository_id}:{request_id or str(uuid4())}"
 
         spool_entry = EventSpoolEntry(
@@ -37,6 +40,8 @@ class EventService:
                 "source_ip": source_ip,
                 "request_id": request_id,
                 "pushed_nodes": pushed_nodes,
+                "pushed_count": count,
+                "pushed_nodes_truncated": truncated,
             },
             idempotency_key=idempotency_key,
             status="pending",
@@ -54,7 +59,11 @@ class EventService:
             credential_id=credential_id,
             source_ip=source_ip,
             request_id=request_id,
-            payload_json={"pushed_nodes": pushed_nodes},
+            payload_json={
+                "pushed_nodes": pushed_nodes,
+                "pushed_count": count,
+                "pushed_nodes_truncated": truncated,
+            },
             occurred_at=now,
         )
         session.add(repository_event)
@@ -66,7 +75,7 @@ class EventService:
             repository_id=repository_id,
             request_id=request_id,
             metadata_json={
-                "pushed_node_count": len(pushed_nodes),
+                "pushed_node_count": count,
                 "authentication_method": authentication_method or "unknown",
             },
         )

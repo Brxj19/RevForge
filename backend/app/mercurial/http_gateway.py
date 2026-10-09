@@ -12,7 +12,6 @@ from threading import Lock
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs
-from uuid import uuid4
 from wsgiref.types import StartResponse
 
 from anyio import from_thread
@@ -22,6 +21,7 @@ from mercurial.hgweb import hgweb_mod
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
+from app.core.request_id import safe_request_id
 from app.domain.enums import RepositoryRole
 from app.mercurial.storage_locator import RepositoryStorageLocator
 from app.models.organization import Organization
@@ -162,7 +162,7 @@ class HgHttpGatewayApplication:
         )
 
     def __call__(self, environ: dict[str, Any], start_response: StartResponse) -> Iterable[bytes]:
-        request_id = environ.get("HTTP_X_REQUEST_ID") or str(uuid4())
+        request_id = safe_request_id(environ.get("HTTP_X_REQUEST_ID"))
         path_info = environ.get("PATH_INFO", "")
         path_segments = [segment for segment in path_info.split("/") if segment]
         if len(path_segments) != 2:

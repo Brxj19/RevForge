@@ -17,6 +17,7 @@ export const NODE: Record<string, string> = {
   "3432b1bfb0d1": "3432b1bfb0d18a2c0dcdbde452e786de0b488436",
   "2295bc3c1ae5": "2295bc3c1ae54ab2aeaf6744687d72cb4267feed",
   "2594ec590c3f": "2594ec590c3f0f666695600b07503e2e910cea01",
+  "7a1f3c9e2b40": "7a1f3c9e2b40d5e6f708192a3b4c5d6e7f809112",
 };
 
 const AUTHOR = {
@@ -28,6 +29,7 @@ export const BRANCH_COLORS: Record<string, string> = {
   default: "#58a6ff",
   "feature/data-structures": "#3fb950",
   "feature/data-structures-improvements": "#bc8cff",
+  "experiment/avl-tree": "#e3b341",
 };
 
 export const BODIES: Record<string, string> = {
@@ -173,6 +175,19 @@ export const CHANGESETS: ChangesetSummary[] = [
     deletions_when_available: 0,
   },
   {
+    // Head of a closed branch: only listed by GET R/refs?include_closed=true.
+    node: "7a1f3c9e2b40d5e6f708192a3b4c5d6e7f809112",
+    short_node: "7a1f3c9e2b40",
+    parents: ["2295bc3c1ae54ab2aeaf6744687d72cb4267feed"],
+    ...AUTHOR,
+    timestamp: "2026-07-13T21:40:00.000Z",
+    message: "Close experiment/avl-tree: BinaryTree covers it",
+    branch: "experiment/avl-tree",
+    files_changed_count_when_available: 1,
+    insertions_when_available: 4,
+    deletions_when_available: 0,
+  },
+  {
     node: "2295bc3c1ae54ab2aeaf6744687d72cb4267feed",
     short_node: "2295bc3c1ae5",
     parents: ["2594ec590c3f0f666695600b07503e2e910cea01"],
@@ -216,6 +231,11 @@ export const REFS: RepositoryRefs = {
   ],
   tags: [ref("v0.1.0", "628371ad0b32")],
 };
+
+/** Branches with no open heads (hg commit --close-branch). */
+export const CLOSED_BRANCHES: RepositoryRefs["branches"] = [
+  ref("experiment/avl-tree", "7a1f3c9e2b40"),
+];
 
 /** path → full node of the changeset that last touched it. */
 export const FILES: Record<string, string> = {

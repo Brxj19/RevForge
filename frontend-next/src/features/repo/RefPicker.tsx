@@ -41,7 +41,12 @@ export function refChoices(refs: RepositoryRefs | undefined) {
     })),
   });
   return [
-    group("Branches", "branch", refs.branches),
+    // Closed branches never appear in the picker, even from an include_closed response.
+    group(
+      "Branches",
+      "branch",
+      refs.branches.filter((b) => b.state !== "closed"),
+    ),
     group("Bookmarks", "bookmark", refs.bookmarks),
     group("Tags", "tag", refs.tags),
   ].filter((g) => g.items.length);

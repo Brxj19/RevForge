@@ -158,12 +158,47 @@ export interface ChangesetSummary {
   files_changed_count_when_available: number | null;
   insertions_when_available: number | null;
   deletions_when_available: number | null;
+  // Phase 2 row fields (screen-map "Phase 2 changes"). Optional so older servers and the code that
+  // only needs the graph fields (lanes.ts, palette, Overview) keep working.
+  /** Tags on this changeset, never "tip". */
+  tags?: string[];
+  bookmarks?: string[];
+  /** Head of its named branch. */
+  is_branch_head?: boolean;
+  is_merge?: boolean;
+  has_binary?: boolean;
+  /** Stats were over budget: counts are null. */
+  stats_too_large?: boolean;
 }
 
 export interface ChangesetList {
   changesets: ChangesetSummary[];
+  /** 40-hex node of the last changeset scanned; pass it back as `cursor`. */
   next_cursor: string | null;
+  /** The scan budget ran out before the page filled: keep searching from next_cursor (F6). */
+  scan_truncated?: boolean;
 }
+
+/** Server-side history filters for GET R/changesets (F4, F6). Empty values are omitted. */
+export interface HistoryFilters {
+  /** Exact named branch. */
+  branch?: string;
+  /** Case-insensitive substring of the user field. */
+  author?: string;
+  /** Repository-relative path: changesets whose changed files are under it. */
+  path?: string;
+  /** Case-insensitive message substring; 6..40 hex also matches node prefixes. */
+  q?: string;
+}
+
+export type ChangedFileStatus =
+  | "added"
+  | "modified"
+  | "removed"
+  | "deleted"
+  | "renamed"
+  | "copied"
+  | "unknown";
 
 export interface ChangesetDetail {
   node: string;
@@ -182,17 +217,63 @@ export interface ChangesetDetail {
   deletions_when_available: number | null;
   changed_files: Array<{
     path: string;
-    status: "added" | "modified" | "deleted" | "renamed" | "copied" | "unknown";
+    /** "removed" from the shared diff model; older servers send "deleted". */
+    status: ChangedFileStatus;
     insertions: number | null;
     deletions: number | null;
     old_path: string | null;
+    /** Phase 2 additions (absent from older servers). */
+    binary?: boolean;
+    old_mode?: string | null;
+    new_mode?: string | null;
   }>;
+  /** Phase 2 row fields, when the detail carries them. */
+  is_merge?: boolean;
+  has_binary?: boolean;
+  stats_too_large?: boolean;
+}
+
+export interface DiffLine {
+  kind: "context" | "add" | "del" | "meta";
+  old_line: number | null;
+  new_line: number | null;
+  text: string;
+}
+
+export interface DiffHunk {
+  header: string;
+  old_start: number;
+  old_lines: number;
+  new_start: number;
+  new_lines: number;
+  lines: DiffLine[];
+}
+
+/** One file of GET R/changesets/{node}/diff (shared diff model, vs first parent). */
+export interface DiffFile {
+  path: string;
+  old_path: string | null;
+  status: "added" | "modified" | "removed" | "renamed" | "copied";
+  binary: boolean;
+  old_mode: string | null;
+  new_mode: string | null;
+  insertions: number;
+  deletions: number;
+  /** Over the per-file cap: no hunks. */
+  too_large: boolean;
+  /** Hunks were cut at the per-file or total line cap. */
+  truncated: boolean;
+  hunks: DiffHunk[];
 }
 
 export interface ChangesetDiff {
   content: string;
   is_truncated: boolean;
   truncation_reason_when_applicable: string | null;
+  /** Phase 2: structured files; absent from older servers (the UI falls back to `content`). */
+  files?: DiffFile[];
+  /** More than 300 files: the rest are not listed. */
+  files_truncated?: boolean;
 }
 
 /** The changeset that last touched an entry (directory: newest under it). */
@@ -297,10 +378,17 @@ export interface RepositoryFileSearchResponse {
 export type RepositoryBrowseResult =
   RepositoryBrowseDirectory | RepositoryBrowseFile;
 
+export type BranchState = "open" | "closed" | "merged";
+
 export interface RepositoryRef {
   name: string;
   node: string;
   short_node: string;
+  /** Phase 2 (absent from older servers): target changeset date and first line. */
+  updated_at?: string | null;
+  summary?: string | null;
+  /** Branches only. closed = no open heads; merged = every open head is an ancestor of default's tip. */
+  state?: BranchState;
 }
 
 export interface RepositoryRefs {

@@ -1,12 +1,16 @@
 import { http, HttpResponse } from "msw";
 import type {
   ChangesetDetail,
+  ChangesetDiff,
   ChangesetSummary,
   CodeSearchMatch,
+  DiffFile,
   LastChangeset,
   RepositoryBlame,
   RepositoryBrowseResult,
   RepositoryDetail,
+  RepositoryRef,
+  RepositoryRefs,
   RepositoryStats,
   RepositoryTransportMetadata,
   RepositoryTreeEntry,
@@ -20,14 +24,15 @@ import {
   BLAME_SPEC,
   BODIES,
   CHANGESETS,
+  CLOSED_BRANCHES,
   FILES,
-  MODIFIED_IN_TIP,
   NODE,
   REFS,
   SOURCES,
   SYMLINKS,
   TOO_LARGE,
 } from "../fixtures/sigma-reckitt";
+import { DIFFS } from "../fixtures/sigma-reckitt-diffs";
 import { API, apiError, csrfFailure, notFound } from "./util";
 
 const R = `${API}/organizations/:org/repositories/:repo`;
@@ -186,29 +191,186 @@ function treeEntries(files: string[], prefix: string): RepositoryTreeEntry[] {
     });
 }
 
-function changesetDetail(c: ChangesetSummary): ChangesetDetail {
-  const changed =
-    c.node === order[0]
-      ? Object.entries(MODIFIED_IN_TIP).map(([path, st]) => ({ path, st }))
-      : Object.entries(FILES)
-          .filter(([, n]) => n === c.node)
-          .map(([path]) => ({ path, st: "M" as const }));
-  const status = { M: "modified", A: "added", R: "deleted" } as const;
+const fullMessage = (c: ChangesetSummary) =>
+  BODIES[c.node] ? `${c.message}\n\n${BODIES[c.node]}` : c.message;
+
+const headNodes = new Set(
+  [...REFS.branches, ...CLOSED_BRANCHES].map((b) => b.node),
+);
+
+/**
+ * API-GAP: history-row-fields — the Phase 2 row fields (refs per row, head/merge/binary flags) and
+ * stats computed from the shared diff model against p1, as GET R/changesets will return them.
+ */
+function summaryRow(c: ChangesetSummary): ChangesetSummary {
+  const files = DIFFS[c.node] ?? [];
   return {
     ...c,
+    files_changed_count_when_available: files.length,
+    insertions_when_available: files.reduce((n, f) => n + f.insertions, 0),
+    deletions_when_available: files.reduce((n, f) => n + f.deletions, 0),
     tags: REFS.tags.filter((t) => t.node === c.node).map((t) => t.name),
     bookmarks: REFS.bookmarks
       .filter((b) => b.node === c.node)
       .map((b) => b.name),
-    message: BODIES[c.node] ? `${c.message}\n\n${BODIES[c.node]}` : c.message,
-    files_changed: changed.map((f) => f.path),
-    changed_files: changed.map((f) => ({
+    is_branch_head: headNodes.has(c.node),
+    is_merge: c.parents.length > 1,
+    has_binary: files.some((f) => f.binary),
+    stats_too_large: false,
+  };
+}
+
+/** Changed files in the detail use the diff model's statuses ("removed", never "deleted"). */
+function changesetDetail(c: ChangesetSummary): ChangesetDetail {
+  const files = DIFFS[c.node] ?? [];
+  const row = summaryRow(c);
+  return {
+    ...row,
+    tags: row.tags ?? [],
+    bookmarks: row.bookmarks ?? [],
+    message: fullMessage(c),
+    files_changed: files.map((f) => f.path),
+    // API-GAP: changeset-diff-files — binary / old_mode / new_mode per changed file.
+    changed_files: files.map((f) => ({
       path: f.path,
-      status: status[f.st],
-      insertions: null,
-      deletions: null,
-      old_path: null,
+      status: f.status,
+      insertions: f.binary ? null : f.insertions,
+      deletions: f.binary ? null : f.deletions,
+      old_path: f.old_path,
+      binary: f.binary,
+      old_mode: f.old_mode,
+      new_mode: f.new_mode,
     })),
+  };
+}
+
+/** Legacy unified text for `content` (git-style headers, like the backend's patch output). */
+function unifiedText(files: DiffFile[]): string {
+  const out: string[] = [];
+  for (const f of files) {
+    const a = f.old_path ?? f.path;
+    out.push(`diff --git a/${a} b/${f.path}`);
+    if (f.binary) {
+      out.push("Binary file has changed");
+      continue;
+    }
+    for (const h of f.hunks) {
+      out.push(h.header);
+      for (const l of h.lines)
+        out.push(
+          `${l.kind === "add" ? "+" : l.kind === "del" ? "-" : " "}${l.text}`,
+        );
+    }
+  }
+  return out.join("\n");
+}
+
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f]/;
+
+/** Validation errors mirror the contract (422 with a code). */
+function historyFilterError(url: URL): Response | null {
+  const p = url.searchParams;
+  const bad = (message: string, code = "validation_error") =>
+    apiError(422, message, code);
+  const branch = p.get("branch");
+  if (
+    branch !== null &&
+    (!branch || utf8(branch) > 255 || CONTROL.test(branch))
+  )
+    return bad("branch must be 1 to 255 bytes without control characters.");
+  const author = p.get("author");
+  if (author !== null && (author.length < 1 || author.length > 100))
+    return bad("author must be 1 to 100 characters.");
+  const q = p.get("q");
+  // eslint-disable-next-line no-control-regex
+  if (q !== null && (q.length < 2 || q.length > 200 || /[\u0000\r\n]/.test(q)))
+    return bad("Search for 2 to 200 characters on one line.");
+  const path = p.get("path");
+  if (
+    path !== null &&
+    (!path ||
+      utf8(path) > 1024 ||
+      path.startsWith("/") ||
+      path.includes("\\") ||
+      CONTROL.test(path) ||
+      path.split("/").some((seg) => seg === ".." || seg === "."))
+  )
+    return bad("path must be a repository-relative path.", "invalid_path");
+  const cursor = p.get("cursor");
+  if (cursor !== null && !/^[0-9a-f]{40}$/.test(cursor))
+    return bad("cursor must be a full 40-hex node.", "invalid_cursor");
+  return null;
+}
+
+function matchesHistory(c: ChangesetSummary, p: URLSearchParams): boolean {
+  const branch = p.get("branch");
+  if (branch && c.branch !== branch) return false;
+  const author = p.get("author")?.toLowerCase();
+  if (
+    author &&
+    !`${c.author_name} <${c.author_email_when_available ?? ""}>`
+      .toLowerCase()
+      .includes(author)
+  )
+    return false;
+  const q = p.get("q")?.toLowerCase();
+  if (
+    q &&
+    !fullMessage(c).toLowerCase().includes(q) &&
+    !(/^[0-9a-f]{6,40}$/.test(q) && c.node.startsWith(q))
+  )
+    return false;
+  const path = p.get("path")?.replace(/\/+$/, "");
+  if (path) {
+    // F4: changed files (and rename sources), never the message. Clean merges are excluded.
+    const files = DIFFS[c.node] ?? [];
+    const touched = files.flatMap((f) =>
+      f.old_path ? [f.path, f.old_path] : [f.path],
+    );
+    if (!touched.some((f) => f === path || f.startsWith(`${path}/`)))
+      return false;
+  }
+  return true;
+}
+
+/** Ancestors of `node` (inclusive) within the demo history. */
+function ancestors(node: string): Set<string> {
+  const seen = new Set<string>();
+  const stack = [node];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    stack.push(...(byNode.get(n)?.parents ?? []));
+  }
+  return seen;
+}
+
+/** API-GAP: refs-state — updated_at / summary per ref, state per branch, include_closed. */
+function refsBody(includeClosed: boolean): RepositoryRefs {
+  const tip = REFS.branches.find((b) => b.name === "default")?.node ?? "";
+  const merged = ancestors(tip);
+  const extra = (r: RepositoryRef): RepositoryRef => {
+    const c = byNode.get(r.node);
+    return {
+      ...r,
+      updated_at: c?.timestamp ?? null,
+      summary: c?.message.split("\n")[0] ?? null,
+    };
+  };
+  const branches: RepositoryRef[] = REFS.branches.map((b) => ({
+    ...extra(b),
+    state: b.name !== "default" && merged.has(b.node) ? "merged" : "open",
+  }));
+  if (includeClosed)
+    branches.push(
+      ...CLOSED_BRANCHES.map((b) => ({ ...extra(b), state: "closed" as const })),
+    );
+  return {
+    branches,
+    bookmarks: REFS.bookmarks.map(extra),
+    tags: REFS.tags.map(extra),
   };
 }
 
@@ -330,13 +492,17 @@ export const repoHandlers = [
     };
     return HttpResponse.json(body);
   }),
-  http.get(`${R}/refs`, ({ params }) => {
+  http.get(`${R}/refs`, ({ params, request }) => {
     const r = visible(params);
     if (!r) return notFound();
+    const includeClosed =
+      new URL(request.url).searchParams.get("include_closed") === "true";
     return (
       notBrowsable(r) ??
       HttpResponse.json(
-        hasData(r) ? REFS : { branches: [], tags: [], bookmarks: [] },
+        hasData(r)
+          ? refsBody(includeClosed)
+          : { branches: [], tags: [], bookmarks: [] },
       )
     );
   }),
@@ -353,12 +519,47 @@ export const repoHandlers = [
         "limit must be between 1 and 50.",
         "validation_error",
       );
-    const start = Number(url.searchParams.get("cursor") ?? 0);
+    // API-GAP: history-filters — branch/author/path/q evaluated server-side, 40-hex node cursor
+    // (exclusive, newest first), scan budget → partial page + scan_truncated (F4, F6).
+    const invalid = historyFilterError(url);
+    if (invalid) return invalid;
     const all: ChangesetSummary[] = hasData(r) ? CHANGESETS : [];
-    const page = all.slice(start, start + limit);
+    const cursor = url.searchParams.get("cursor");
+    let start = 0;
+    if (cursor) {
+      const at = all.findIndex((c) => c.node === cursor);
+      if (at < 0)
+        return apiError(
+          404,
+          "No revision matches that name or hash.",
+          "revision_not_found",
+        );
+      start = at + 1;
+    }
+    const page: ChangesetSummary[] = [];
+    let scanned = 0;
+    let last: string | null = null;
+    let truncated = false;
+    let i = start;
+    for (; i < all.length; i++) {
+      if (scanned >= db.historyScanBudget) {
+        truncated = true;
+        break;
+      }
+      const c = all[i]!;
+      scanned++;
+      last = c.node;
+      if (matchesHistory(c, url.searchParams)) page.push(summaryRow(c));
+      if (page.length === limit) {
+        i++;
+        break;
+      }
+    }
+    const more = i < all.length;
     return HttpResponse.json({
       changesets: page,
-      next_cursor: start + limit < all.length ? String(start + limit) : null,
+      next_cursor: more ? last : null,
+      scan_truncated: truncated,
     });
   }),
   http.get(`${R}/changesets/:node`, ({ params }) => {
@@ -377,6 +578,33 @@ export const repoHandlers = [
     if ("error" in res) return res.error;
     const c = byNode.get(res.node);
     return c ? HttpResponse.json(changesetDetail(c)) : notFound();
+  }),
+  // API-GAP: changeset-diff-files — `files` (hunks, rename/binary/mode flags, caps) and
+  // `files_truncated` next to the legacy `content`.
+  http.get(`${R}/changesets/:node/diff`, ({ params }) => {
+    const r = visible(params);
+    if (!r) return notFound();
+    const blocked = notBrowsable(r);
+    if (blocked) return blocked;
+    const node = String(params.node);
+    if (!/^[0-9a-f]{6,40}$/.test(node))
+      return apiError(
+        422,
+        "Use a full node or at least 6 hex digits.",
+        "validation_error",
+      );
+    const res = resolveRev(node, hasData(r) ? order : []);
+    if ("error" in res) return res.error;
+    if (!byNode.has(res.node)) return notFound();
+    const files = DIFFS[res.node] ?? [];
+    const body: ChangesetDiff = {
+      content: unifiedText(files),
+      is_truncated: files.some((f) => f.truncated || f.too_large),
+      truncation_reason_when_applicable: null,
+      files,
+      files_truncated: false,
+    };
+    return HttpResponse.json(body);
   }),
   http.get(`${R}/browse`, ({ params, request }) => {
     const r = visible(params);

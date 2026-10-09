@@ -276,7 +276,7 @@ def test_public_repository_provisioning_and_read_only_browser(
 
     empty_history = client.get("/api/v1/organizations/acme/repositories/public-repo/changesets")
     assert empty_history.status_code == 200
-    assert empty_history.json() == {"changesets": [], "next_cursor": None}
+    assert empty_history.json() == {"changesets": [], "next_cursor": None, "scan_truncated": False}
 
     empty_browse = client.get("/api/v1/organizations/acme/repositories/public-repo/browse")
     assert empty_browse.status_code == 200
@@ -318,6 +318,10 @@ def test_public_repository_provisioning_and_read_only_browser(
             "insertions": 7000,
             "deletions": 0,
             "old_path": None,
+            # Phase 2 additive fields.
+            "binary": False,
+            "old_mode": None,
+            "new_mode": "100644",
         }
     ]
 
@@ -413,9 +417,13 @@ def test_large_repository_browse_and_history_summary_do_not_hit_output_limits(
     assert history.status_code == 200
     history_payload = history.json()
     assert len(history_payload["changesets"]) == 1
-    assert history_payload["changesets"][0]["files_changed_count_when_available"] == 5000
-    assert history_payload["changesets"][0]["insertions_when_available"] == 5000
-    assert history_payload["changesets"][0]["deletions_when_available"] == 0
+    # Phase 2: per-row stats are computed in-process and bounded (300 files per row); the
+    # file count is still known from the manifest status, line counts are not computed.
+    row = history_payload["changesets"][0]
+    assert row["files_changed_count_when_available"] == 5000
+    assert row["stats_too_large"] is True
+    assert row["insertions_when_available"] is None
+    assert row["deletions_when_available"] is None
 
     browse = client.get("/api/v1/organizations/scale/repositories/large-repo/browse")
     assert browse.status_code == 200

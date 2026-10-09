@@ -1,9 +1,11 @@
 import { apiUrl, path, request, withQuery } from "./client";
 import type {
   ChangesetDetail,
+  ChangesetDiff,
   ChangesetList,
   CodeSearchResponse,
   ContentKind,
+  HistoryFilters,
   RepositoryBlame,
   RepositoryBlameLine,
   RepositoryBrowseFile,
@@ -106,8 +108,13 @@ export const reposApi = {
     }),
   transport: (org: string, repo: string) =>
     request<RepositoryTransportMetadata>(`${R(org, repo)}/transport`),
-  refs: (org: string, repo: string) =>
-    request<RepositoryRefs>(`${R(org, repo)}/refs`),
+  /** Closed branches only with includeClosed (default keeps the API's open-only behaviour). */
+  refs: (org: string, repo: string, opts: { includeClosed?: boolean } = {}) =>
+    request<RepositoryRefs>(
+      withQuery(`${R(org, repo)}/refs`, {
+        include_closed: opts.includeClosed ? "true" : undefined,
+      }),
+    ),
   browse: async (
     org: string,
     repo: string,
@@ -121,16 +128,29 @@ export const reposApi = {
         }),
       ),
     ),
+  /**
+   * History, newest first. Filters are evaluated server-side (F4: `path` matches changed files, not
+   * messages); values go through URLSearchParams, empty ones are dropped.
+   */
   changesets: (
     org: string,
     repo: string,
-    opts: { cursor?: string | null; limit?: number } = {},
+    opts: { cursor?: string | null; limit?: number } & HistoryFilters = {},
   ) =>
     request<ChangesetList>(
       withQuery(`${R(org, repo)}/changesets`, {
+        branch: opts.branch,
+        author: opts.author,
+        path: opts.path,
+        q: opts.q,
         cursor: opts.cursor,
         limit: opts.limit,
       }),
+    ),
+  /** Structured diff against the first parent (files[].hunks) plus the legacy text. */
+  changesetDiff: (org: string, repo: string, node: string) =>
+    request<ChangesetDiff>(
+      `${R(org, repo)}${path`/changesets/${node}/diff`}`,
     ),
   /** A full node or a hex prefix of at least 6 digits (I11). */
   changeset: (org: string, repo: string, node: string) =>

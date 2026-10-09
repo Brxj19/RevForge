@@ -94,11 +94,19 @@ class ChangesetSummaryResponse(BaseModel):
     files_changed_count_when_available: int | None
     insertions_when_available: int | None = None
     deletions_when_available: int | None = None
+    # Phase 2 (additive).
+    tags: list[str] = []
+    bookmarks: list[str] = []
+    is_branch_head: bool = False
+    is_merge: bool = False
+    has_binary: bool = False
+    stats_too_large: bool = False
 
 
 class ChangesetListResponse(BaseModel):
     changesets: list[ChangesetSummaryResponse]
     next_cursor: str | None
+    scan_truncated: bool = False
 
 
 class ChangesetDetailResponse(BaseModel):
@@ -117,6 +125,9 @@ class ChangesetDetailResponse(BaseModel):
     insertions_when_available: int | None = None
     deletions_when_available: int | None = None
     changed_files: list[ChangesetChangedFileResponse] = []
+    is_merge: bool = False
+    has_binary: bool = False
+    stats_too_large: bool = False
 
 
 class ChangesetChangedFileResponse(BaseModel):
@@ -125,12 +136,47 @@ class ChangesetChangedFileResponse(BaseModel):
     insertions: int | None = None
     deletions: int | None = None
     old_path: str | None = None
+    binary: bool = False
+    old_mode: str | None = None
+    new_mode: str | None = None
+
+
+class DiffLineResponse(BaseModel):
+    kind: Literal["context", "add", "del", "meta"]
+    old_line: int | None
+    new_line: int | None
+    text: str
+
+
+class DiffHunkResponse(BaseModel):
+    header: str
+    old_start: int
+    old_lines: int
+    new_start: int
+    new_lines: int
+    lines: list[DiffLineResponse]
+
+
+class DiffFileResponse(BaseModel):
+    path: str
+    old_path: str | None
+    status: Literal["added", "modified", "removed", "renamed", "copied"]
+    binary: bool
+    old_mode: str | None
+    new_mode: str | None
+    insertions: int
+    deletions: int
+    too_large: bool
+    truncated: bool
+    hunks: list[DiffHunkResponse]
 
 
 class ChangesetDiffResponse(BaseModel):
     content: str
     is_truncated: bool
     truncation_reason_when_applicable: str | None = None
+    files: list[DiffFileResponse] = []
+    files_truncated: bool = False
 
 
 class TreeEntryChangesetResponse(BaseModel):
@@ -236,6 +282,10 @@ class RepositoryRefResponse(BaseModel):
     name: str
     node: str
     short_node: str
+    updated_at: datetime | None = None
+    summary: str | None = None
+    # Branches only: open | closed | merged.
+    state: Literal["open", "closed", "merged"] | None = None
 
 
 class RepositoryRefsResponse(BaseModel):

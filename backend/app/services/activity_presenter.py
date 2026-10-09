@@ -112,11 +112,19 @@ def _sanitize_mapping(data: dict[str, object] | None) -> list[ActivityDetail]:
         return []
 
     details: list[ActivityDetail] = []
+    # I13: the true count is ``pushed_count``; events from before it only have the list.
+    pushed_count = data.get("pushed_count")
+    has_count = isinstance(pushed_count, int) and not isinstance(pushed_count, bool)
     for key, value in data.items():
-        if key in SENSITIVE_KEYS:
+        if key in SENSITIVE_KEYS or key == "pushed_nodes_truncated":
+            continue
+        if key == "pushed_count":
+            if has_count:
+                details.append(ActivityDetail(label="Changesets received", value=str(value)))
             continue
         if key == "pushed_nodes" and isinstance(value, list):
-            details.append(ActivityDetail(label="Changesets received", value=str(len(value))))
+            if not has_count:
+                details.append(ActivityDetail(label="Changesets received", value=str(len(value))))
             continue
         rendered = _format_value(key, value)
         if rendered is None or rendered == "":

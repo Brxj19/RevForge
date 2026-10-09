@@ -1,1 +1,7 @@
-export { ChangeBadge, DiffBar, type ChangeKind } from "./DiffStat";
+export {
+  ChangeBadge,
+  changeKindOf,
+  changeWord,
+  DiffBar,
+  type ChangeKind,
+} from "./DiffStat";

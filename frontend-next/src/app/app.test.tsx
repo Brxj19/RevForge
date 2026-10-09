@@ -25,14 +25,14 @@ describe("routes", () => {
   });
 
   it("shows a placeholder for screens that aren't built yet", async () => {
-    renderApp("/sigma/sigma-reckitt/history?branch=default");
+    renderApp("/sigma/sigma-reckitt/pulls");
     expect(
-      await screen.findByRole("heading", { name: "History", level: 1 }),
+      await screen.findByRole("heading", { name: "Pull requests", level: 1 }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Not built yet" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/phase 2/)).toBeInTheDocument();
+    expect(screen.getByText(/phase 3/)).toBeInTheDocument();
   });
 
   it("redirects legacy repository URLs", async () => {
