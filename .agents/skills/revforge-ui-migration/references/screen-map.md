@@ -46,10 +46,10 @@ Scaffold (phase-0-setup.md), tokens, every `ui/` primitive + `/dev/ui` kit, icon
 ## Phase 2 — History, changesets, refs
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| History list + graph + detail pane | `#/r/sigma-reckitt/history` | `history` | 🔁 `GET R/changesets?branch=&author=&path=&q=&cursor=` server-side filters (escaped revsets), `insertions/deletions/files_changed` per row, `refs` per row | F4, F5, F6, U1, U2, I13 (push events completeness for activity) | todo |
-| Commit hover card | hover a row | `history` | uses row data + ✅ `GET R/changesets/{node}` (body, files) | — | todo |
-| Changeset page | `#/r/sigma-reckitt/c/0b486fec60de` | `changeset` | ✅ `GET R/changesets/{node}` · 🔁 `…/diff` return hunks + rename/binary flags | F7, I34 | todo |
-| Branches & tags | `#/r/sigma-reckitt/refs` | `refs` | ✅ `GET R/refs` · 🔁 add `state` (open/closed/merged), `updated_at` | — | todo |
+| History list + graph + detail pane | `#/r/sigma-reckitt/history` | `history` | 🔁 `GET R/changesets?branch=&author=&path=&q=&cursor=` server-side filters (escaped revsets), `insertions/deletions/files_changed` per row, `refs` per row | F4, F5, F6, U1, U2, I13 (push events completeness for activity) | wip |
+| Commit hover card | hover a row | `history` | uses row data + ✅ `GET R/changesets/{node}` (body, files) | — | wip |
+| Changeset page | `#/r/sigma-reckitt/c/0b486fec60de` | `changeset` | ✅ `GET R/changesets/{node}` · 🔁 `…/diff` return hunks + rename/binary flags | F7, I34 | wip |
+| Branches & tags | `#/r/sigma-reckitt/refs` | `refs` | ✅ `GET R/refs` · 🔁 add `state` (open/closed/merged), `updated_at` | — | wip |
 
 ## Phase 3 — Pull requests and reviews
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
@@ -135,6 +135,32 @@ Shapes are the agreed contract for MSW handlers and backend implementation. List
 //     Content-Security-Policy: sandbox; default-src 'none'; Cross-Origin-Resource-Policy: same-origin; Cache-Control: private, no-store. Directory → 404, > max_raw_bytes → 413
 // GET R/search/code?q&rev&limit → { items: { path: string; line: number; text: string; ranges: [number, number][] }[]; truncated: boolean }
 //     literal, case-insensitive; q 2..200 chars, no NUL/CR/LF (else 422); ≤100 matches, 300-char snippets; skips binary/symlink/>1MB
+// Phase 2 changes (🔁):
+// GET R/changesets?branch&author&path&q&cursor&limit(1..50) → { changesets: ChangesetSummary[]; next_cursor: string|null; scan_truncated: boolean }
+//     all filters optional, AND-combined, evaluated in-process on the served view with formatspec + `literal:` / `path:` prefixes (never re:/glob:/set:):
+//     branch: exact name, 1..255 bytes, no control chars; unknown branch → empty page (200)
+//     author: 1..100 chars, case-insensitive literal substring of the user field
+//     q: 2..200 chars, no NUL/CR/LF, case-insensitive literal substring of the message; a 6..40 hex q also matches node prefixes
+//     path: repository-relative (validate_repository_relative_path, ≤1024 bytes) → changesets whose changed files are under it (clean merges excluded)
+//     cursor: 40-hex node only (else 422 'invalid_cursor'); not in served view → 404 'revision_not_found'
+//     order: revision number descending. Scan budget/deadline: partial page + scan_truncated=true + next_cursor = last scanned node
+//     ChangesetSummary + tags: string[] (no 'tip'); bookmarks: string[]; is_branch_head: boolean; is_merge: boolean; has_binary: boolean;
+//                       stats_too_large: boolean (stats against p1, computed in-process; over budget → counts null + stats_too_large)
+// GET R/changesets/{node} → changed_files[] + binary: boolean; old_mode: string|null; new_mode: string|null (status from the shared diff model; bounded hg work)
+// GET R/changesets/{node}/diff → existing { content; is_truncated; truncation_reason_when_applicable } + { files: DiffFile[]; files_truncated: boolean }
+//     DiffFile { path; old_path: string|null; status: 'added'|'modified'|'removed'|'renamed'|'copied'; binary: boolean; old_mode: string|null; new_mode: string|null;
+//                insertions: number; deletions: number; too_large: boolean; truncated: boolean;
+//                hunks: { header: string; old_start; old_lines; new_start; new_lines;
+//                         lines: { kind: 'context'|'add'|'del'|'meta'; old_line: number|null; new_line: number|null; text: string }[] }[] }
+//     in-process patch.diffhunks vs p1 (git + nobinary; never base85); caps: 300 files, 5k lines/file, 20k lines total, max_diff_bytes, 2000-char lines
+// GET R/refs?include_closed=false → each ref + updated_at: string|null (target changeset date); summary: string|null (target first line)
+//     branches + state: 'open'|'closed'|'merged'  (closed = no open heads; merged = non-default, open, every open head is an ancestor of default's tip)
+//     closed branches only with include_closed=true (default keeps today's behaviour)
+// Rate-limit buckets: history, history_filter (path/q/author), changeset, changeset_diff, pr_diff → 429 'rate_limited' + Retry-After
+// I13 push events: payload pushed_nodes (oldest→newest, ≤1000), pushed_count (true count), pushed_nodes_truncated; presenters use pushed_count
+// I15 remainder: X-Request-ID / REVFORGE_REQUEST_ID accepted only if ^[A-Za-z0-9._:-]{1,64}$ else server uuid4; DataError spool files dropped, not retried
+// I34 PR diff: revisions resolved to full served nodes at create (no revsets, 422 otherwise); diff vs ancestor(target, source) with the shared diff model;
+//     unknown revision → 404 'revision_not_found'; runs under the hg work limiter; response additive (status/old_path/binary per file)
 // GET R/compare?base&head → { base_node: string; head_node: string; merge_base: string; changesets: ChangesetSummary[];
 //                            files: DiffFileSummary[]; conflicts: boolean; identical: boolean }
 // GET /me/pull-requests?filter=review_requested|authored|involved|open|closed&cursor → list of PullRequestSummary (+ repository { org, repo })
