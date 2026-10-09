@@ -189,8 +189,9 @@ def _serialize_repository_detail(
         inherited_access=inherited_access,
         organization_slug=organization_slug,
         phase_status=repository_phase_status(repository),
-        provisioning_error=public_provisioning_error(repository),
-        provisioning_started_at=repository.provisioning_started_at,
+        # Recovery details are for the people who can retry; readers only see the state.
+        provisioning_error=public_provisioning_error(repository) if can_manage else None,
+        provisioning_started_at=repository.provisioning_started_at if can_manage else None,
     )
 
 

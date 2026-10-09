@@ -459,6 +459,54 @@ def test_raw_size_limit_is_checked_before_reading(
     assert response.json()["error"]["code"] == "content_too_large"
 
 
+def test_copied_large_file_is_never_decompressed_for_size_checks(
+    client: Any, seeded: dict[str, str], session_factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A copy carries rename metadata, and filelog.size() then reads the whole text.
+
+    A few KB pushed as copies of a huge compressible file must not make browse, stats,
+    search, blame or raw decompress it in the API process.
+    """
+    from mercurial import filelog
+
+    root = repository_path(session_factory, REPO)
+    hg(root, "update", "-q", "-r", seeded["tagged"])
+    _write(root, "bomb/big.txt", b"\0" * 3_000_000)
+    commit(root, "Add a large compressible file")
+    hg(root, "copy", "-q", "bomb/big.txt", "bomb/copy.txt")
+    node = commit(root, "Copy it")
+    monkeypatch.setenv("REVFORGE_MAX_RAW_BYTES", "1000")
+    monkeypatch.setenv("REVFORGE_MAX_FILE_CONTENT_BYTES", "1000")
+    monkeypatch.setenv("REVFORGE_CODE_SEARCH_MAX_FILE_BYTES", "1000")
+    get_settings.cache_clear()
+    read_service_module.reset_read_caches()
+
+    largest = {"bytes": 0}
+    original = filelog.filelog.read
+
+    def recording_read(self: Any, node_: Any) -> Any:
+        data = original(self, node_)
+        largest["bytes"] = max(largest["bytes"], len(data))
+        return data
+
+    monkeypatch.setattr(filelog.filelog, "read", recording_read)
+    browse = client.get(url(ORG, REPO, "/browse"), params={"rev": node, "path": "bomb"})
+    assert browse.status_code == 200
+    sizes = {entry["name"]: entry["size"] for entry in browse.json()["entries"]}
+    # The stored length may include the copy header, never less than the content.
+    assert sizes["big.txt"] == 3_000_000
+    assert 3_000_000 <= sizes["copy.txt"] < 3_000_200
+    assert client.get(url(ORG, REPO, "/stats"), params={"rev": node}).status_code == 200
+    assert _search(client, "zz", rev=node).status_code == 200
+    file_view = client.get(url(ORG, REPO, "/browse"), params={"rev": node, "path": "bomb/copy.txt"})
+    assert file_view.json()["is_too_large"] is True
+    blame = client.get(url(ORG, REPO, "/blame"), params={"rev": node, "path": "bomb/copy.txt"})
+    assert blame.json()["is_too_large"] is True
+    raw = client.get(url(ORG, REPO, "/raw"), params={"rev": node, "path": "bomb/copy.txt"})
+    assert raw.status_code == 413
+    assert largest["bytes"] < 1_000_000
+
+
 # ---------------------------------------------------------------- search/code
 
 
@@ -670,6 +718,33 @@ def test_repository_detail_exposes_provisioning_fields(client: Any, session_fact
     assert client.get(url(ORG, "repo")).json()["provisioning_error"] is None
 
 
+def test_provisioning_details_are_only_shown_to_managers(client: Any, session_factory: Any) -> None:
+    register(client, OWNER)
+    create_org(client, ORG)
+    create_repo(client, ORG, "repo", "public")
+    update_repository(
+        session_factory,
+        "repo",
+        provisioning_state="failed",
+        provisioning_error_code="storage_conflict",
+    )
+    assert client.get(url(ORG, "repo")).json()["provisioning_error"] == "storage_conflict"
+    reader = "reader@example.com"
+    register(client, reader)
+    login(client, OWNER)
+    add_member(client, ORG, reader)
+    grant(client, ORG, "repo", reader, "read")
+    login(client, reader)
+    detail = client.get(url(ORG, "repo")).json()
+    assert detail["provisioning_state"] == "failed"
+    assert detail["provisioning_error"] is None
+    assert detail["provisioning_started_at"] is None
+    client.cookies.clear()
+    anonymous = client.get(url(ORG, "repo")).json()
+    assert anonymous["provisioning_state"] == "failed"
+    assert anonymous["provisioning_error"] is None
+
+
 def test_transport_anonymous_public_https_only_and_path_hint_for_admins(
     client: Any, session_factory: Any
 ) -> None:
@@ -700,3 +775,33 @@ def test_transport_anonymous_public_https_only_and_path_hint_for_admins(
     assert body["setup"]["recommended_next_step"] == "sign_in"
     assert "authorized_keys" not in anonymous.text
     assert client.get(url(ORG, "closed", "/transport")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_cancelled_read_keeps_its_work_slot_until_the_thread_finishes(
+    tmp_path: Path,
+) -> None:
+    import asyncio
+    import threading
+
+    settings = get_settings()
+    service = read_service_module.MercurialReadService(
+        settings=settings, command_runner=HgCommandRunner(settings)
+    )
+    release = threading.Event()
+    started = threading.Event()
+
+    def blocking() -> str:
+        started.set()
+        release.wait(5)
+        return "done"
+
+    task = asyncio.create_task(service._in_thread(tmp_path, blocking))
+    assert await asyncio.to_thread(started.wait, 5)
+    task.cancel()
+    await asyncio.sleep(0.05)
+    # Still holding the slot while the thread runs, even though the caller was cancelled.
+    assert not task.done()
+    release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task

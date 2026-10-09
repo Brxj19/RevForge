@@ -175,7 +175,20 @@ class MercurialReadService:
     ) -> T:
         """Run blocking Mercurial library work off the event loop under a work slot."""
         async with self._limiter.slot(str(repository_path)):
-            return await asyncio.to_thread(fn, *args, **kwargs)
+            work = asyncio.ensure_future(asyncio.to_thread(fn, *args, **kwargs))
+            try:
+                return await asyncio.shield(work)
+            except asyncio.CancelledError:
+                # A thread can't be cancelled: keep the slot until it really finishes,
+                # or a disconnecting client could run unbounded concurrent hg work.
+                while not work.done():
+                    try:
+                        await asyncio.wait({work})
+                    except asyncio.CancelledError:
+                        continue
+                if not work.cancelled():
+                    work.exception()  # retrieved: the caller is gone
+                raise
 
     async def _run(self, args: list[str], *, repository_path: Path, stdout_limit: int) -> Any:
         async with self._limiter.slot(str(repository_path)):
@@ -310,7 +323,9 @@ class MercurialReadService:
     ) -> _FileProbe:
         fctx = ctx.filectx(path_bytes, fileid=manifest[path_bytes])
         is_link = b"l" in manifest.flags(path_bytes)
-        size = int(fctx.size())
+        size = _bounded_size(
+            fctx, max(self._settings.max_file_content_bytes, self._settings.max_raw_bytes)
+        )
         extension = extension_of(path)
         content_kind: ContentKind = "text"
         if is_link:
@@ -325,7 +340,7 @@ class MercurialReadService:
             size=size,
             is_link=is_link,
             # A link target is a short path string; read it in-process.
-            link_target=bytes(fctx.data()) if is_link else None,
+            link_target=bytes(fctx.data()) if is_link and size <= _MAX_LINK_TARGET_BYTES else None,
             content_kind=content_kind,
             # Decided from the stored size before any `hg cat` (no oversized reads).
             is_too_large=size > self._settings.max_file_content_bytes,
@@ -434,7 +449,7 @@ class MercurialReadService:
             size: int | None = None
             if kind == "file":
                 file_path = prefix + head
-                size = int(ctx.filectx(file_path, fileid=manifest[file_path]).size())
+                size = _stored_size(ctx.filectx(file_path, fileid=manifest[file_path]))
             last: HgChangesetRef | None = None
             if compute_last:
                 newest = max(
@@ -590,7 +605,8 @@ class MercurialReadService:
         if path_bytes not in manifest:
             raise MercurialNotFoundError()
         fctx = ctx.filectx(path_bytes, fileid=manifest[path_bytes])
-        if int(fctx.size()) > self._settings.max_file_content_bytes:
+        max_bytes = self._settings.max_file_content_bytes
+        if _bounded_size(fctx, max_bytes) > max_bytes:
             return node, "too_large"
         if b"l" in manifest.flags(path_bytes) or _looks_binary(bytes(fctx.data())):
             return node, "binary"
@@ -696,7 +712,7 @@ class MercurialReadService:
             if b"l" in manifest.flags(path_bytes):
                 continue
             fctx = ctx.filectx(path_bytes, fileid=manifest[path_bytes])
-            size = int(fctx.size())
+            size = _bounded_size(fctx, self._settings.code_search_max_file_bytes)
             if size > self._settings.code_search_max_file_bytes:
                 continue
             if bytes_scanned + size > self._settings.code_search_max_total_bytes:
@@ -1115,7 +1131,7 @@ def compute_repository_stats(
     secondary_bytes: dict[str, int] = {}
     total_size = 0
     for path_bytes in manifest.keys():
-        size = int(ctx.filectx(path_bytes, fileid=manifest[path_bytes]).size())
+        size = _stored_size(ctx.filectx(path_bytes, fileid=manifest[path_bytes]))
         total_size += size
         if b"l" in manifest.flags(path_bytes):
             continue
@@ -1323,6 +1339,27 @@ def _language_hint(path: str) -> str | None:
 def _language_name(path: str) -> str | None:
     language = detect_language(path)
     return language.name if language is not None else None
+
+
+# A symlink target is a short path; anything bigger is not read for display.
+_MAX_LINK_TARGET_BYTES = 4096
+
+
+def _stored_size(fctx: Any) -> int:
+    """Upper bound on a file revision's size, read from the revlog index without decompressing.
+
+    ``filectx.size()`` decompresses the whole revision when it carries copy/rename metadata,
+    so a few KB pushed as copies of a huge compressible file would make every listing read
+    gigabytes. The stored length includes that metadata header (tens of bytes), so it can
+    overstate the size slightly; it never understates it.
+    """
+    return int(fctx.filelog()._revlog.rawsize(fctx.filerev()))
+
+
+def _bounded_size(fctx: Any, cap: int) -> int:
+    """The exact size when the stored length is within ``cap``, else the stored length."""
+    stored = _stored_size(fctx)
+    return stored if stored > cap else int(fctx.size())
 
 
 def _looks_binary(value: bytes) -> bool:
