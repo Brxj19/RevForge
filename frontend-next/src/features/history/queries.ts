@@ -40,6 +40,7 @@ export function createChangesetDetailQuery(
     queryKey: qk.changeset(org(), repo(), node() ?? ""),
     queryFn: () => reposApi.changeset(org(), repo(), node() ?? ""),
     enabled: !!node(),
-    staleTime: Infinity,
+    // Immutable only when addressed by a full node.
+    staleTime: /^[0-9a-f]{40}$/i.test(node() ?? "") ? Infinity : 30_000,
   }));
 }

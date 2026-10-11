@@ -273,6 +273,7 @@ def _serialize_diff_file(item: DiffFile) -> DiffFileResponse:
         deletions=item.deletions,
         too_large=item.too_large,
         truncated=item.truncated,
+        long_lines_truncated=item.long_lines_truncated,
         hunks=[
             DiffHunkResponse(
                 header=hunk.header,
@@ -286,6 +287,7 @@ def _serialize_diff_file(item: DiffFile) -> DiffFileResponse:
                         old_line=line.old_line,
                         new_line=line.new_line,
                         text=line.text,
+                        truncated=line.truncated,
                     )
                     for line in hunk.lines
                 ],
@@ -496,7 +498,12 @@ def _raise_read_error(exc: Exception) -> None:
         ) from exc
     if isinstance(exc, ForbiddenError):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.") from exc
-    if isinstance(exc, InvalidRevisionError | InvalidRepositoryPathError):
+    if isinstance(exc, InvalidRepositoryPathError):
+        # Stable code for the history path filter and every path-taking read route (S6).
+        raise ApiError(
+            422, code="invalid_path", detail="Revision or repository path is invalid."
+        ) from exc
+    if isinstance(exc, InvalidRevisionError):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Revision or repository path is invalid.",

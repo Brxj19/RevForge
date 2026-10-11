@@ -240,6 +240,8 @@ def test_path_filter_matches_changed_files_not_messages(
     assert seeded["binary"] not in under_dir
     assert _nodes(_history(client, path="dir/c.txt")) == [seeded["rename"]]
     assert _nodes(_history(client, path="x b/y.txt")) == [seeded["text"], seeded["c0"]]
+    coded = _history(client, path="dir/../a.txt")
+    assert coded.json()["error"]["code"] == "invalid_path"  # S6: stable code, not http_error
     for invalid in (
         "dir/../a.txt",
         "glob:*.txt",
@@ -379,7 +381,9 @@ def test_history_rows_carry_refs_flags_and_stats(
     assert rename["files_changed_count_when_available"] == 2  # rename + copy
     assert rename["insertions_when_available"] == 0 and rename["deletions_when_available"] == 0
 
-    assert _row(client, seeded["close"])["is_branch_head"] is True
+    # Only open heads count: the closing changeset of closed-br is not a branch head.
+    assert _row(client, seeded["close"])["is_branch_head"] is False
+    assert _row(client, seeded["open"])["is_branch_head"] is True
 
 
 def test_over_budget_rows_report_stats_too_large_without_diffing(
@@ -437,7 +441,13 @@ def test_diff_rename_copy_and_modes(
     assert files["link"]["new_mode"] == "120000" and files["link"]["old_mode"] is None
     hunk = files["link"]["hunks"][0]
     assert [line["kind"] for line in hunk["lines"]] == ["add", "meta"]
-    assert hunk["lines"][0] == {"kind": "add", "old_line": None, "new_line": 1, "text": "a.txt"}
+    assert hunk["lines"][0] == {
+        "kind": "add",
+        "old_line": None,
+        "new_line": 1,
+        "text": "a.txt",
+        "truncated": False,
+    }
 
 
 def test_diff_binary_is_flagged_never_base85(
@@ -500,6 +510,9 @@ def test_changeset_detail_uses_diff_model_with_bounded_hg_work(
     assert changed["link"]["binary"] is False
     binary = client.get(url(ORG, REPO, f"/changesets/{seeded['binary']}")).json()
     assert binary["changed_files"][0]["binary"] is True
+    # S3: binary files have no line counts (the frozen app shows "Binary or not counted").
+    assert binary["changed_files"][0]["insertions"] is None
+    assert binary["changed_files"][0]["deletions"] is None
     rename = client.get(url(ORG, REPO, f"/changesets/{seeded['rename']}")).json()
     renamed = {item["path"]: item for item in rename["changed_files"]}["dir/c.txt"]
     assert renamed["status"] == "renamed" and renamed["old_path"] == "dir/b.txt"
@@ -529,8 +542,11 @@ def test_diff_file_line_and_byte_caps(
 
     monkeypatch.setattr(diff_model, "DEFAULT_MAX_LINE_CHARS", 3)
     removed = _files(_diff(client, seeded["delete"]))["sql/schema.sql"]
-    assert removed["hunks"][0]["lines"][0]["text"] == "-- "
-    assert removed["truncated"] is True
+    lines = removed["hunks"][0]["lines"]
+    assert lines[0]["text"] == "-- " and lines[0]["truncated"] is True
+    assert len(lines) == 2  # a long line never hides the rest of the file (S2)
+    assert removed["long_lines_truncated"] is True
+    assert removed["truncated"] is False
     monkeypatch.setattr(diff_model, "DEFAULT_MAX_LINE_CHARS", 2000)
 
     monkeypatch.setenv("REVFORGE_MAX_DIFF_BYTES", "64")
@@ -806,8 +822,11 @@ def _matrix_requests(client: Any, repo: str, pr_id: str | None) -> dict[str, int
     base = f"/api/v1/organizations/{ORG}/repositories/{repo}"
     statuses = {
         "filtered": client.get(f"{base}/changesets", params={"q": "seed"}).status_code,
+        "list": client.get(f"{base}/changesets").status_code,
+        "detail": client.get(f"{base}/changesets/default").status_code,
         "diff": client.get(f"{base}/changesets/default/diff").status_code,
         "refs": client.get(f"{base}/refs").status_code,
+        "refs_closed": client.get(f"{base}/refs", params={"include_closed": "true"}).status_code,
     }
     if pr_id is not None:
         statuses["pr_diff"] = client.get(f"{base}/pull-requests/{pr_id}/diff").status_code
@@ -1302,3 +1321,58 @@ def test_refs_rate_limit(
     assert limited.status_code == 429
     assert limited.json()["error"]["code"] == "rate_limited"
     assert int(limited.headers["retry-after"]) >= 1
+
+
+def test_long_line_does_not_hide_later_hunks(client: Any, session_factory: Any) -> None:
+    """S2: a >2000-char line is cut on its own; the file's later hunks are still emitted."""
+    register(client, OWNER)
+    create_org(client, ORG)
+    create_repo(client, ORG, "wide", "public")
+    assert provision(client, ORG, "wide").status_code == 200
+    root = repository_path(session_factory, "wide")
+    lines = [f"line {index}\n" for index in range(200)]
+    _write(root, "f.txt", "".join(lines))
+    commit(root, "base")
+    lines[5] = "X" * 3000 + "\n"
+    lines[150] = "changed far below\n"
+    _write(root, "f.txt", "".join(lines))
+    node = commit(root, "two hunks")
+    item = client.get(url(ORG, "wide", f"/changesets/{node}/diff")).json()["files"][0]
+    assert len(item["hunks"]) == 2
+    assert item["truncated"] is False and item["long_lines_truncated"] is True
+    long_line = next(line for line in item["hunks"][0]["lines"] if line["kind"] == "add")
+    assert long_line["truncated"] is True and len(long_line["text"]) == 2000
+    assert item["insertions"] == 2 and item["deletions"] == 2
+    far = [line for line in item["hunks"][1]["lines"] if line["kind"] == "add"]
+    assert far == [
+        {
+            "kind": "add",
+            "old_line": None,
+            "new_line": 151,
+            "text": "changed far below",
+            "truncated": False,
+        }
+    ]
+
+
+def test_pr_id_from_another_repository_is_404(client: Any, session_factory: Any) -> None:
+    register(client, OWNER)
+    create_org(client, ORG)
+    for slug in ("repo-a", "repo-b"):
+        create_repo(client, ORG, slug, "public")
+        assert provision(client, ORG, slug).status_code == 200
+        root = repository_path(session_factory, slug)
+        _write(root, "README.md", "seed\n")
+        commit(root, "seed")
+        _add_topic(root)
+    created = client.post(
+        f"{API_REPO('repo-a')}/pull-requests",
+        json={"title": "t", "source_revision": "topic", "target_revision": "default"},
+        headers=csrf(client),
+    )
+    assert created.status_code == 201, created.text
+    pr_id = created.json()["id"]
+    assert client.get(f"{API_REPO('repo-a')}/pull-requests/{pr_id}/diff").status_code == 200
+    for suffix in ("", "/diff"):
+        response = client.get(f"{API_REPO('repo-b')}/pull-requests/{pr_id}{suffix}")
+        assert response.status_code == 404, (suffix, response.text)

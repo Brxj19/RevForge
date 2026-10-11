@@ -1,5 +1,13 @@
 import { useNavigate } from "@solidjs/router";
-import { createMemo, For, Match, Show, Switch, type JSX } from "solid-js";
+import {
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+  type JSX,
+} from "solid-js";
 import {
   createRefsQuery,
   createTransportQuery,
@@ -66,8 +74,8 @@ export default function HistoryPage() {
     path: url.path.trim().replace(/^\/+|\/+$/g, "") || undefined,
     q: url.q.trim().length >= 2 ? url.q.trim() : undefined,
   }));
-  const filtered = () =>
-    !!(url.branch || url.author.trim() || url.path.trim() || url.q.trim());
+  // What's actually sent: a 1-character q isn't a filter (graph stays, no callout).
+  const filtered = () => Object.values(filters()).some(Boolean);
   const history = createHistoryQuery(repo.org, repo.repo, filters);
   // Reading .data while pending would suspend the route instead of showing the skeleton.
   const pages = () => (history.isSuccess ? history.data.pages : []);
@@ -91,6 +99,8 @@ export default function HistoryPage() {
   );
 
   const rowEls = new Map<string, HTMLElement>();
+  // Keyboard moves settle before the detail pane fetches (S4: rate-limit bucket per user).
+  const [keyboardMove, setKeyboardMove] = createSignal(false);
   const focusTarget = () =>
     selected() && rows().some((r) => r.node === selected())
       ? selected()
@@ -98,6 +108,7 @@ export default function HistoryPage() {
 
   const open = (node: string) => navigate(changesetPath(repo.base(), node));
   const activate = (node: string) => {
+    setKeyboardMove(false);
     if (narrow()) open(node);
     else setUrl({ node: selected() === node ? "" : node });
   };
@@ -122,6 +133,7 @@ export default function HistoryPage() {
           : Math.min(list.length - 1, Math.max(0, at + delta))
       ];
     if (!next) return;
+    setKeyboardMove(true);
     if (!narrow()) setUrl({ node: next.node }, { replace: true });
     focusRow(next.node);
   };
@@ -364,7 +376,9 @@ export default function HistoryPage() {
                 base={repo.base()}
                 node={node()}
                 summary={selectedRow()}
+                settleMs={keyboardMove() ? 250 : 0}
                 onSelect={(n) => {
+                  setKeyboardMove(false);
                   setUrl({ node: n });
                   if (rowEls.has(n)) focusRow(n);
                 }}
@@ -446,7 +460,11 @@ function HistoryError(props: {
         art="no-results"
         size="page"
         title="Those filters can't be used"
-        body={e()?.message ?? "Check the filters and try again."}
+        body={
+          e()?.code === "invalid_path"
+            ? "The path filter must be a path inside the repository, like src/graph.cpp."
+            : (e()?.message ?? "Check the filters and try again.")
+        }
         actions={
           <Button variant="primary" onClick={() => props.onClear()}>
             Clear filters

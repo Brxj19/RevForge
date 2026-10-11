@@ -1,11 +1,20 @@
-import { For, Match, Show, Switch } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  For,
+  Match,
+  on,
+  onCleanup,
+  Show,
+  Switch,
+} from "solid-js";
 import type { ChangesetSummary } from "~/lib/api";
 import { absoluteTime, plural } from "~/lib/format";
 import { Avatar } from "~/ui/Avatar";
 import { ButtonLink } from "~/ui/Button";
 import { Card, CardHeader } from "~/ui/Card";
 import { CopyButton } from "~/ui/CopyButton";
-import { ChangeBadge, changeKindOf, DiffBar } from "~/ui/DiffStat";
+import { ChangeBadge, changeKindOf } from "~/ui/DiffStat";
 import { EmptyState } from "~/ui/EmptyState";
 import { Hash } from "~/ui/Hash";
 import { IconButton } from "~/ui/IconButton";
@@ -15,6 +24,7 @@ import { SkeletonText } from "~/ui/Skeleton";
 import {
   browsePath,
   changesetPath,
+  detailErrorText,
   firstLine,
   isCleanMerge,
   isMerge,
@@ -22,6 +32,7 @@ import {
   rowStat,
   withDetail,
 } from "./format";
+import { FileStat } from "./FileStat";
 import { createChangesetDetailQuery } from "./queries";
 import styles from "./history.module.css";
 
@@ -32,16 +43,40 @@ export function DetailPane(props: {
   base: string;
   node: string;
   summary?: ChangesetSummary;
+  /**
+   * Wait this long after the node stops changing before fetching its detail (keyboard moves), so
+   * holding J doesn't fire one GET per row and drain the `changeset` rate-limit bucket.
+   */
+  settleMs?: number;
   onSelect: (node: string) => void;
   onClose: () => void;
 }) {
+  // eslint-disable-next-line solid/reactivity -- initial value; later changes go through the effect
+  const [fetchNode, setFetchNode] = createSignal(props.node);
+  createEffect(
+    on(
+      () => props.node,
+      (n) => {
+        const ms = props.settleMs ?? 0;
+        if (!ms) return setFetchNode(n);
+        const t = setTimeout(() => setFetchNode(n), ms);
+        onCleanup(() => clearTimeout(t));
+      },
+      { defer: true },
+    ),
+  );
+  const settled = () => fetchNode() === props.node;
   const detail = createChangesetDetailQuery(
     () => props.org,
     () => props.repo,
-    () => props.node,
+    fetchNode,
   );
-  // Reading .data while pending would suspend the whole route (Solid Query + Suspense).
-  const loaded = () => (detail.isSuccess ? detail.data : undefined);
+  // Reading .data while pending would suspend the whole route (Solid Query + Suspense); while the
+  // selection is still moving the previous node's detail must not show either.
+  const loaded = () =>
+    settled() && detail.isSuccess ? detail.data : undefined;
+  const pending = () => !settled() || detail.isPending;
+  const failed = () => settled() && detail.isError;
   const c = () => withDetail(props.summary, loaded());
   return (
     <Card as="aside" class={styles.detail} aria-label="Changeset details">
@@ -111,11 +146,14 @@ export function DetailPane(props: {
                 </dd>
               </dl>
               <Switch>
-                <Match when={detail.isPending}>
+                <Match when={pending()}>
                   <SkeletonText lines={["80%", "65%"]} label="Loading files" />
                 </Match>
-                <Match when={detail.isError}>
-                  <p class="muted">Couldn't load the changed files.</p>
+                <Match when={failed()}>
+                  <p class="muted" role="status">
+                    Couldn't load the changed files.{" "}
+                    {detailErrorText(detail.error)}
+                  </p>
                 </Match>
                 <Match when={(loaded()?.changed_files.length ?? 0) === 0}>
                   <EmptyState
@@ -145,16 +183,11 @@ export function DetailPane(props: {
                               <span class={styles.grow} title={f.path}>
                                 {f.path}
                               </span>
-                              <Show
-                                when={
-                                  f.insertions !== null && f.deletions !== null
-                                }
-                              >
-                                <DiffBar
-                                  additions={f.insertions ?? 0}
-                                  deletions={f.deletions ?? 0}
-                                />
-                              </Show>
+                              <FileStat
+                                binary={f.binary}
+                                insertions={f.insertions}
+                                deletions={f.deletions}
+                              />
                             </a>
                           </li>
                         )}
@@ -178,14 +211,14 @@ export function DetailPane(props: {
             </div>
           )}
         </Match>
-        <Match when={detail.isError}>
+        <Match when={failed()}>
           <EmptyState
             art="load-error"
             size="inline"
             compact
             level={3}
             title="Couldn't load this changeset."
-            body="It may not exist in this repository."
+            body={detailErrorText(detail.error)}
           />
         </Match>
         <Match when={true}>

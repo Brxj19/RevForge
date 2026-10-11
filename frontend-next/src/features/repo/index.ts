@@ -1,4 +1,5 @@
 export { useRepo, type RepoContextValue } from "./context";
+export { createHistoryHref } from "./history-link";
 export { RevisionRail, type RevisionRailProps } from "./RevisionRail";
 export { DataError, EmptyRepo, PROVISIONING_ERRORS } from "./RepoStates";
 export {

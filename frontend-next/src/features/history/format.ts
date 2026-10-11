@@ -1,4 +1,8 @@
-import type { ChangesetDetail, ChangesetSummary } from "~/lib/api";
+import {
+  ApiError,
+  type ChangesetDetail,
+  type ChangesetSummary,
+} from "~/lib/api";
 import { plural } from "~/lib/format";
 
 type Stats = Pick<
@@ -72,6 +76,19 @@ export function withDetail(
 ): ChangesetSummary | undefined {
   if (!detail) return summary;
   return { ...(summary ?? {}), ...detail } as ChangesetSummary;
+}
+
+export const isRateLimited = (e: unknown) =>
+  e instanceof ApiError && e.status === 429;
+
+/** Why the changeset detail didn't load: rate limits are temporary, not "missing". */
+export function detailErrorText(e: unknown): string {
+  if (isRateLimited(e)) return "Too many requests — try again in a moment.";
+  if (e instanceof ApiError && e.status === 404)
+    return "It may not exist in this repository.";
+  if (e instanceof ApiError && e.isNetworkError)
+    return "Can't reach the forge. Check your connection.";
+  return "Try again in a moment.";
 }
 
 export const changesetPath = (base: string, node: string) =>

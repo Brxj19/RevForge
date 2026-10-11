@@ -388,7 +388,7 @@ export interface RepositoryRef {
   updated_at?: string | null;
   summary?: string | null;
   /** Branches only. closed = no open heads; merged = every open head is an ancestor of default's tip. */
-  state?: BranchState;
+  state?: BranchState | null;
 }
 
 export interface RepositoryRefs {

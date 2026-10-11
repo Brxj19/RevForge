@@ -5,6 +5,7 @@ import { FileTable, isReadme, MarkdownPreview } from "~/features/code";
 import { CommitHoverCard } from "~/features/history";
 import { reposApi } from "~/lib/api";
 import { absoluteTime, bytes, shortAge } from "~/lib/format";
+import { loaded } from "~/lib/query";
 import { qk } from "~/lib/query-keys";
 import { Avatar } from "~/ui/Avatar";
 import { ButtonLink } from "~/ui/Button";
@@ -45,7 +46,10 @@ export default function OverviewPage() {
       reposApi.stats(repo.org(), repo.repo(), { rev: repo.rev() || undefined }),
     staleTime: 5 * 60_000,
   }));
-  const dir = () => (root.data?.kind === "directory" ? root.data : undefined);
+  const dir = () => {
+    const d = loaded(root);
+    return d?.kind === "directory" ? d : undefined;
+  };
   const empty = () => {
     const d = dir();
     return !!d && !d.revision && d.entries.length === 0;
@@ -61,11 +65,13 @@ export default function OverviewPage() {
     () => readmeEntry()?.path ?? "",
     () => !!readmeEntry(),
   );
-  const readmeText = () =>
-    readme.data?.kind === "file" && readmeEntry() ? readme.data.content : null;
-  const head = () => recent.data?.changesets[0];
+  const readmeText = () => {
+    const r = loaded(readme);
+    return r?.kind === "file" && readmeEntry() ? r.content : null;
+  };
+  const head = () => loaded(recent)?.changesets[0];
   const defaultBranch = () => {
-    const b = refs.data?.branches ?? [];
+    const b = loaded(refs)?.branches ?? [];
     return b.some((x) => x.name === "default") ? "default" : b[0]?.name;
   };
   const changesetHref = (node: string) =>
@@ -93,7 +99,7 @@ export default function OverviewPage() {
           <Panes columns="minmax(0,1fr)">
             <Pane>
               <Card>
-                <EmptyRepo pushUrl={transport.data?.https.clone_url} />
+                <EmptyRepo pushUrl={loaded(transport)?.https.clone_url} />
               </Card>
             </Pane>
           </Panes>
@@ -258,7 +264,7 @@ export default function OverviewPage() {
                     <dt>Branches</dt>
                     <dd>
                       <a class="link" href={repo.href("refs")}>
-                        {refs.data?.branches.length ?? "…"}
+                        {loaded(refs)?.branches.length ?? "…"}
                       </a>
                     </dd>
                   </div>
@@ -267,10 +273,10 @@ export default function OverviewPage() {
                     <dd>
                       <a class="link" href={repo.href("refs/tags")}>
                         <Show
-                          when={refs.data?.tags.length === 1}
-                          fallback={refs.data?.tags.length ?? "…"}
+                          when={loaded(refs)?.tags.length === 1}
+                          fallback={loaded(refs)?.tags.length ?? "…"}
                         >
-                          {refs.data?.tags[0]?.name}
+                          {loaded(refs)?.tags[0]?.name}
                         </Show>
                       </a>
                     </dd>
@@ -279,7 +285,7 @@ export default function OverviewPage() {
                     <dt>Contributors</dt>
                     <dd>
                       <Show
-                        when={stats.data}
+                        when={loaded(stats)}
                         fallback={<Skeleton width="24px" />}
                       >
                         {(s) => (
@@ -295,7 +301,7 @@ export default function OverviewPage() {
                     <dt>Size</dt>
                     <dd class="mono">
                       <Show
-                        when={stats.data}
+                        when={loaded(stats)}
                         fallback={<Skeleton width="48px" />}
                       >
                         {(s) => bytes(s().size_bytes)}
@@ -311,9 +317,8 @@ export default function OverviewPage() {
                   </Match>
                   <Match
                     when={
-                      stats.data &&
-                      stats.data.languages.length > 0 &&
-                      stats.data
+                      (loaded(stats)?.languages.length ?? 0) > 0 &&
+                      loaded(stats)
                     }
                   >
                     {(s) => (
@@ -379,7 +384,7 @@ export default function OverviewPage() {
                       Couldn't load recent changesets.
                     </p>
                   </Match>
-                  <Match when={recent.data?.changesets.length === 0}>
+                  <Match when={loaded(recent)?.changesets.length === 0}>
                     <EmptyState
                       art="no-changesets-match"
                       size="inline"
@@ -389,7 +394,7 @@ export default function OverviewPage() {
                       body="Push to see history here."
                     />
                   </Match>
-                  <Match when={recent.data}>
+                  <Match when={loaded(recent)}>
                     {(r) => (
                       <ul class={styles.recent}>
                         <For each={r().changesets}>

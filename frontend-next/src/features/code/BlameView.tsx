@@ -96,7 +96,7 @@ export function BlameView(props: BlameViewProps) {
   const queryClient = useQueryClient();
   const groups = createMemo(() => blameGroups(props.blame.lines));
   const ranks = createMemo(() => ageRanks(props.blame.lines));
-  const [tokens] = createResource(
+  const [tokenResource] = createResource(
     () =>
       [
         props.blame.lines.map((l) => l.content).join("\n"),
@@ -104,6 +104,10 @@ export function BlameView(props: BlameViewProps) {
       ] as const,
     ([text, id]) => tokenize(text, id),
   );
+  // Reading a pending resource would suspend the app-level <Suspense> and blank the route:
+  // render plain text first, highlight once the grammar has loaded.
+  const tokens = () =>
+    tokenResource.state === "ready" ? tokenResource() : undefined;
 
   const before = async (node: string) => {
     try {

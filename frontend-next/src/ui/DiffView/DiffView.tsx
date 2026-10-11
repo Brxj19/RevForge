@@ -106,13 +106,17 @@ function DiffFileView(props: {
   const hidden = createMemo(
     () => bidi() || lines().some((l) => hasHidden(l.text)),
   );
-  const [tokens] = createResource(
+  const [tokenResource] = createResource(
     () =>
       props.lang && props.lang !== "txt" && lines().length
         ? ([lines().map((l) => l.text), props.lang] as const)
         : null,
     ([texts, lang]) => tokenizeLines(texts, lang),
   );
+  // Reading a pending resource would suspend the app-level <Suspense> and blank the route:
+  // render plain text first, highlight once the grammar has loaded.
+  const tokens = () =>
+    tokenResource.state === "ready" ? tokenResource() : undefined;
   // Flat line index → tokens, so hunks render from one tokenize call per file.
   const offsets = createMemo(() => {
     let n = 0;

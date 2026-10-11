@@ -194,9 +194,8 @@ function treeEntries(files: string[], prefix: string): RepositoryTreeEntry[] {
 const fullMessage = (c: ChangesetSummary) =>
   BODIES[c.node] ? `${c.message}\n\n${BODIES[c.node]}` : c.message;
 
-const headNodes = new Set(
-  [...REFS.branches, ...CLOSED_BRANCHES].map((b) => b.node),
-);
+/** is_branch_head means an open head; closed heads report false. */
+const headNodes = new Set(REFS.branches.map((b) => b.node));
 
 /**
  * the Phase 2 row fields (refs per row, head/merge/binary flags) and
@@ -220,7 +219,10 @@ function summaryRow(c: ChangesetSummary): ChangesetSummary {
   };
 }
 
-/** Changed files in the detail use the diff model's statuses ("removed", never "deleted"). */
+/**
+ * GET R/changesets/{node} keeps today's detail statuses: a removed file is "deleted" here (the /diff
+ * DiffFile says "removed"), and binary files have null counts.
+ */
 function changesetDetail(c: ChangesetSummary): ChangesetDetail {
   const files = DIFFS[c.node] ?? [];
   const row = summaryRow(c);
@@ -233,7 +235,7 @@ function changesetDetail(c: ChangesetSummary): ChangesetDetail {
     // binary / old_mode / new_mode per changed file.
     changed_files: files.map((f) => ({
       path: f.path,
-      status: f.status,
+      status: f.status === "removed" ? "deleted" : f.status,
       insertions: f.binary ? null : f.insertions,
       deletions: f.binary ? null : f.deletions,
       old_path: f.old_path,

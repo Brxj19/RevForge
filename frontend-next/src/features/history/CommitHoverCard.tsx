@@ -10,7 +10,7 @@ import type { ChangesetSummary } from "~/lib/api";
 import { absoluteTime, relativeTime } from "~/lib/format";
 import { Avatar } from "~/ui/Avatar";
 import { CopyButton } from "~/ui/CopyButton";
-import { ChangeBadge, changeKindOf, DiffBar } from "~/ui/DiffStat";
+import { ChangeBadge, changeKindOf } from "~/ui/DiffStat";
 import { Hash } from "~/ui/Hash";
 import { HoverCard, HoverCardSection } from "~/ui/HoverCard";
 import { FileIcon } from "~/ui/icons";
@@ -20,12 +20,14 @@ import { SkeletonText } from "~/ui/Skeleton";
 import {
   browsePath,
   changesetPath,
+  detailErrorText,
   firstLine,
   isMerge,
   messageBody,
   statsSentence,
   withDetail,
 } from "./format";
+import { FileStat } from "./FileStat";
 import { createChangesetDetailQuery } from "./queries";
 import styles from "./history.module.css";
 
@@ -129,6 +131,11 @@ function CommitCard(props: {
                 <Match when={detail.isPending}>
                   <SkeletonText lines={["70%", "55%"]} label="Loading files" />
                 </Match>
+                <Match when={detail.isError}>
+                  <p class={styles.hcError} role="status">
+                    {detailErrorText(detail.error)}
+                  </p>
+                </Match>
                 <Match when={files().length > 0}>
                   <ul class={styles.hcFiles}>
                     <For each={files().slice(0, 5)}>
@@ -139,14 +146,11 @@ function CommitCard(props: {
                           <span class={styles.grow} title={f.path}>
                             {f.path}
                           </span>
-                          <Show
-                            when={f.insertions !== null && f.deletions !== null}
-                          >
-                            <DiffBar
-                              additions={f.insertions ?? 0}
-                              deletions={f.deletions ?? 0}
-                            />
-                          </Show>
+                          <FileStat
+                            binary={f.binary}
+                            insertions={f.insertions}
+                            deletions={f.deletions}
+                          />
                         </li>
                       )}
                     </For>
@@ -186,7 +190,9 @@ function CommitCard(props: {
       </Match>
       <Match when={detail.isError}>
         <HoverCardSection>
-          <span class="muted">Couldn't load this changeset.</span>
+          <span class="muted" role="status">
+            Couldn't load this changeset. {detailErrorText(detail.error)}
+          </span>
         </HoverCardSection>
       </Match>
       <Match when={true}>

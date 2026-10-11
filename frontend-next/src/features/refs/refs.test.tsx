@@ -189,3 +189,32 @@ describe("branches & tags", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("refs QA fixes", () => {
+  it("browses a ref whose name the API won't accept as ?rev= by its node", async () => {
+    const node = "c".repeat(40);
+    server.use(
+      http.get(API_REFS, () =>
+        HttpResponse.json({
+          branches: [
+            {
+              name: "-odd name",
+              node,
+              short_node: node.slice(0, 12),
+              state: null,
+            },
+          ],
+          bookmarks: [],
+          tags: [],
+        }),
+      ),
+    );
+    renderApp(REFS);
+    await table();
+    expect(
+      screen.getByRole("link", { name: "Browse files at -odd name" }),
+    ).toHaveAttribute("href", `/sigma/sigma-reckitt/code?rev=${node}`);
+    // A null state (older servers) shows a dash, not a pill.
+    expect(rowOf("-odd name")).toHaveTextContent("—");
+  });
+});

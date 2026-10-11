@@ -485,6 +485,10 @@ describe("history states and untrusted content", () => {
         name: "Those filters can't be used",
       }),
     ).toBeInTheDocument();
+    // Keyed on the API's invalid_path code (S6).
+    expect(
+      screen.getByText(/The path filter must be a path inside the repository/),
+    ).toBeInTheDocument();
   });
 
   it("shows push instructions for a repository without history", async () => {
@@ -506,5 +510,114 @@ describe("history states and untrusted content", () => {
       await screen.findByRole("heading", { name: "Repository not found" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("listbox", { name: "Changesets" })).toBeNull();
+  });
+});
+
+describe("history QA fixes", () => {
+  it("doesn't treat a one-character search as a filter: graph stays, no callout", async () => {
+    renderApp(`${HISTORY}?q=a`);
+    await listbox();
+    expect(screen.getByTestId("history-graph")).toBeInTheDocument();
+    expect(screen.queryByText(/The graph is hidden/)).toBeNull();
+    expect(
+      screen.getByText("Type at least 2 characters to search."),
+    ).toBeInTheDocument();
+  });
+
+  it("marks only open branch heads (closed heads get no branch chip)", async () => {
+    renderApp(HISTORY);
+    await listbox();
+    const closed = row("7a1f3c9e2b40d5e6f708192a3b4c5d6e7f809112")!;
+    expect(
+      within(closed).queryByTitle("Branch experiment/avl-tree"),
+    ).toBeNull();
+    expect(within(row(IMPROV)!).getByTitle(/^Branch /)).toBeInTheDocument();
+  });
+
+  it("holding J fetches the detail once the selection settles, not per keypress (S4)", async () => {
+    const reqs = recordRequests(/\/changesets\/[0-9a-f]{40}$/);
+    renderApp(HISTORY);
+    await listbox();
+    row(TIP)!.focus();
+    await userEvent.keyboard("jjjjj");
+    await waitFor(() => expect(search().get("node")).not.toBeNull());
+    const settledOn = search().get("node")!;
+    const pane = await screen.findByRole("complementary", {
+      name: "Changeset details",
+    });
+    await within(pane).findByRole("list", { name: "Changed files" });
+    const fetched = reqs.urls.map((u) => u.pathname.split("/").pop());
+    expect(fetched).toContain(settledOn);
+    // Rows passed over on the way never hit GET changesets/{node} from the pane.
+    expect(new Set(fetched).size).toBeLessThanOrEqual(2);
+  });
+
+  it("says when the detail is rate limited instead of 'may not exist' (429)", async () => {
+    server.use(
+      http.get(`${LIST}/:node`, () =>
+        apiError(429, "Slow down", "rate_limited"),
+      ),
+    );
+    renderApp(`${HISTORY}?node=${IMPROV}`);
+    const pane = await screen.findByRole("complementary", {
+      name: "Changeset details",
+    });
+    expect(
+      await within(pane).findByText(
+        /Too many requests — try again in a moment/,
+      ),
+    ).toBeInTheDocument();
+    expect(pane).not.toHaveTextContent("may not exist");
+    await listbox();
+    fireEvent.pointerEnter(row(TIP)!, { pointerType: "mouse" });
+    const card = await screen.findByRole("group", {
+      name: `Changeset ${TIP.slice(0, 12)}`,
+    });
+    expect(
+      await within(card).findByText(
+        /Too many requests — try again in a moment/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows removed (deleted) files and binary files without a 0/0 bar", async () => {
+    server.use(
+      http.get(`${LIST}/:node`, () =>
+        HttpResponse.json({
+          ...summary({ node: IMPROV, message: "Drop the binary" }),
+          tags: [],
+          bookmarks: [],
+          files_changed: ["old.txt", "main"],
+          changed_files: [
+            {
+              path: "old.txt",
+              status: "deleted",
+              insertions: 0,
+              deletions: 3,
+              old_path: null,
+            },
+            {
+              path: "main",
+              status: "modified",
+              insertions: null,
+              deletions: null,
+              old_path: null,
+              binary: true,
+            },
+          ],
+        }),
+      ),
+    );
+    renderApp(`${HISTORY}?node=${IMPROV}`);
+    const pane = await screen.findByRole("complementary", {
+      name: "Changeset details",
+    });
+    const files = await within(pane).findByRole("list", {
+      name: "Changed files",
+    });
+    const [removed, bin] = within(files).getAllByRole("listitem");
+    expect(within(removed!).getByLabelText("Removed")).toHaveTextContent("D");
+    expect(bin).toHaveTextContent("binary");
+    expect(within(bin!).queryByRole("img", { name: /additions/ })).toBeNull();
   });
 });

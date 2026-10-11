@@ -86,9 +86,20 @@ function LegacyRepoRedirect() {
 /** Short changeset links (/:org/:repo/c/:node, the prototype's form) go to the changeset route. */
 function ShortChangesetRedirect() {
   const params = useParams<{ org: string; repo: string; node: string }>();
+  // Re-encode every segment (decoding first, so an already-encoded value isn't double-encoded).
+  const seg = (v: string) => {
+    let raw = v;
+    try {
+      raw = decodeURIComponent(v);
+    } catch {
+      // keep as is
+    }
+    return encodeURIComponent(raw);
+  };
+  const location = useLocation();
   return (
     <Navigate
-      href={`/${params.org}/${params.repo}/changesets/${params.node}`}
+      href={`/${seg(params.org)}/${seg(params.repo)}/changesets/${seg(params.node)}${location.search}`}
     />
   );
 }

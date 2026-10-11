@@ -33,6 +33,8 @@ class DiffLine:
     old_line: int | None
     new_line: int | None
     text: str
+    # The line was cut at ``max_line_chars`` (display only; counts are unaffected).
+    truncated: bool = False
 
 
 @dataclass(slots=True)
@@ -56,7 +58,10 @@ class DiffFile:
     insertions: int
     deletions: int
     too_large: bool = False
+    # Lines or hunks were omitted by the line/byte caps.
     truncated: bool = False
+    # At least one emitted line was cut at ``max_line_chars``; nothing was omitted for it.
+    long_lines_truncated: bool = False
     hunks: list[DiffHunk] = field(default_factory=list)
 
 
@@ -312,10 +317,14 @@ def _parse_hunk(
             continue
         body = raw[1:] if kind != "meta" else raw
         text = _decode(body).removesuffix("\n").removesuffix("\r")
-        if len(text) > caps.max_line_chars:
+        cut = len(text) > caps.max_line_chars
+        if cut:
+            # Only this line is shortened; later lines and hunks of the file still emit (S2).
             text = text[: caps.max_line_chars]
-            file_diff.truncated = True
-        hunk.lines.append(DiffLine(kind=kind, old_line=old_no, new_line=new_no, text=text))
+            file_diff.long_lines_truncated = True
+        hunk.lines.append(
+            DiffLine(kind=kind, old_line=old_no, new_line=new_no, text=text, truncated=cut)
+        )
         file_lines[0] += 1
         budget.total_lines += 1
         budget.total_bytes += len(text.encode("utf-8")) + 1

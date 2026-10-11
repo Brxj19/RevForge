@@ -4,6 +4,7 @@ import { copyText } from "~/lib/clipboard";
 import { Icon } from "~/ui/icons";
 import { showToast } from "~/ui/Toast";
 import { useRepo } from "./context";
+import { createHistoryHref } from "./history-link";
 import { createRefsQuery } from "./queries";
 import { RefPicker } from "./RefPicker";
 import styles from "./repo.module.css";
@@ -27,6 +28,7 @@ export function RevisionRail(props: RevisionRailProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const refs = createRefsQuery(repo.org, repo.repo, () => true);
+  const historyHref = createHistoryHref();
   const current = () => repo.rev() || "default";
   const kind = createMemo(() => {
     const r = refs.data;
@@ -147,7 +149,7 @@ export function RevisionRail(props: RevisionRailProps) {
       <Show when={props.file}>
         <a
           class={styles.tool}
-          href={repo.href("history", { path: props.path })}
+          href={historyHref(props.path)}
           aria-label="File history"
         >
           <Icon name="clock" size={14} />

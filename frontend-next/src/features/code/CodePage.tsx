@@ -1,3 +1,4 @@
+import { loaded } from "~/lib/query";
 import { useParams } from "@solidjs/router";
 import { createMemo, Match, Switch } from "solid-js";
 import {
@@ -20,7 +21,9 @@ import styles from "./code.module.css";
 const STATUS_LETTER: Record<string, string> = {
   modified: "M",
   added: "A",
+  // GET R/changesets/{node} says "deleted"; the shared diff model says "removed".
   deleted: "R",
+  removed: "R",
   renamed: "M",
   copied: "A",
 };
@@ -54,7 +57,7 @@ export default function CodePage() {
   const changeset = createChangesetQuery(repo.org, repo.repo, node);
   const changes = createMemo<Record<string, string>>(() =>
     Object.fromEntries(
-      (changeset.data?.changed_files ?? []).map((f) => [
+      (loaded(changeset)?.changed_files ?? []).map((f) => [
         f.path,
         STATUS_LETTER[f.status] ?? "M",
       ]),

@@ -96,7 +96,10 @@ describe("code page", () => {
       name: /graph\.cpp/,
     });
     // Files changed in the current changeset carry a text status, not colour alone.
-    expect(graph).toHaveTextContent("Modified in this changeset");
+    // Markers arrive with the changeset detail, after the tree (no route-level suspense).
+    await waitFor(() =>
+      expect(graph).toHaveTextContent("Modified in this changeset"),
+    );
     graph.focus();
     await userEvent.keyboard("{Enter}");
     await waitFor(() =>
@@ -265,5 +268,74 @@ describe("code page", () => {
       within(tree).queryByRole("treeitem", { name: /main\.cpp/ }),
     ).toBeNull();
     expect(window.location.href).toBe(before);
+  });
+});
+
+describe("code page QA fixes", () => {
+  it("keeps the branch in File history links", async () => {
+    renderApp(
+      "/sigma/sigma-reckitt/code/main.cpp?rev=feature%2Fdata-structures",
+    );
+    await viewer();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("link", { name: "File history" }),
+      ).toHaveAttribute(
+        "href",
+        "/sigma/sigma-reckitt/history?path=main.cpp&branch=feature%2Fdata-structures",
+      ),
+    );
+  });
+
+  it("marks files the changeset removed, whichever word the API uses", async () => {
+    server.use(
+      http.get(
+        "*/api/v1/organizations/:org/repositories/:repo/changesets/:node",
+        ({ params }) =>
+          HttpResponse.json({
+            node: String(params.node),
+            short_node: String(params.node).slice(0, 12),
+            parents: [],
+            author_name: "Brxj19",
+            author_email_when_available: null,
+            timestamp: "2026-07-13T20:00:00.000Z",
+            message: "m",
+            branch: "default",
+            tags: [],
+            bookmarks: [],
+            files_changed: ["src/graph.cpp", "src/graph.hpp"],
+            files_changed_count_when_available: 2,
+            insertions_when_available: 0,
+            deletions_when_available: 0,
+            changed_files: [
+              {
+                path: "src/graph.cpp",
+                status: "deleted",
+                insertions: 0,
+                deletions: 1,
+                old_path: null,
+              },
+              {
+                path: "src/graph.hpp",
+                status: "removed",
+                insertions: 0,
+                deletions: 1,
+                old_path: null,
+              },
+            ],
+          }),
+      ),
+    );
+    renderApp("/sigma/sigma-reckitt/code/src");
+    const tree = await screen.findByRole("tree", { name: "Repository files" });
+    const cpp = await within(tree).findByRole("treeitem", {
+      name: /graph\.cpp/,
+    });
+    await waitFor(() =>
+      expect(cpp).toHaveTextContent("Removed in this changeset"),
+    );
+    expect(
+      within(tree).getByRole("treeitem", { name: /graph\.hpp/ }),
+    ).toHaveTextContent("Removed in this changeset");
   });
 });

@@ -447,3 +447,38 @@ describe("overview recent changesets", () => {
     expect(await within(card).findByText("src/graph.cpp")).toBeInTheDocument();
   });
 });
+
+describe("overview loading (S1)", () => {
+  it("shows the file table while only the recent changesets are still loading", async () => {
+    server.use(
+      http.get(
+        "*/api/v1/organizations/:org/repositories/:repo/changesets",
+        async ({ request }) => {
+          if (new URL(request.url).searchParams.get("limit") === "6")
+            await new Promise(() => undefined);
+          return HttpResponse.json({ changesets: [], next_cursor: null });
+        },
+      ),
+    );
+    renderApp("/sigma/sigma-reckitt");
+    expect(
+      await screen.findByRole("table", {
+        name: "Files at the repository root",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("status", { name: "Loading changesets" }),
+    ).toBeInTheDocument();
+  });
+
+  it("browses refs with names the API can't take as ?rev= by node", async () => {
+    const { refChoices } = await import("./RefPicker");
+    const node = "b".repeat(40);
+    const [branches] = refChoices({
+      branches: [{ name: "fix spaces", node, short_node: node.slice(0, 12) }],
+      bookmarks: [],
+      tags: [],
+    });
+    expect(branches?.items[0]?.rev).toBe(node);
+  });
+});

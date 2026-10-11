@@ -5,6 +5,7 @@ import { DataError, useRepo } from "~/features/repo";
 import { reposApi, type BranchState, type RepositoryRef } from "~/lib/api";
 import { absoluteTime, relativeTime } from "~/lib/format";
 import { qk } from "~/lib/query-keys";
+import { revForRef } from "~/lib/safe";
 import { useUrlState } from "~/lib/url";
 import { Button, ButtonLink } from "~/ui/Button";
 import { Card } from "~/ui/Card";
@@ -243,7 +244,7 @@ function RefRow(props: { item: RepositoryRef; kind: Kind }) {
   const changeset = () =>
     repo.href(`changesets/${encodeURIComponent(r().node)}`);
   const browseRev = () =>
-    props.kind === "branches" && r().name === "default" ? "" : r().name;
+    props.kind === "branches" && r().name === "default" ? "" : revForRef(r());
   return (
     <tr data-state={r().state}>
       <Td>

@@ -378,3 +378,13 @@ describe("changeset states", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("changeset QA fixes", () => {
+  it("re-encodes the node when redirecting /c/:node", async () => {
+    renderApp("/sigma/sigma-reckitt/c/0b486f%20x?from=email");
+    await waitFor(() =>
+      expect(window.location.pathname).toBe(`${CS}/0b486f%20x`),
+    );
+    expect(window.location.search).toBe("?from=email");
+  });
+});

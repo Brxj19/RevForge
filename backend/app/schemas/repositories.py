@@ -146,6 +146,8 @@ class DiffLineResponse(BaseModel):
     old_line: int | None
     new_line: int | None
     text: str
+    # Cut at 2000 characters for display; insertion/deletion counts are unaffected.
+    truncated: bool = False
 
 
 class DiffHunkResponse(BaseModel):
@@ -168,6 +170,7 @@ class DiffFileResponse(BaseModel):
     deletions: int
     too_large: bool
     truncated: bool
+    long_lines_truncated: bool = False
     hunks: list[DiffHunkResponse]
 
 

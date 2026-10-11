@@ -9,7 +9,7 @@ import {
   Switch,
 } from "solid-js";
 import { useShortcut } from "~/lib/keyboard";
-import { useRepo, DataError } from "~/features/repo";
+import { createHistoryHref, useRepo, DataError } from "~/features/repo";
 import {
   reposApi,
   type LastChangeset,
@@ -73,6 +73,7 @@ export interface FileViewProps {
  */
 export function FileView(props: FileViewProps) {
   const repo = useRepo();
+  const historyHref = createHistoryHref();
   const [url, setUrl] = useUrlState({ view: "", L: "" });
   const viewer = createCodeViewer();
   const [downloading, setDownloading] = createSignal(false);
@@ -186,7 +187,7 @@ export function FileView(props: FileViewProps) {
         {
           label: "File history",
           icon: "clock",
-          href: repo.href("history", { path: path() }),
+          href: historyHref(path()),
         },
         ...(VIEWS[kind()].includes("blame")
           ? [

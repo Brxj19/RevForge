@@ -386,7 +386,7 @@ class MercurialReadService:
 
         branchmap = repo.branchmap()
         branch_heads = {
-            bytes(head) for name in branchmap for head in branchmap.branchheads(name, closed=True)
+            bytes(head) for name in branchmap for head in branchmap.branchheads(name, closed=False)
         }
         page_input_budget = [_STATS_PAGE_INPUT_BYTES]
         changesets: list[HgChangeset] = []
@@ -452,8 +452,13 @@ class MercurialReadService:
             HgChangedFile(
                 path=item.path,
                 status=_LEGACY_STATUS[item.status],
-                insertions=None if item.too_large or item.truncated else item.insertions,
-                deletions=None if item.too_large or item.truncated else item.deletions,
+                # Binary, too-large and partial files have no meaningful line counts (S3).
+                insertions=None
+                if item.too_large or item.truncated or item.binary
+                else item.insertions,
+                deletions=None
+                if item.too_large or item.truncated or item.binary
+                else item.deletions,
                 old_path=item.old_path,
                 binary=item.binary,
                 old_mode=item.old_mode,

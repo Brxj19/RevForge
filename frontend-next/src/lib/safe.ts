@@ -59,3 +59,15 @@ export function safeNextPath(next: string | null | undefined): string {
   if (UNSAFE_CHARS.test(next)) return "/";
   return next;
 }
+
+/** Ref names the backend accepts as ?rev= (its SAFE_REF_RE); other names are browsed by node. */
+const SAFE_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$/;
+
+export function isSafeRefName(name: string): boolean {
+  return SAFE_REF_RE.test(name);
+}
+
+/** ?rev= for a ref: its name when the backend accepts it, otherwise the node it points to. */
+export function revForRef(ref: { name: string; node: string }): string {
+  return isSafeRefName(ref.name) ? ref.name : ref.node;
+}
