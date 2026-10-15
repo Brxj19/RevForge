@@ -41,6 +41,8 @@ export interface DiffViewFile {
   deletions: number;
   too_large: boolean;
   truncated: boolean;
+  /** Some lines were cut at the line-length cap; every hunk is still present. */
+  long_lines_truncated?: boolean;
   hunks: readonly DiffViewHunk[];
 }
 
@@ -269,6 +271,12 @@ function DiffFileView(props: {
                 )}
               </For>
             </table>
+            <Show when={f().long_lines_truncated}>
+              <Placeholder icon="warn" href={props.href}>
+                Some very long lines are cut short here; the full text is in the
+                raw file.
+              </Placeholder>
+            </Show>
             <Show when={f().truncated}>
               <Placeholder icon="warn" href={props.href}>
                 The rest of this file's changes aren't shown: the diff was

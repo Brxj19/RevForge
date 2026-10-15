@@ -110,6 +110,31 @@ describe("DiffView", () => {
     expect(cut).toHaveTextContent("the diff was truncated");
   });
 
+  it("notes cut long lines without hiding the file's other hunks", () => {
+    mount([
+      file({
+        path: "wide.min.js",
+        long_lines_truncated: true,
+        hunks: [
+          ...file().hunks,
+          {
+            header: "@@ -150,1 +150,1 @@",
+            lines: [
+              { kind: "add", old_line: null, new_line: 150, text: "later" },
+            ],
+          },
+        ],
+      }),
+    ]);
+    const wide = screen.getByRole("region", { name: "wide.min.js" });
+    expect(wide).toHaveTextContent("Some very long lines are cut short");
+    expect(wide).not.toHaveTextContent("the diff was truncated");
+    expect(within(wide).getAllByRole("rowgroup").length).toBeGreaterThanOrEqual(
+      2,
+    );
+    expect(wide).toHaveTextContent("later");
+  });
+
   it("renders markup as text and makes hidden characters visible", () => {
     mount([
       file({

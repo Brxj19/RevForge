@@ -238,6 +238,8 @@ export interface DiffLine {
   old_line: number | null;
   new_line: number | null;
   text: string;
+  /** The line was cut at the server's line-length cap. */
+  truncated?: boolean;
 }
 
 export interface DiffHunk {
@@ -263,6 +265,8 @@ export interface DiffFile {
   too_large: boolean;
   /** Hunks were cut at the per-file or total line cap. */
   truncated: boolean;
+  /** Some lines were cut at the line-length cap; every hunk is still present. */
+  long_lines_truncated?: boolean;
   hunks: DiffHunk[];
 }
 
