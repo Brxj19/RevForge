@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
 
+from .diff_model import DiffFile
+
 ContentKind = Literal["text", "binary", "image", "font", "symlink"]
 
 
@@ -14,6 +16,9 @@ class HgChangedFile:
     insertions: int | None
     deletions: int | None
     old_path: str | None = None
+    binary: bool = False
+    old_mode: str | None = None
+    new_mode: str | None = None
 
 
 @dataclass(slots=True)
@@ -39,12 +44,17 @@ class HgChangeset:
     files_changed: list[str]
     revision_number: int
     stats: HgChangesetStats | None = None
+    is_branch_head: bool = False
+    is_merge: bool = False
+    has_binary: bool = False
+    stats_too_large: bool = False
 
 
 @dataclass(slots=True)
 class HgChangesetPage:
     changesets: list[HgChangeset]
     next_cursor: str | None
+    scan_truncated: bool = False
 
 
 @dataclass(slots=True)
@@ -52,6 +62,8 @@ class HgDiff:
     content: str
     is_truncated: bool
     truncation_reason: str | None
+    files: list[DiffFile] = field(default_factory=list)
+    files_truncated: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -166,6 +178,9 @@ class HgReference:
     name: str
     node: str
     short_node: str
+    updated_at: datetime | None = None
+    summary: str | None = None
+    state: Literal["open", "closed", "merged"] | None = None
 
 
 @dataclass(slots=True)

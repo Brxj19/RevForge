@@ -1,0 +1,118 @@
+/* Ported from the prototype .cs-head / .chg / pageChangeset. */
+.head {
+  padding: 16px 20px;
+  display: grid;
+  gap: 10px;
+}
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.title {
+  margin: 0;
+  font: 18px/1.35 var(--display);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.body {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.author {
+  color: var(--text);
+  font-weight: 500;
+}
+.fullHash {
+  overflow-wrap: anywhere;
+}
+.parent {
+  color: var(--accent);
+}
+.parent:hover {
+  text-decoration: underline;
+}
+.fileList {
+  padding: 8px;
+}
+.fileListHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px 8px;
+}
+.counts {
+  font: 11.5px var(--mono);
+  white-space: nowrap;
+}
+.chg {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.chg button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-2);
+  font: 12.5px var(--mono);
+  text-align: left;
+  cursor: pointer;
+}
+.chg button:hover {
+  background: var(--hover);
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notes {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.notes:empty {
+  display: none;
+}
+.raw {
+  margin: 0;
+  padding: 12px 16px;
+  font: 12.5px/1.6 var(--mono);
+  white-space: pre;
+  overflow-x: auto;
+}

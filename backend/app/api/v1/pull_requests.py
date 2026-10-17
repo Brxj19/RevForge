@@ -7,19 +7,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     SessionIdentity,
-    get_hg_command_runner,
+    get_mercurial_read_service,
     get_optional_identity,
     get_repository_storage_locator,
     get_session,
     require_csrf,
 )
+from app.api.rate_limit import rate_limited
+from app.core.errors import ApiError
 from app.domain.enums import PullRequestState, ReviewDecision
-from app.mercurial.command_runner import HgCommandRunner
 from app.mercurial.errors import (
+    HgBusyError,
     HgCommandFailedError,
     HgCommandOutputLimitError,
     HgCommandTimeoutError,
+    InvalidRevisionError,
+    MercurialNotFoundError,
+    RepositoryNotProvisionedError,
+    RevisionAmbiguousError,
 )
+from app.mercurial.read_service import MercurialReadService
 from app.mercurial.storage_locator import RepositoryStorageLocator
 from app.models.pull_request import (
     PullRequest,
@@ -47,7 +54,7 @@ from app.services.errors import (
     NotFoundError,
     ValidationFailure,
 )
-from app.services.pr_diff_service import compute_diff
+from app.services.pr_diff_service import compute_diff, resolve_pull_request_revisions
 from app.services.pr_merge_service import verify_landed_merge
 from app.services.pull_request_service import (
     add_comment,
@@ -65,6 +72,7 @@ from app.services.repository_service import (
     get_organization_by_slug_for_repo_routes,
     get_repository_access_for_actor,
     get_repository_for_actor,
+    repository_is_browsable,
 )
 
 router = APIRouter(
@@ -101,6 +109,7 @@ async def _get_repo_for_read(
     organization_slug: str,
     repository_slug: str,
     identity: SessionIdentity | None,
+    allow_archived: bool = False,
 ) -> Repository:
     organization = await get_organization_by_slug_for_repo_routes(
         session, organization_slug=organization_slug
@@ -110,9 +119,17 @@ async def _get_repo_for_read(
         organization=organization,
         repository_slug=repository_slug,
         actor=identity.user if identity else None,
-        allow_archived=False,
+        allow_archived=allow_archived,
     )
     return repository
+
+
+def _repository_not_ready() -> ApiError:
+    return ApiError(
+        409,
+        code="repository_not_ready",
+        detail="Repository is not provisioned for Mercurial browsing yet.",
+    )
 
 
 def _serialize_pr(
@@ -208,6 +225,8 @@ async def create_pull_request_route(
     payload: PullRequestCreateRequest,
     identity: SessionIdentity = Depends(require_csrf),
     session: AsyncSession = Depends(get_session),
+    storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
+    read_service: MercurialReadService = Depends(get_mercurial_read_service),
 ) -> PullRequestDetailResponse:
     try:
         repo = await _get_repo_for_write(
@@ -216,13 +235,22 @@ async def create_pull_request_route(
             repository_slug=repository_slug,
             identity=identity,
         )
+        if not repository_is_browsable(repo):
+            raise _repository_not_ready()
+        # I34: pin both sides to immutable served nodes now; never store a revset or ref.
+        source_node, target_node = await resolve_pull_request_revisions(
+            read_service,
+            repository_path=storage_locator.repository_path(repo),
+            source_revision=payload.source_revision,
+            target_revision=payload.target_revision,
+        )
         pr = await create_pull_request(
             session,
             repository=repo,
             title=payload.title,
             description=payload.description,
-            source_revision=payload.source_revision,
-            target_revision=payload.target_revision,
+            source_revision=source_node,
+            target_revision=target_node,
             source_branch=payload.source_branch,
             target_branch=payload.target_branch,
             draft=payload.draft,
@@ -239,6 +267,22 @@ async def create_pull_request_route(
     except ConflictError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValidationFailure as exc:
+        await session.rollback()
+        raise ApiError(422, code="invalid_revision", detail=str(exc)) from exc
+    except HgBusyError as exc:
+        await session.rollback()
+        raise ApiError(
+            503,
+            code="repository_busy",
+            detail="Repository is busy. Try again shortly.",
+            headers={"Retry-After": "2"},
+        ) from exc
+    except MercurialNotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Repository content not found."
+        ) from exc
     return _serialize_detail(pr)
 
 
@@ -520,10 +564,11 @@ async def get_pull_request_diff_route(
     organization_slug: str,
     repository_slug: str,
     pull_request_id: UUID,
+    _rate_limit: None = Depends(rate_limited("pr_diff")),
     identity: SessionIdentity | None = Depends(get_optional_identity),
     session: AsyncSession = Depends(get_session),
-    command_runner: HgCommandRunner = Depends(get_hg_command_runner),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
+    read_service: MercurialReadService = Depends(get_mercurial_read_service),
 ) -> PullRequestDiffResponse:
     try:
         repo = await _get_repo_for_read(
@@ -531,10 +576,14 @@ async def get_pull_request_diff_route(
             organization_slug=organization_slug,
             repository_slug=repository_slug,
             identity=identity,
+            # Archived repositories stay readable (read-only), like the history views.
+            allow_archived=True,
         )
         pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pull_request_id)
+        if not repository_is_browsable(repo):
+            raise RepositoryNotProvisionedError()
         files, adds, dels, total = await compute_diff(
-            command_runner,
+            read_service,
             repository_path=storage_locator.repository_path(repo),
             source_revision=pr.source_revision,
             target_revision=pr.target_revision,
@@ -543,20 +592,21 @@ async def get_pull_request_diff_route(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except HgCommandFailedError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Mercurial operation failed.",
+    except RepositoryNotProvisionedError as exc:
+        raise _repository_not_ready() from exc
+    except (MercurialNotFoundError, InvalidRevisionError) as exc:
+        # Unknown, hidden, or (legacy) unusable stored revision: client/data state, not 500.
+        raise ApiError(404, code="revision_not_found", detail="Revision not found.") from exc
+    except RevisionAmbiguousError as exc:
+        raise ApiError(
+            409, code="revision_ambiguous", detail="Revision prefix is ambiguous."
         ) from exc
-    except HgCommandTimeoutError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Mercurial operation timed out.",
-        ) from exc
-    except HgCommandOutputLimitError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Mercurial output exceeded size limit.",
+    except HgBusyError as exc:
+        raise ApiError(
+            503,
+            code="repository_busy",
+            detail="Repository is busy. Try again shortly.",
+            headers={"Retry-After": "2"},
         ) from exc
     return PullRequestDiffResponse(
         changed_files=files,
@@ -576,8 +626,8 @@ async def merge_pull_request_route(
     pull_request_id: UUID,
     identity: SessionIdentity = Depends(require_csrf),
     session: AsyncSession = Depends(get_session),
-    command_runner: HgCommandRunner = Depends(get_hg_command_runner),
     storage_locator: RepositoryStorageLocator = Depends(get_repository_storage_locator),
+    read_service: MercurialReadService = Depends(get_mercurial_read_service),
 ) -> PullRequestDetailResponse:
     try:
         repo = await _get_repo_for_write(
@@ -587,8 +637,10 @@ async def merge_pull_request_route(
             identity=identity,
         )
         pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pull_request_id)
+        if not repository_is_browsable(repo):
+            raise _repository_not_ready()
         merged_revision = await verify_landed_merge(
-            command_runner,
+            read_service,
             repository_path=storage_locator.repository_path(repo),
             source_revision=pr.source_revision,
             target_revision=pr.target_revision,
@@ -634,5 +686,13 @@ async def merge_pull_request_route(
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="Mercurial output exceeded size limit.",
+        ) from exc
+    except HgBusyError as exc:
+        await session.rollback()
+        raise ApiError(
+            503,
+            code="repository_busy",
+            detail="Repository is busy. Try again shortly.",
+            headers={"Retry-After": "2"},
         ) from exc
     return _serialize_detail(pr)

@@ -72,6 +72,25 @@ def _principal_key(request: Request, identity: SessionIdentity | None) -> str:
     return f"ip:{client.host if client is not None else 'unknown'}"
 
 
+def enforce_rate_limit(
+    bucket: str, *, request: Request, identity: SessionIdentity | None, settings: Settings
+) -> None:
+    """Count one request against ``bucket``; raise 429 ``rate_limited`` when over."""
+    retry_after = read_rate_limiter.hit(
+        bucket,
+        _principal_key(request, identity),
+        limit=settings.read_rate_limit_max_requests,
+        window_seconds=settings.read_rate_limit_window_seconds,
+    )
+    if retry_after is not None:
+        raise ApiError(
+            429,
+            code="rate_limited",
+            detail="Too many requests. Try again later.",
+            headers={"Retry-After": str(max(1, math.ceil(retry_after)))},
+        )
+
+
 def rate_limited(bucket: str) -> Callable[..., Awaitable[None]]:
     """FastAPI dependency: per-principal sliding window for one endpoint bucket."""
 
@@ -80,18 +99,25 @@ def rate_limited(bucket: str) -> Callable[..., Awaitable[None]]:
         identity: SessionIdentity | None = Depends(get_optional_identity),
         settings: Settings = Depends(get_settings),
     ) -> None:
-        retry_after = read_rate_limiter.hit(
-            bucket,
-            _principal_key(request, identity),
-            limit=settings.read_rate_limit_max_requests,
-            window_seconds=settings.read_rate_limit_window_seconds,
-        )
-        if retry_after is not None:
-            raise ApiError(
-                429,
-                code="rate_limited",
-                detail="Too many requests. Try again later.",
-                headers={"Retry-After": str(max(1, math.ceil(retry_after)))},
-            )
+        enforce_rate_limit(bucket, request=request, identity=identity, settings=settings)
 
     return dependency
+
+
+# Content-scanning history filters (they inspect every scanned changeset) get their own,
+# separately counted bucket so they cannot starve plain history browsing.
+_HISTORY_SCAN_FILTERS = ("author", "path", "q")
+
+
+async def history_rate_limited(
+    request: Request,
+    identity: SessionIdentity | None = Depends(get_optional_identity),
+    settings: Settings = Depends(get_settings),
+) -> None:
+    scans = any(request.query_params.get(name) for name in _HISTORY_SCAN_FILTERS)
+    enforce_rate_limit(
+        "history_filter" if scans else "history",
+        request=request,
+        identity=identity,
+        settings=settings,
+    )

@@ -1,20 +1,43 @@
 import { For } from "solid-js";
 import styles from "./DiffStat.module.css";
 
-export type ChangeKind = "M" | "A" | "R";
+/** A added · M modified · D removed · R renamed · C copied (hg status letters, plus R/C for moves). */
+export type ChangeKind = "M" | "A" | "D" | "R" | "C";
 const WORD: Record<ChangeKind, string> = {
   M: "Modified",
   A: "Added",
-  R: "Removed",
+  D: "Removed",
+  R: "Renamed",
+  C: "Copied",
 };
 
-/** M / A / R badge; the letter plus a tooltip, never colour alone. */
+/** Maps an API file status ("removed"/"deleted", "renamed", …) to its badge letter. */
+export function changeKindOf(status: string): ChangeKind {
+  switch (status) {
+    case "added":
+      return "A";
+    case "removed":
+    case "deleted":
+      return "D";
+    case "renamed":
+      return "R";
+    case "copied":
+      return "C";
+    default:
+      return "M";
+  }
+}
+
+export const changeWord = (kind: ChangeKind) => WORD[kind];
+
+/** Status badge: the letter plus an accessible word, never colour alone. */
 export function ChangeBadge(props: { kind: ChangeKind }) {
   return (
     <span
       class={styles.badge}
       data-kind={props.kind}
       title={WORD[props.kind]}
+      role="img"
       aria-label={WORD[props.kind]}
     >
       {props.kind}

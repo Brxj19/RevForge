@@ -10,6 +10,11 @@ interface MockDb {
   csrf: string;
   pins: Partial<Record<UserKey, PinRef[]>>;
   requestSeq: number;
+  /**
+   * Revisions GET R/changesets may scan per request before it returns a partial page with
+   * scan_truncated (the backend's scan budget). Tests lower it to exercise "Keep searching" (F6).
+   */
+  historyScanBudget: number;
   /** Provisioning state changes made through POST R/provision, keyed "org/repo". */
   provisioning: Record<
     string,
@@ -32,6 +37,7 @@ function fresh(signedIn: UserKey | null): MockDb {
       ],
     },
     requestSeq: 0,
+    historyScanBudget: 10_000,
     provisioning: {},
   };
 }

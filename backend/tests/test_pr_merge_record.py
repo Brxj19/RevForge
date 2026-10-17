@@ -9,6 +9,7 @@ import pytest
 
 from app.core.config import get_settings
 from app.mercurial.command_runner import HgCommandRunner
+from app.mercurial.read_service import MercurialReadService
 from app.services.errors import ConflictError, ValidationFailure
 from app.services.pr_merge_service import verify_landed_merge
 
@@ -47,8 +48,10 @@ async def _commit(repo: Path, name: str) -> str:
 
 
 @pytest.fixture
-def runner(settings_env) -> HgCommandRunner:
-    return HgCommandRunner(get_settings())
+def runner(settings_env) -> MercurialReadService:
+    # I34: revisions resolve in-process on the served view (no `hg log -r <value>`).
+    settings = get_settings()
+    return MercurialReadService(settings=settings, command_runner=HgCommandRunner(settings))
 
 
 @pytest.mark.asyncio
@@ -85,7 +88,7 @@ async def test_invalid_revision_raises_validation(runner, tmp_path) -> None:
     repo = tmp_path / "r"
     await _init(repo)
     await _commit(repo, "base")
-    node = await _commit(repo, "second")  # all() now resolves to 2 nodes (ambiguous)
+    node = await _commit(repo, "second")  # revsets such as all() are never evaluated
     with pytest.raises(ValidationFailure):
         await verify_landed_merge(
             runner, repository_path=repo, source_revision="all()", target_revision=node

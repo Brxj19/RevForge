@@ -1,3 +1,4 @@
+import type { DiffViewFile } from "~/ui/DiffView";
 // Sample data for the UI kit, from the prototype's demo set (fictional).
 export const KIT_MEMBERS = [
   { name: "Brxj19", role: "owner", last: "now" },
@@ -110,3 +111,60 @@ export function kitHeatDays(today: Date) {
   }
   return out;
 }
+
+/** Two files for the DiffView demo: a modified C++ file and a pure rename. */
+export const KIT_DIFF: DiffViewFile[] = [
+  {
+    path: "src/graph.cpp",
+    old_path: null,
+    status: "modified",
+    binary: false,
+    old_mode: null,
+    new_mode: null,
+    insertions: 4,
+    deletions: 1,
+    too_large: false,
+    truncated: false,
+    hunks: [
+      {
+        header: "@@ -9,3 +9,6 @@ void Graph::add_edge(int u, int v) {",
+        lines: [
+          {
+            kind: "context",
+            old_line: 9,
+            new_line: 9,
+            text: "    adj_[v].push_back(u);",
+          },
+          { kind: "del", old_line: 10, new_line: null, text: "}" },
+          { kind: "add", old_line: null, new_line: 10, text: "}" },
+          { kind: "add", old_line: null, new_line: 11, text: "" },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 12,
+            text: "bool Graph::has_edge(int u, int v) const {",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 13,
+            text: "    return false;",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    path: "scripts/build.sh",
+    old_path: "build.sh",
+    status: "renamed",
+    binary: false,
+    old_mode: null,
+    new_mode: null,
+    insertions: 0,
+    deletions: 0,
+    too_large: false,
+    truncated: false,
+    hunks: [],
+  },
+];

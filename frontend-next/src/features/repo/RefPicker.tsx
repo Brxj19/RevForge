@@ -8,6 +8,7 @@ import {
 } from "solid-js";
 import type { RepositoryRefs } from "~/lib/api";
 import { fuzzy } from "~/lib/fuzzy";
+import { revForRef } from "~/lib/safe";
 import { InputGroup } from "~/ui/Field";
 import { Icon, type IconName } from "~/ui/icons";
 import { Highlight, menuStyles } from "~/ui/Menu";
@@ -34,14 +35,19 @@ export function refChoices(refs: RepositoryRefs | undefined) {
   ) => ({
     label,
     items: list.map((r): RefChoice => ({
-      rev: kind === "branch" && r.name === "default" ? "" : r.name,
+      rev: kind === "branch" && r.name === "default" ? "" : revForRef(r),
       label: r.name,
       kind,
       hint: r.short_node.slice(0, 12),
     })),
   });
   return [
-    group("Branches", "branch", refs.branches),
+    // Closed branches never appear in the picker, even from an include_closed response.
+    group(
+      "Branches",
+      "branch",
+      refs.branches.filter((b) => b.state !== "closed"),
+    ),
     group("Bookmarks", "bookmark", refs.bookmarks),
     group("Tags", "tag", refs.tags),
   ].filter((g) => g.items.length);
