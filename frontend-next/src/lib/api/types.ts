@@ -537,6 +537,7 @@ export interface PullRequestComment {
   base_revision: string | null;
   head_revision: string | null;
   outdated: boolean;
+  resolved: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -618,6 +619,75 @@ export interface PinList {
  */
 export interface Viewer extends CurrentUser {
   is_platform_admin?: boolean;
+}
+
+// Phase 3: Pull Requests
+
+export interface UserRef {
+  id: string;
+  display_name: string;
+  email: string;
+}
+
+export type TimelineEventType =
+  | "opened"
+  | "review_requested"
+  | "review"
+  | "comment"
+  | "push"
+  | "merged"
+  | "closed"
+  | "reopened"
+  | "ready_for_review"
+  | "converted_to_draft";
+
+export interface TimelineEvent {
+  type: TimelineEventType;
+  actor: UserRef;
+  at: string;
+  /** Extra data per event type (review decision, push nodes, comment id, etc). */
+  [key: string]: unknown;
+}
+
+export interface MergeCheck {
+  id: string;
+  ok: boolean;
+  pending?: boolean;
+  message: string;
+  detail?: string;
+}
+
+export interface MergeStatus {
+  mergeable: boolean;
+  checks: MergeCheck[];
+}
+
+export interface DiffFileSummary {
+  path: string;
+  status: string;
+  insertions: number;
+  deletions: number;
+}
+
+export interface CompareResult {
+  base_node: string;
+  head_node: string;
+  merge_base: string;
+  changesets: ChangesetSummary[];
+  files: DiffFileSummary[];
+  conflicts: boolean;
+  identical: boolean;
+}
+
+export interface PullRequestListResponse {
+  pull_requests: PullRequestSummary[];
+  counts: { open: number; draft: number; merged: number; closed: number };
+  next_cursor: string | null;
+}
+
+export interface ViewedFile {
+  path: string;
+  viewed: boolean;
 }
 
 /** A repository from an organization's list (RepositorySummary) with the org slug it was listed under. */

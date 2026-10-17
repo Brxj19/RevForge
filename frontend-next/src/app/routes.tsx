@@ -22,6 +22,16 @@ const CodePage = lazy(() => import("~/features/code/CodePage"));
 const HistoryPage = lazy(() => import("~/features/history/HistoryPage"));
 const ChangesetPage = lazy(() => import("~/features/changeset/ChangesetPage"));
 const RefsPage = lazy(() => import("~/features/refs/RefsPage"));
+const PullsListPage = lazy(() => import("~/features/pulls/PullsListPage"));
+const NewPullRequestPage = lazy(
+  () => import("~/features/pulls/NewPullRequestPage"),
+);
+const PullRequestPage = lazy(
+  () => import("~/features/pulls/PullRequestPage"),
+);
+const ReviewsInboxPage = lazy(
+  () => import("~/features/pulls/ReviewsInboxPage"),
+);
 const UiKitPage = lazy(() => import("~/features/dev-ui/UiKitPage"));
 const IllustrationsPage = lazy(
   () => import("~/features/dev-ui/IllustrationsPage"),
@@ -146,7 +156,7 @@ export function AppRoutes(): JSX.Element {
       />
       <Route
         path="/reviews"
-        component={authed(soon("Reviews", 3, "#/reviews"))}
+        component={authed(ReviewsInboxPage)}
       />
       <Route
         path="/activity"
@@ -214,20 +224,12 @@ export function AppRoutes(): JSX.Element {
         <Route path="/history" component={HistoryPage} />
         <Route path="/changesets/:node" component={ChangesetPage} />
         <Route path="/c/:node" component={ShortChangesetRedirect} />
-        <Route
-          path="/pulls"
-          component={soonInRepo("Pull requests", 3, "#/r/sigma-reckitt/pulls")}
-        />
+        <Route path="/pulls" component={PullsListPage} />
         <Route
           path="/pulls/new"
-          component={authed(
-            soonInRepo("New pull request", 3, "#/r/sigma-reckitt/pulls/new"),
-          )}
+          component={authed(NewPullRequestPage)}
         />
-        <Route
-          path="/pulls/:n/:tab?"
-          component={soonInRepo("Pull request", 3, "#/r/sigma-reckitt/pulls/7")}
-        />
+        <Route path="/pulls/:n" component={PullRequestPage} />
         <Route path="/refs/:kind?" component={RefsPage} />
         <Route
           path="/settings/:section?/:id?"

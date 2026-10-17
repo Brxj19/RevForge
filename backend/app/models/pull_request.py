@@ -99,6 +99,7 @@ class PullRequestComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     base_revision: Mapped[str | None] = mapped_column(String(40), nullable=True)
     head_revision: Mapped[str | None] = mapped_column(String(40), nullable=True)
     outdated: Mapped[bool] = mapped_column(default=False, server_default=sa_false(), nullable=False)
+    resolved: Mapped[bool] = mapped_column(default=False, server_default=sa_false(), nullable=False)
 
     pull_request = relationship("PullRequest", back_populates="comments")
     author = relationship("User")
@@ -156,3 +157,31 @@ class PullRequestReview(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     pull_request = relationship("PullRequest", back_populates="reviews")
     reviewer = relationship("User")
+
+
+class PullRequestViewedFile(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "pull_request_viewed_files"
+    __table_args__ = (
+        UniqueConstraint(
+            "pull_request_id",
+            "user_id",
+            "path",
+            name="uq_pull_request_viewed_files_pr_user_path",
+        ),
+    )
+
+    pull_request_id: Mapped[UUIDType] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("pull_requests.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    user_id: Mapped[UUIDType] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    path: Mapped[str] = mapped_column(String(500), nullable=False)
+
+    pull_request = relationship("PullRequest")
+    user = relationship("User")

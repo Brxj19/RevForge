@@ -9,6 +9,7 @@ from app.models.pull_request import (
     PullRequestComment,
     PullRequestReview,
     PullRequestReviewer,
+    PullRequestViewedFile,
 )
 from app.models.repository import Repository
 from app.models.repository_event import EventSpoolEntry, RepositoryEvent
@@ -29,6 +30,7 @@ __all__ = [
     "PullRequestComment",
     "PullRequestReview",
     "PullRequestReviewer",
+    "PullRequestViewedFile",
     "Repository",
     "RepositoryEvent",
     "RepositoryPermission",

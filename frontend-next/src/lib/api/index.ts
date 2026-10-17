@@ -11,5 +11,6 @@ export {
 export { authApi } from "./auth";
 export { meApi, MAX_PINS } from "./me";
 export { orgsApi } from "./orgs";
+export { pullsApi } from "./pulls";
 export { reposApi } from "./repos";
 export type * from "./types";

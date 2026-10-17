@@ -18,7 +18,7 @@ const STATE_PILL = {
 } as const;
 
 /** Repo header (DESIGN.md §2.3): org / repo, visibility, state, description, Watch, Clone, tabs. */
-export function RepoHeader(props: { refCount?: number }) {
+export function RepoHeader(props: { refCount?: number; prOpenCount?: number }) {
   const auth = useAuth();
   const repo = useRepo();
   const location = useLocation();
@@ -51,6 +51,7 @@ export function RepoHeader(props: { refCount?: number }) {
         href: repo.href("pulls"),
         label: "Pull requests",
         icon: "pr",
+        count: props.prOpenCount,
         active: t === "pulls",
       },
       {
