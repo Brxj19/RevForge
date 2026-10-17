@@ -190,6 +190,14 @@ class TreeEntryChangesetResponse(BaseModel):
     date: datetime
 
 
+class TreeEntryChangesetResponse(BaseModel):
+    node: str
+    short_node: str
+    summary: str
+    author_name: str
+    date: datetime
+
+
 class RepositoryTreeEntryResponse(BaseModel):
     name: str
     path: str
