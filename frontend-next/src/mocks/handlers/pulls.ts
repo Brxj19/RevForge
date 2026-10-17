@@ -8,6 +8,7 @@ import type {
 import { db, roleFor } from "../db";
 import { findRepo } from "../db";
 import {
+  ALL_PRS,
   PR7_DIFF_FILES,
   PR7_MERGE_CHECKS,
   PR_COUNTS,
@@ -15,6 +16,7 @@ import {
   PR_SUMMARIES,
   PR_TIMELINES,
   PR_USERS,
+  PR_USERS_EXT,
 } from "../fixtures/pulls";
 import { CHANGESETS } from "../fixtures/sigma-reckitt";
 import { DIFFS } from "../fixtures/sigma-reckitt-diffs";
@@ -46,6 +48,10 @@ function visible(params: Record<string, unknown>) {
 const hasPRs = (params: Record<string, unknown>) =>
   String(params.org) === "sigma" && String(params.repo) === "sigma-reckitt";
 
+const allUsers = { ...PR_USERS, ...PR_USERS_EXT };
+const nameFor = (id: string) =>
+  Object.values(allUsers).find((u) => u.id === id)?.display_name ?? id.slice(0, 8);
+
 export const pullHandlers = [
   // GET R/pull-requests?state=&q=&author=&cursor=
   http.get(`${R}/pull-requests`, ({ params, request }) => {
@@ -67,13 +73,8 @@ export const pullHandlers = [
       if (state && state !== "all" && pr.state !== state) return false;
       if (q && !pr.title.toLowerCase().includes(q)) return false;
       if (author) {
-        const user = Object.values(PR_USERS).find((u) => u.id === pr.author_id);
-        if (
-          user &&
-          !user.display_name.toLowerCase().includes(author) &&
-          !user.email.toLowerCase().includes(author)
-        )
-          return false;
+        const name = nameFor(pr.author_id).toLowerCase();
+        if (!name.includes(author)) return false;
       }
       return true;
     });
@@ -107,7 +108,6 @@ export const pullHandlers = [
     if (!r) return notFound();
     const csrf = csrfFailure(request);
     if (csrf) return csrf;
-    // Return a fake created PR
     return HttpResponse.json(PR_SUMMARIES[0], { status: 201 });
   }),
 
@@ -172,7 +172,7 @@ export const pullHandlers = [
     if (!pr) return notFound();
     const status: MergeStatus =
       n === 7
-        ? { mergeable: true, checks: PR7_MERGE_CHECKS }
+        ? { mergeable: false, checks: PR7_MERGE_CHECKS }
         : {
             mergeable: pr.state === "open",
             checks: [
@@ -190,7 +190,6 @@ export const pullHandlers = [
     const n = Number(params.n);
     const pr = PR_DETAILS[n];
     if (!pr) return notFound();
-    // PR #7 has rich diff data; others fall back to changeset diffs
     const files = n === 7 ? PR7_DIFF_FILES : (DIFFS[pr.source_revision] ?? []);
     const body: ChangesetDiff = {
       content: files
@@ -267,7 +266,6 @@ export const pullHandlers = [
     const head = url.searchParams.get("head") ?? "";
     if (!base || !head)
       return apiError(422, "Both base and head are required.", "validation_error");
-    // Return a subset of changesets between the two refs
     const changesets = CHANGESETS.slice(0, 3);
     const body: CompareResult = {
       base_node: base,
@@ -291,17 +289,23 @@ export const pullHandlers = [
     const filter = url.searchParams.get("filter") ?? "review_requested";
     const userId =
       db.session === "brxj19" ? PR_USERS.brxj19!.id : PR_USERS.tatwa!.id;
-    let filtered = PR_SUMMARIES;
+    let filtered = ALL_PRS;
     if (filter === "review_requested") {
-      // PRs where the current user is a reviewer
-      filtered = PR_SUMMARIES.filter((pr) => {
+      filtered = ALL_PRS.filter((pr) => {
         const detail = PR_DETAILS[pr.number];
-        return detail?.reviewers.some((rv) => rv.reviewer_id === userId);
+        if (detail) return detail.reviewers.some((rv) => rv.reviewer_id === userId);
+        // For cross-repo PRs without detail, check reviewers_preview
+        return pr.reviewers_preview?.some(
+          (rv) => rv.display_name === (db.session === "brxj19" ? "Brxj19" : "Tatwa Prasad"),
+        );
       });
-    } else if (filter === "authored") {
-      filtered = PR_SUMMARIES.filter((pr) => pr.author_id === userId);
+    } else if (filter === "authored" || filter === "mine") {
+      filtered = ALL_PRS.filter((pr) => pr.author_id === userId);
+    } else if (filter === "open") {
+      filtered = ALL_PRS.filter((pr) => pr.state === "open" || pr.state === "draft");
+    } else if (filter === "done") {
+      filtered = ALL_PRS.filter((pr) => pr.state === "merged" || pr.state === "closed");
     }
-    // "involved" returns all for simplicity
     const body: PullRequestListResponse = {
       pull_requests: filtered,
       counts: PR_COUNTS,

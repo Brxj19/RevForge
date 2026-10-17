@@ -502,6 +502,13 @@ export interface RepositoryTransportMetadata {
   } | null;
 }
 
+/** Reviewer preview returned in the PR list so the row can show avatars + decision. */
+export interface ReviewerPreview {
+  display_name: string;
+  required: boolean;
+  decision: "pending" | "approved" | "changes_requested" | "commented";
+}
+
 export interface PullRequestSummary {
   id: string;
   repository_id: string;
@@ -524,6 +531,20 @@ export interface PullRequestSummary {
   changes_requested_count: number;
   reviewer_count: number;
   comment_count: number;
+  /** Display name of the author, populated by the list endpoint. */
+  author_display_name?: string;
+  /** Repository slug, populated for cross-repo queries (reviews inbox). */
+  repository_slug?: string;
+  /** Commit count (changesets), when known from the list. */
+  commit_count?: number;
+  /** Files changed count, when known from the list. */
+  files_changed_count?: number;
+  /** Total insertions, when known from the list. */
+  total_insertions?: number;
+  /** Total deletions, when known from the list. */
+  total_deletions?: number;
+  /** Reviewer summaries for the list row avatars. */
+  reviewers_preview?: ReviewerPreview[];
 }
 
 export interface PullRequestComment {
