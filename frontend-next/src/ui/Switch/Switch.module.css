@@ -1,0 +1,64 @@
+.root {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+}
+.input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.control {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: #2a2a2a;
+  transition: background var(--t-base);
+  cursor: pointer;
+}
+.thumb {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #bbb;
+  transition:
+    left var(--t-base),
+    background var(--t-base);
+}
+.control[data-checked] {
+  background: var(--accent);
+}
+.control[data-checked] .thumb {
+  left: 17px;
+  background: #fff;
+}
+.input:focus-visible + .control {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.root[data-disabled] {
+  opacity: 0.55;
+}
+.root[data-disabled] .control {
+  cursor: not-allowed;
+}
+.text {
+  display: grid;
+  line-height: 20px;
+}
+.label {
+  cursor: pointer;
+}
+.desc {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}

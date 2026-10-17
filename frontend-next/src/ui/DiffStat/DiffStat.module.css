@@ -1,0 +1,38 @@
+.badge {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  display: inline-grid;
+  place-items: center;
+  font: 600 10px var(--mono);
+  flex-shrink: 0;
+}
+.badge[data-kind="M"] {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+.badge[data-kind="A"] {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.badge[data-kind="R"] {
+  background: var(--red-bg);
+  color: var(--red);
+}
+.bar {
+  display: inline-flex;
+  gap: 1px;
+  vertical-align: middle;
+}
+.bar i {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--border-2);
+}
+.bar i[data-k="a"] {
+  background: var(--green);
+}
+.bar i[data-k="d"] {
+  background: var(--red);
+}

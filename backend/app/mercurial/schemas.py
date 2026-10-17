@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Literal
+
+ContentKind = Literal["text", "binary", "image", "font", "symlink"]
 
 
 @dataclass(slots=True)
@@ -51,11 +54,24 @@ class HgDiff:
     truncation_reason: str | None
 
 
+@dataclass(slots=True, frozen=True)
+class HgChangesetRef:
+    """Compact changeset summary attached to tree entries."""
+
+    node: str
+    short_node: str
+    summary: str
+    author_name: str
+    date: datetime
+
+
 @dataclass(slots=True)
 class HgTreeEntry:
     name: str
     path: str
     kind: str
+    size: int | None = None
+    last_changeset: HgChangesetRef | None = None
 
 
 @dataclass(slots=True)
@@ -74,6 +90,8 @@ class HgFileBrowse:
     is_binary: bool
     is_too_large: bool
     size_when_known: int | None
+    content_kind: ContentKind = "text"
+    language: str | None = None
 
 
 @dataclass(slots=True)
@@ -85,6 +103,9 @@ class HgBlameLine:
     author_email_when_available: str | None
     path: str
     content: str
+    origin_line: int | None = None
+    date: datetime | None = None
+    summary: str = ""
 
 
 @dataclass(slots=True)
@@ -92,6 +113,46 @@ class HgBlame:
     revision: str
     path: str
     lines: list[HgBlameLine]
+    is_binary: bool = False
+    is_too_large: bool = False
+
+
+@dataclass(slots=True)
+class HgRawFile:
+    revision: str
+    path: str
+    data: bytes
+
+
+@dataclass(slots=True, frozen=True)
+class HgLanguageShare:
+    name: str
+    percent: float
+    color: str
+
+
+@dataclass(slots=True, frozen=True)
+class HgRepositoryStats:
+    revision: str
+    languages: tuple[HgLanguageShare, ...]
+    contributors: int
+    contributors_truncated: bool
+    size_bytes: int
+
+
+@dataclass(slots=True)
+class HgCodeSearchMatch:
+    path: str
+    line: int
+    text: str
+    ranges: list[tuple[int, int]] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class HgCodeSearchResult:
+    revision: str
+    items: list[HgCodeSearchMatch]
+    truncated: bool
 
 
 @dataclass(slots=True)
@@ -114,6 +175,6 @@ class HgReferences:
     bookmarks: list[HgReference]
 
 
-def mercurial_timestamp(raw_value: list[int]) -> datetime:
+def mercurial_timestamp(raw_value: list[int] | list[float] | tuple[float, int]) -> datetime:
     seconds, _offset_seconds = raw_value
     return datetime.fromtimestamp(seconds, tz=UTC)

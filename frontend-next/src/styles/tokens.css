@@ -1,0 +1,93 @@
+/* Design tokens — DESIGN.md §3. Values copied from the prototype :root. Never add colours here
+   without updating DESIGN.md first. */
+:root {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg: #000;
+  --raised: #060606;
+  --surface: #0b0b0b;
+  --surface-2: #121212;
+  --hover: #181818;
+  --active: #202020;
+  --border: #1f1f1f;
+  --border-2: #2c2c2c;
+  --border-3: #3a3a3a;
+
+  /* text */
+  --text: #ededed;
+  --text-2: #b9b9b9;
+  --muted: #8b8b8b;
+  --subtle: #5f5f5f;
+
+  /* accent (Appearance can override these three on :root — app/accent.ts) */
+  --accent: #58a6ff;
+  --accent-2: #79c0ff;
+  --accent-bg: rgba(88, 166, 255, 0.12);
+  --accent-line: rgba(88, 166, 255, 0.4);
+  --on-accent: #04111f;
+
+  /* status */
+  --green: #3fb950;
+  --green-bg: rgba(63, 185, 80, 0.12);
+  --green-line: rgba(63, 185, 80, 0.3);
+  --amber: #e3b341;
+  --amber-bg: rgba(227, 179, 65, 0.12);
+  --amber-line: rgba(227, 179, 65, 0.3);
+  --red: #f85149;
+  --red-bg: rgba(248, 81, 73, 0.12);
+  --red-line: rgba(248, 81, 73, 0.35);
+  --on-red: #1a0402;
+  --purple: #bc8cff;
+  --purple-bg: rgba(188, 140, 255, 0.12);
+  --purple-line: rgba(188, 140, 255, 0.3);
+
+  /* diff */
+  --add-bg: rgba(46, 160, 67, 0.15);
+  --add-tx: #aff5b4;
+  --del-bg: rgba(248, 81, 73, 0.13);
+  --del-tx: #ffd7d3;
+
+  /* misc surfaces used by overlays and charts */
+  --tooltip-bg: #1d1d1d;
+  --hovercard-bg: #141414;
+  --track: #1a1a1a;
+  --heat-0: #141414;
+  --scrim: rgba(0, 0, 0, 0.62);
+
+  /* avatar gradients (Avatar tone 1–5) */
+  --avatar-1: linear-gradient(135deg, #1f6feb, #8957e5);
+  --avatar-2: linear-gradient(135deg, #238636, #2ea043);
+  --avatar-3: linear-gradient(135deg, #9e6a03, #d29922);
+  --avatar-4: linear-gradient(135deg, #da3633, #f85149);
+  --avatar-5: linear-gradient(135deg, #6e7681, #8b949e);
+
+  /* type */
+  --display: "Departure Mono", "IBM Plex Mono", ui-monospace, monospace;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* layout */
+  --top: 52px;
+  --side: 232px;
+
+  /* radius — §3.3 */
+  --r-xs: 4px;
+  --r: 6px;
+  --r-card: 8px;
+  --r-dialog: 10px;
+  --r-palette: 12px;
+
+  /* elevation — overlays only */
+  --shadow-menu: 0 16px 40px rgba(0, 0, 0, 0.65);
+  --shadow-dialog: 0 24px 60px rgba(0, 0, 0, 0.7);
+  --shadow-palette: 0 24px 70px rgba(0, 0, 0, 0.75);
+  --shadow-hovercard: 0 18px 44px rgba(0, 0, 0, 0.7);
+  --shadow-toast: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --shadow-drawer: 20px 0 40px rgba(0, 0, 0, 0.6);
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --t-fast: 120ms;
+  --t-base: 180ms;
+}

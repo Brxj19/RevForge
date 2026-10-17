@@ -1,0 +1,85 @@
+/* Prototype .ex-tree / .tn / .kids guides (DESIGN.md §7.2). */
+.tree {
+  padding: 6px 4px 12px;
+  font: 13px var(--mono);
+}
+.tn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding-right: 8px;
+  border-radius: var(--r-xs);
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+}
+.tn:hover {
+  background: var(--hover);
+}
+.tn[data-on] {
+  background: var(--accent-bg);
+  color: var(--text);
+}
+.tn[data-on]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.tn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--indent-guide);
+}
+.tree:hover .guide {
+  border-left-color: var(--indent-guide-active);
+}
+.tw {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  color: var(--subtle);
+  flex-shrink: 0;
+  transition: transform var(--t-fast);
+}
+.tw[data-open] {
+  transform: rotate(90deg);
+}
+.nm {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nm mark {
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+.st {
+  margin-left: auto;
+  font: 600 10.5px var(--mono);
+  color: var(--amber);
+}
+.loading {
+  height: 26px;
+  display: flex;
+  align-items: center;
+}
+.sk {
+  width: 60%;
+  height: 10px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+}

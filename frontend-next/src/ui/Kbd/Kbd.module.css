@@ -1,0 +1,14 @@
+.kbd {
+  font: 11px var(--mono);
+  padding: 1px 6px;
+  border: 1px solid var(--border-2);
+  border-bottom-width: 2px;
+  border-radius: var(--r-xs);
+  color: var(--muted);
+  background: var(--raised);
+  white-space: nowrap;
+}
+.shortcut {
+  display: inline-flex;
+  gap: 4px;
+}

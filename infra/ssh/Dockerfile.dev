@@ -1,19 +1,32 @@
+FROM ghcr.io/astral-sh/uv:0.12.22 AS uv
+
 FROM python:3.12-slim
 
+# Mercurial comes only from backend/uv.lock (I38); see infra/backend/Dockerfile.dev.
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    UV_PROJECT_ENVIRONMENT=/usr/local \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_LINK_MODE=copy \
+    REVFORGE_HG_EXECUTABLE=/usr/local/bin/hg
+
+COPY --from=uv /uv /usr/local/bin/uv
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential mercurial openssh-server netcat-openbsd \
+    && apt-get install -y --no-install-recommends build-essential openssh-server netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp/revforge-backend
 
-COPY backend/README.md backend/pyproject.toml ./
+COPY backend/README.md backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --inexact
+
 COPY backend/app ./app
 
-RUN pip install --no-cache-dir .
+RUN uv sync --frozen --no-dev --no-editable --inexact \
+    && test "$(HGPLAIN=1 HGRCPATH= /usr/local/bin/hg version -T '{ver}')" \
+        = "$(python -c 'from mercurial import util; print(util.version().decode())')"
 
 RUN mkdir -p /var/run/sshd /srv/revforge-ssh /data/repositories /data/event-spool \
     && useradd --create-home --shell /bin/sh revforge-hg \

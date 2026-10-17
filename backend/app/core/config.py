@@ -66,6 +66,38 @@ class Settings(BaseSettings):
         alias="REVFORGE_MAX_FILE_CONTENT_BYTES",
     )
     max_history_page_size: int = Field(default=50, alias="REVFORGE_MAX_HISTORY_PAGE_SIZE")
+    max_raw_bytes: int = Field(default=10 * 1024 * 1024, alias="REVFORGE_MAX_RAW_BYTES")
+    hg_max_concurrent_operations: int = Field(
+        default=8, alias="REVFORGE_HG_MAX_CONCURRENT_OPERATIONS"
+    )
+    hg_max_concurrent_per_repository: int = Field(
+        default=3, alias="REVFORGE_HG_MAX_CONCURRENT_PER_REPOSITORY"
+    )
+    tree_last_changeset_file_cap: int = Field(
+        default=10_000, alias="REVFORGE_TREE_LAST_CHANGESET_FILE_CAP"
+    )
+    stats_contributor_scan_cap: int = Field(
+        default=20_000, alias="REVFORGE_STATS_CONTRIBUTOR_SCAN_CAP"
+    )
+    code_search_max_files: int = Field(default=20_000, alias="REVFORGE_CODE_SEARCH_MAX_FILES")
+    code_search_max_total_bytes: int = Field(
+        default=64 * 1024 * 1024, alias="REVFORGE_CODE_SEARCH_MAX_TOTAL_BYTES"
+    )
+    code_search_max_file_bytes: int = Field(
+        default=1024 * 1024, alias="REVFORGE_CODE_SEARCH_MAX_FILE_BYTES"
+    )
+    code_search_timeout_seconds: float = Field(
+        default=5.0, alias="REVFORGE_CODE_SEARCH_TIMEOUT_SECONDS"
+    )
+    read_rate_limit_window_seconds: int = Field(
+        default=60, alias="REVFORGE_READ_RATE_LIMIT_WINDOW_SECONDS"
+    )
+    read_rate_limit_max_requests: int = Field(
+        default=120, alias="REVFORGE_READ_RATE_LIMIT_MAX_REQUESTS"
+    )
+    provisioning_stale_after_seconds: int = Field(
+        default=300, alias="REVFORGE_PROVISIONING_STALE_AFTER_SECONDS"
+    )
     cors_allowed_origins: Annotated[list[str], NoDecode] = Field(
         default=["http://localhost:5173", "http://127.0.0.1:5173"],
         alias="REVFORGE_CORS_ALLOWED_ORIGINS",
@@ -166,6 +198,17 @@ class Settings(BaseSettings):
         "max_diff_bytes",
         "max_file_content_bytes",
         "max_history_page_size",
+        "max_raw_bytes",
+        "hg_max_concurrent_operations",
+        "hg_max_concurrent_per_repository",
+        "tree_last_changeset_file_cap",
+        "stats_contributor_scan_cap",
+        "code_search_max_files",
+        "code_search_max_total_bytes",
+        "code_search_max_file_bytes",
+        "read_rate_limit_window_seconds",
+        "read_rate_limit_max_requests",
+        "provisioning_stale_after_seconds",
         "transport_rate_limit_window_seconds",
         "transport_rate_limit_max_attempts",
     )
@@ -173,6 +216,13 @@ class Settings(BaseSettings):
     def validate_positive_limits(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("Mercurial limits must be positive integers.")
+        return value
+
+    @field_validator("code_search_timeout_seconds")
+    @classmethod
+    def validate_positive_float(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("Timeouts must be positive.")
         return value
 
     @field_validator("ssh_public_port")

@@ -19,6 +19,9 @@ backend/htmlcov/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend-next/node_modules/
+frontend-next/dist/
+frontend-next/playwright-report/
 coverage/
 
 # Caches

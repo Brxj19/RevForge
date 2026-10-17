@@ -1,0 +1,15 @@
+.trigger {
+  display: inline-flex;
+}
+.content {
+  z-index: 70;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  font: 500 11.5px var(--sans);
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: min(320px, calc(100vw - 16px));
+}

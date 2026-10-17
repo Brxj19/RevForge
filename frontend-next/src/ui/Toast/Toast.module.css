@@ -1,0 +1,79 @@
+.region {
+  position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  right: 20px;
+  z-index: 100;
+  width: min(360px, calc(100vw - 40px));
+}
+.list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  padding: 10px 12px;
+  border-radius: var(--r-card);
+  font-size: 13px;
+  box-shadow: var(--shadow-toast);
+  animation: tin var(--t-base) ease-out;
+}
+.toast[data-swipe="move"] {
+  transform: translateX(var(--kb-toast-swipe-move-x));
+}
+.toast[data-tone="ok"] .icon {
+  color: var(--green);
+}
+.toast[data-tone="err"] .icon {
+  color: var(--red);
+}
+.toast[data-tone="info"] .icon {
+  color: var(--accent);
+}
+.icon {
+  flex-shrink: 0;
+}
+.msg {
+  flex: 1;
+  min-width: 0;
+}
+.action {
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--r);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+.action:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.close {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r);
+  background: none;
+  color: var(--text-2);
+}
+.close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+@keyframes tin {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

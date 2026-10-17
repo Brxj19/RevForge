@@ -8,4 +8,7 @@ backend/.ruff_cache
 backend/.venv
 frontend/dist
 frontend/node_modules
+frontend-next/dist
+frontend-next/node_modules
+frontend-next/playwright-report
 graphify-out

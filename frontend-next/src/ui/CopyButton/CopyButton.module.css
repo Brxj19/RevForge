@@ -1,0 +1,22 @@
+.done {
+  color: var(--green) !important;
+}
+.line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r);
+  background: var(--raised);
+  padding: 0 4px 0 10px;
+  height: 34px;
+  min-width: 0;
+}
+.code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+}

@@ -1,0 +1,44 @@
+/* Prototype .clone-pop: a card with a menu shadow. */
+.pop {
+  z-index: 95;
+  max-width: calc(100vw - 32px);
+  max-height: min(480px, calc(100vh - 80px));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-menu);
+  outline: none;
+  transform-origin: var(--kb-popover-content-transform-origin);
+  animation: popIn var(--t-fast) var(--ease-out);
+}
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.title {
+  margin: 0;
+  font: 600 13.5px/1.3 var(--sans);
+}
+.body {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  min-height: 0;
+  overflow: auto;
+}
+.body[data-flush] {
+  padding: 0;
+  gap: 0;
+}
