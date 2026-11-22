@@ -692,6 +692,19 @@ def test_pr_create_rejects_revsets_and_pins_full_nodes(
         assert rejected.json()["error"]["code"] == "invalid_revision"
 
 
+def test_pr_number_lookup_resolves_within_authorized_repository(
+    client: Any, seeded: dict[str, str]
+) -> None:
+    created = _create_pr(client, seeded["rename"], seeded["c1"])
+    assert created.status_code == 201, created.text
+    pr = created.json()
+    response = client.get(_pr_url(f"/by-number/{pr['number']}"))
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == pr["id"]
+    assert client.get(_pr_url("/by-number/0")).status_code == 404
+    assert client.get(_pr_url("/by-number/999999")).status_code == 404
+
+
 def test_pr_diff_uses_merge_base_and_reports_flags(
     client: Any, seeded: dict[str, str], no_hg_processes: None
 ) -> None:

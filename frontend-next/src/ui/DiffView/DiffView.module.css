@@ -82,6 +82,22 @@
   width: 1.4ch;
   user-select: none;
 }
+.diff td.lineAction {
+  width: 1%;
+  padding: 0 3px;
+}
+.lineAction button {
+  opacity: 0;
+}
+.diff tr:hover .lineAction button,
+.lineAction button:focus-visible {
+  opacity: 1;
+}
+.diff tr.thread td {
+  white-space: normal;
+  padding: 12px;
+  background: var(--surface);
+}
 .diff tr[data-kind="add"] td {
   background: var(--add-bg);
 }

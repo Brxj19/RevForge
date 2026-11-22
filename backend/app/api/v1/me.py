@@ -18,7 +18,9 @@ from app.schemas.pull_requests import (
     RepositoryContextResponse,
 )
 from app.services.contribution_activity import list_user_contribution_activity
+from app.services.errors import NotFoundError
 from app.services.pull_request_service import MyPullRequestFilter, list_my_pull_requests
+from app.services.repository_service import get_repository_access_for_actor
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -57,6 +59,17 @@ async def list_my_pull_requests_route(
     items: list[PullRequestSummaryResponse] = []
     for pr in prs:
         repo = pr.repository
+        try:
+            await get_repository_access_for_actor(
+                session,
+                organization=repo.organization,
+                repository_slug=repo.slug,
+                actor=identity.user,
+                allow_archived=True,
+            )
+        except NotFoundError:
+            # A review request or prior authorship never grants repository access.
+            continue
         org_slug = getattr(getattr(repo, "organization", None), "slug", "unknown")
         pr_reviews = getattr(pr, "reviews", [])
         pr_reviewers = getattr(pr, "reviewers", [])

@@ -14,6 +14,9 @@ from app.domain.enums import PullRequestState, ReviewDecision
 
 class PullRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "pull_requests"
+    __table_args__ = (
+        UniqueConstraint("repository_id", "number", name="uq_pull_requests_repo_number"),
+    )
 
     repository_id: Mapped[UUIDType] = mapped_column(
         Uuid(as_uuid=True),

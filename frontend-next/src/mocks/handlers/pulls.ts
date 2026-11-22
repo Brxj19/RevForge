@@ -1,6 +1,5 @@
 import { http, HttpResponse } from "msw";
 import type {
-  ChangesetDiff,
   CompareResult,
   MergeStatus,
   PullRequestListResponse,
@@ -18,27 +17,13 @@ import {
   PR_USERS,
   PR_USERS_EXT,
 } from "../fixtures/pulls";
-import { CHANGESETS } from "../fixtures/sigma-reckitt";
+import { CHANGESETS, NODE } from "../fixtures/sigma-reckitt";
 import { DIFFS } from "../fixtures/sigma-reckitt-diffs";
 import { API, apiError, csrfFailure, notFound } from "./util";
 
 const R = `${API}/organizations/:org/repositories/:repo`;
 
-// API-GAP: PR-list — all PR endpoints are mocked (backend not yet implemented)
-// API-GAP: PR-detail
-// API-GAP: PR-create
-// API-GAP: PR-update
-// API-GAP: PR-close
-// API-GAP: PR-merge
-// API-GAP: PR-timeline
-// API-GAP: PR-merge-status
-// API-GAP: PR-diff
-// API-GAP: PR-comments
-// API-GAP: PR-reviews
-// API-GAP: PR-reviewers
-// API-GAP: PR-viewed
-// API-GAP: compare
-// API-GAP: my-pull-requests
+// Prototype fixtures for the implemented pull-request API.
 
 function visible(params: Record<string, unknown>) {
   const r = findRepo(String(params.org), String(params.repo));
@@ -47,10 +32,14 @@ function visible(params: Record<string, unknown>) {
 
 const hasPRs = (params: Record<string, unknown>) =>
   String(params.org) === "sigma" && String(params.repo) === "sigma-reckitt";
+const prNumber = (value: unknown) =>
+  Object.values(PR_DETAILS).find((pr) => pr.id === String(value))?.number ??
+  Number(value);
 
 const allUsers = { ...PR_USERS, ...PR_USERS_EXT };
 const nameFor = (id: string) =>
-  Object.values(allUsers).find((u) => u.id === id)?.display_name ?? id.slice(0, 8);
+  Object.values(allUsers).find((u) => u.id === id)?.display_name ??
+  id.slice(0, 8);
 
 export const pullHandlers = [
   // GET R/pull-requests?state=&q=&author=&cursor=
@@ -71,7 +60,16 @@ export const pullHandlers = [
     const author = url.searchParams.get("author")?.toLowerCase();
     let filtered = PR_SUMMARIES.filter((pr) => {
       if (state && state !== "all" && pr.state !== state) return false;
-      if (q && !pr.title.toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        ![
+          pr.title,
+          nameFor(pr.author_id),
+          pr.source_branch ?? "",
+          pr.target_branch ?? "",
+        ].some((value) => value.toLowerCase().includes(q))
+      )
+        return false;
       if (author) {
         const name = nameFor(pr.author_id).toLowerCase();
         if (!name.includes(author)) return false;
@@ -92,12 +90,28 @@ export const pullHandlers = [
     return HttpResponse.json(body);
   }),
 
+  // GET R/pull-requests/by-number/:n
+  http.get(`${R}/pull-requests/reviewer-candidates`, ({ params }) => {
+    const r = visible(params);
+    if (!r) return notFound();
+    const role = roleFor(db.session, r);
+    if (role !== "write" && role !== "admin")
+      return apiError(403, "Write access required", "forbidden");
+    return HttpResponse.json({ users: Object.values(allUsers) });
+  }),
+
+  http.get(`${R}/pull-requests/by-number/:n`, ({ params }) => {
+    if (!visible(params) || !hasPRs(params)) return notFound();
+    const pr = PR_DETAILS[Number(params.n)];
+    return pr ? HttpResponse.json(pr) : notFound();
+  }),
+
   // GET R/pull-requests/:n
   http.get(`${R}/pull-requests/:n`, ({ params }) => {
     const r = visible(params);
     if (!r) return notFound();
     if (!hasPRs(params)) return notFound();
-    const n = Number(params.n);
+    const n = prNumber(params.n);
     const pr = PR_DETAILS[n];
     return pr ? HttpResponse.json(pr) : notFound();
   }),
@@ -112,14 +126,18 @@ export const pullHandlers = [
   }),
 
   // PATCH R/pull-requests/:n
-  http.patch(`${R}/pull-requests/:n`, ({ params, request }) => {
+  http.patch(`${R}/pull-requests/:n`, async ({ params, request }) => {
     const r = visible(params);
     if (!r) return notFound();
     const csrf = csrfFailure(request);
     if (csrf) return csrf;
-    const n = Number(params.n);
+    const n = prNumber(params.n);
     const pr = PR_DETAILS[n];
-    return pr ? HttpResponse.json(pr) : notFound();
+    if (!pr) return notFound();
+    const body = (await request.json()) as Partial<
+      Pick<typeof pr, "title" | "description" | "state">
+    >;
+    return HttpResponse.json({ ...pr, ...body });
   }),
 
   // POST R/pull-requests/:n/close
@@ -128,10 +146,14 @@ export const pullHandlers = [
     if (!r) return notFound();
     const csrf = csrfFailure(request);
     if (csrf) return csrf;
-    const n = Number(params.n);
+    const n = prNumber(params.n);
     const pr = PR_DETAILS[n];
     return pr
-      ? HttpResponse.json({ ...pr, state: "closed", closed_at: new Date().toISOString() })
+      ? HttpResponse.json({
+          ...pr,
+          state: "closed",
+          closed_at: new Date().toISOString(),
+        })
       : notFound();
   }),
 
@@ -141,11 +163,15 @@ export const pullHandlers = [
     if (!r) return notFound();
     const csrf = csrfFailure(request);
     if (csrf) return csrf;
-    const n = Number(params.n);
+    const n = prNumber(params.n);
     const pr = PR_DETAILS[n];
     if (!pr) return notFound();
     if (pr.state !== "open")
-      return apiError(409, "Only open pull requests can be merged.", "invalid_state");
+      return apiError(
+        409,
+        "Only open pull requests can be merged.",
+        "invalid_state",
+      );
     return HttpResponse.json({
       ...pr,
       state: "merged",
@@ -158,16 +184,25 @@ export const pullHandlers = [
     const r = visible(params);
     if (!r) return notFound();
     if (!hasPRs(params)) return notFound();
-    const n = Number(params.n);
+    const n = prNumber(params.n);
     const timeline = PR_TIMELINES[n];
-    return timeline ? HttpResponse.json(timeline) : notFound();
+    return timeline
+      ? HttpResponse.json({
+          items: timeline.map(({ type, actor, at, ...payload }) => ({
+            type,
+            actor,
+            at,
+            payload,
+          })),
+        })
+      : notFound();
   }),
 
   // GET R/pull-requests/:n/merge-status
   http.get(`${R}/pull-requests/:n/merge-status`, ({ params }) => {
     const r = visible(params);
     if (!r) return notFound();
-    const n = Number(params.n);
+    const n = prNumber(params.n);
     const pr = PR_DETAILS[n];
     if (!pr) return notFound();
     const status: MergeStatus =
@@ -187,18 +222,15 @@ export const pullHandlers = [
     const r = visible(params);
     if (!r) return notFound();
     if (!hasPRs(params)) return notFound();
-    const n = Number(params.n);
+    const n = prNumber(params.n);
     const pr = PR_DETAILS[n];
     if (!pr) return notFound();
     const files = n === 7 ? PR7_DIFF_FILES : (DIFFS[pr.source_revision] ?? []);
-    const body: ChangesetDiff = {
-      content: files
-        .map((f) => `diff --git a/${f.path} b/${f.path}`)
-        .join("\n"),
-      is_truncated: false,
-      truncation_reason_when_applicable: null,
-      files,
-      files_truncated: false,
+    const body = {
+      changed_files: files,
+      total_additions: 0,
+      total_deletions: 0,
+      total_files: files.length,
     };
     return HttpResponse.json(body);
   }),
@@ -213,13 +245,16 @@ export const pullHandlers = [
   }),
 
   // POST R/pull-requests/:n/comments/:cid/resolve
-  http.post(`${R}/pull-requests/:n/comments/:cid/resolve`, ({ params, request }) => {
-    const r = visible(params);
-    if (!r) return notFound();
-    const csrf = csrfFailure(request);
-    if (csrf) return csrf;
-    return HttpResponse.json({ ok: true });
-  }),
+  http.post(
+    `${R}/pull-requests/:n/comments/:cid/resolve`,
+    ({ params, request }) => {
+      const r = visible(params);
+      if (!r) return notFound();
+      const csrf = csrfFailure(request);
+      if (csrf) return csrf;
+      return HttpResponse.json({ ok: true });
+    },
+  ),
 
   // POST R/pull-requests/:n/reviews
   http.post(`${R}/pull-requests/:n/reviews`, ({ params, request }) => {
@@ -265,16 +300,30 @@ export const pullHandlers = [
     const base = url.searchParams.get("base") ?? "";
     const head = url.searchParams.get("head") ?? "";
     if (!base || !head)
-      return apiError(422, "Both base and head are required.", "validation_error");
+      return apiError(
+        422,
+        "Both base and head are required.",
+        "validation_error",
+      );
     const changesets = CHANGESETS.slice(0, 3);
     const body: CompareResult = {
-      base_node: base,
-      head_node: head,
-      merge_base: base,
+      base_node: NODE["1c7450e15fcb"]!,
+      head_node: NODE["0b486fec60de"]!,
+      merge_base: NODE["2295bc3c1ae5"]!,
       changesets,
       files: [
-        { path: "src/graph.cpp", status: "modified", insertions: 24, deletions: 3 },
-        { path: "include/graph.h", status: "modified", insertions: 2, deletions: 0 },
+        {
+          path: "src/graph.cpp",
+          status: "modified",
+          insertions: 24,
+          deletions: 3,
+        },
+        {
+          path: "include/graph.h",
+          status: "modified",
+          insertions: 2,
+          deletions: 0,
+        },
       ],
       conflicts: false,
       identical: base === head,
@@ -293,24 +342,34 @@ export const pullHandlers = [
     if (filter === "review_requested") {
       filtered = ALL_PRS.filter((pr) => {
         const detail = PR_DETAILS[pr.number];
-        if (detail) return detail.reviewers.some((rv) => rv.reviewer_id === userId);
+        if (detail)
+          return detail.reviewers.some((rv) => rv.reviewer_id === userId);
         // For cross-repo PRs without detail, check reviewers_preview
         return pr.reviewers_preview?.some(
-          (rv) => rv.display_name === (db.session === "brxj19" ? "Brxj19" : "Tatwa Prasad"),
+          (rv) =>
+            rv.display_name ===
+            (db.session === "brxj19" ? "Brxj19" : "Tatwa Prasad"),
         );
       });
     } else if (filter === "authored" || filter === "mine") {
       filtered = ALL_PRS.filter((pr) => pr.author_id === userId);
     } else if (filter === "open") {
-      filtered = ALL_PRS.filter((pr) => pr.state === "open" || pr.state === "draft");
-    } else if (filter === "done") {
-      filtered = ALL_PRS.filter((pr) => pr.state === "merged" || pr.state === "closed");
+      filtered = ALL_PRS.filter(
+        (pr) => pr.state === "open" || pr.state === "draft",
+      );
+    } else if (filter === "closed") {
+      filtered = ALL_PRS.filter(
+        (pr) => pr.state === "merged" || pr.state === "closed",
+      );
     }
-    const body: PullRequestListResponse = {
-      pull_requests: filtered,
-      counts: PR_COUNTS,
-      next_cursor: null,
-    };
-    return HttpResponse.json(body);
+    return HttpResponse.json({
+      pull_requests: filtered.map((pr) => ({
+        ...pr,
+        repository: {
+          org: pr.organization_slug ?? "sigma",
+          repo: pr.repository_slug ?? "sigma-reckitt",
+        },
+      })),
+    });
   }),
 ];

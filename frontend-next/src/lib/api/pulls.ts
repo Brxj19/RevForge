@@ -14,12 +14,20 @@ import type {
 const R = (org: string, repo: string) =>
   path`/organizations/${org}/repositories/${repo}`;
 
-const PR = (org: string, repo: string, number: number) =>
-  `${R(org, repo)}/pull-requests/${encodeURIComponent(String(number))}`;
-
-// API-GAP: all PR endpoints — backend does not implement them yet.
+const byNumber = (org: string, repo: string, number: number) =>
+  request<PullRequestDetail>(
+    `${R(org, repo)}/pull-requests/by-number/${encodeURIComponent(String(number))}`,
+  );
+const PR = async (org: string, repo: string, number: number) => {
+  const pr = await byNumber(org, repo, number);
+  return `${R(org, repo)}/pull-requests/${encodeURIComponent(pr.id)}`;
+};
 
 export const pullsApi = {
+  reviewerCandidates: (org: string, repo: string) =>
+    request<{
+      users: { id: string; display_name: string | null; email: string }[];
+    }>(`${R(org, repo)}/pull-requests/reviewer-candidates`),
   /** GET R/pull-requests?state=&q=&author=&cursor= */
   list: (
     org: string,
@@ -42,7 +50,7 @@ export const pullsApi = {
 
   /** GET R/pull-requests/{number} */
   get: (org: string, repo: string, number: number) =>
-    request<PullRequestDetail>(PR(org, repo, number)),
+    byNumber(org, repo, number),
 
   /** POST R/pull-requests */
   create: (
@@ -51,6 +59,8 @@ export const pullsApi = {
     body: {
       title: string;
       description?: string;
+      source_revision: string;
+      target_revision: string;
       source_branch: string;
       target_branch: string;
       draft?: boolean;
@@ -64,47 +74,77 @@ export const pullsApi = {
     }),
 
   /** PATCH R/pull-requests/{number} */
-  update: (
+  update: async (
     org: string,
     repo: string,
     number: number,
-    body: { title?: string; description?: string },
+    body: { title?: string; description?: string; state?: "open" | "draft" },
     csrf: string | null,
   ) =>
-    request<PullRequestDetail>(PR(org, repo, number), {
+    request<PullRequestDetail>(await PR(org, repo, number), {
       method: "PATCH",
       json: body,
       csrf,
     }),
 
   /** POST R/pull-requests/{number}/close */
-  close: (org: string, repo: string, number: number, csrf: string | null) =>
-    request<PullRequestDetail>(`${PR(org, repo, number)}/close`, {
+  close: async (
+    org: string,
+    repo: string,
+    number: number,
+    csrf: string | null,
+  ) =>
+    request<PullRequestDetail>(`${await PR(org, repo, number)}/close`, {
       method: "POST",
       csrf,
     }),
 
   /** POST R/pull-requests/{number}/merge */
-  merge: (org: string, repo: string, number: number, csrf: string | null) =>
-    request<PullRequestDetail>(`${PR(org, repo, number)}/merge`, {
+  merge: async (
+    org: string,
+    repo: string,
+    number: number,
+    csrf: string | null,
+  ) =>
+    request<PullRequestDetail>(`${await PR(org, repo, number)}/merge`, {
       method: "POST",
       csrf,
     }),
 
   /** GET R/pull-requests/{number}/timeline */
-  timeline: (org: string, repo: string, number: number) =>
-    request<TimelineEvent[]>(`${PR(org, repo, number)}/timeline`),
+  timeline: async (org: string, repo: string, number: number) => {
+    const data = await request<{
+      items: (TimelineEvent & { payload?: Record<string, unknown> })[];
+    }>(`${await PR(org, repo, number)}/timeline`);
+    return data.items.map(({ payload, ...event }) => ({
+      ...payload,
+      ...event,
+      actor: {
+        ...event.actor,
+        display_name: event.actor.display_name || event.actor.id.slice(0, 8),
+      },
+    }));
+  },
 
   /** GET R/pull-requests/{number}/merge-status */
-  mergeStatus: (org: string, repo: string, number: number) =>
-    request<MergeStatus>(`${PR(org, repo, number)}/merge-status`),
+  mergeStatus: async (org: string, repo: string, number: number) =>
+    request<MergeStatus>(`${await PR(org, repo, number)}/merge-status`),
 
   /** GET R/pull-requests/{number}/diff */
-  diff: (org: string, repo: string, number: number) =>
-    request<ChangesetDiff>(`${PR(org, repo, number)}/diff`),
+  diff: async (org: string, repo: string, number: number) => {
+    const data = await request<{
+      changed_files: NonNullable<ChangesetDiff["files"]>;
+    }>(`${await PR(org, repo, number)}/diff`);
+    return {
+      content: "",
+      is_truncated: false,
+      truncation_reason_when_applicable: null,
+      files: data.changed_files,
+    };
+  },
 
   /** POST R/pull-requests/{number}/comments */
-  addComment: (
+  addComment: async (
     org: string,
     repo: string,
     number: number,
@@ -112,18 +152,20 @@ export const pullsApi = {
       body: string;
       file_path?: string;
       line_number?: number;
+      base_revision?: string;
+      head_revision?: string;
       reply_to_comment_id?: string;
     },
     csrf: string | null,
   ) =>
-    request<unknown>(`${PR(org, repo, number)}/comments`, {
+    request<unknown>(`${await PR(org, repo, number)}/comments`, {
       method: "POST",
       json: body,
       csrf,
     }),
 
   /** POST R/pull-requests/{number}/comments/{cid}/resolve */
-  resolveComment: (
+  resolveComment: async (
     org: string,
     repo: string,
     number: number,
@@ -132,40 +174,40 @@ export const pullsApi = {
     csrf: string | null,
   ) =>
     request<unknown>(
-      `${PR(org, repo, number)}/comments/${encodeURIComponent(commentId)}/resolve`,
+      `${await PR(org, repo, number)}/comments/${encodeURIComponent(commentId)}/resolve`,
       { method: "POST", json: { resolved }, csrf },
     ),
 
   /** POST R/pull-requests/{number}/reviews */
-  addReview: (
+  addReview: async (
     org: string,
     repo: string,
     number: number,
     body: { decision: string; body?: string },
     csrf: string | null,
   ) =>
-    request<unknown>(`${PR(org, repo, number)}/reviews`, {
+    request<unknown>(`${await PR(org, repo, number)}/reviews`, {
       method: "POST",
       json: body,
       csrf,
     }),
 
   /** POST R/pull-requests/{number}/reviewers */
-  addReviewer: (
+  addReviewer: async (
     org: string,
     repo: string,
     number: number,
     body: { reviewer_id: string; required?: boolean },
     csrf: string | null,
   ) =>
-    request<unknown>(`${PR(org, repo, number)}/reviewers`, {
+    request<unknown>(`${await PR(org, repo, number)}/reviewers`, {
       method: "POST",
       json: body,
       csrf,
     }),
 
   /** DELETE R/pull-requests/{number}/reviewers/{id} */
-  removeReviewer: (
+  removeReviewer: async (
     org: string,
     repo: string,
     number: number,
@@ -173,12 +215,12 @@ export const pullsApi = {
     csrf: string | null,
   ) =>
     request<unknown>(
-      `${PR(org, repo, number)}/reviewers/${encodeURIComponent(reviewerId)}`,
+      `${await PR(org, repo, number)}/reviewers/${encodeURIComponent(reviewerId)}`,
       { method: "DELETE", csrf },
     ),
 
   /** PUT R/pull-requests/{number}/viewed */
-  setFileViewed: (
+  setFileViewed: async (
     org: string,
     repo: string,
     number: number,
@@ -186,7 +228,7 @@ export const pullsApi = {
     viewed: boolean,
     csrf: string | null,
   ) =>
-    request<ViewedFile>(`${PR(org, repo, number)}/viewed`, {
+    request<ViewedFile>(`${await PR(org, repo, number)}/viewed`, {
       method: "PUT",
       json: { path: filePath, viewed },
       csrf,
@@ -199,8 +241,22 @@ export const pullsApi = {
     ),
 
   /** GET /me/pull-requests?filter= */
-  myPullRequests: (filter?: string) =>
-    request<PullRequestListResponse>(
-      withQuery("/me/pull-requests", { filter }),
-    ),
+  myPullRequests: async (filter?: string) => {
+    const data = await request<{
+      pull_requests: (PullRequestSummary & {
+        repository: { org: string; repo: string };
+      })[];
+    }>(
+      withQuery("/me/pull-requests", {
+        filter: filter === "done" ? "closed" : filter,
+      }),
+    );
+    return {
+      pull_requests: data.pull_requests.map((pr) => ({
+        ...pr,
+        organization_slug: pr.repository.org,
+        repository_slug: pr.repository.repo,
+      })),
+    };
+  },
 };

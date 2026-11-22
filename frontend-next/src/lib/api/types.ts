@@ -535,6 +535,8 @@ export interface PullRequestSummary {
   author_display_name?: string;
   /** Repository slug, populated for cross-repo queries (reviews inbox). */
   repository_slug?: string;
+  /** Organization slug, populated for cross-repository queries. */
+  organization_slug?: string;
   /** Commit count (changesets), when known from the list. */
   commit_count?: number;
   /** Files changed count, when known from the list. */
@@ -577,6 +579,7 @@ export interface PullRequestReviewer {
   pull_request_id: string;
   reviewer_id: string;
   required: boolean;
+  display_name?: string;
 }
 
 export interface PullRequestDetail extends PullRequestSummary {

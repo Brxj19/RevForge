@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.security import utc_now
 from app.domain.enums import PullRequestState, ReviewDecision
+from app.models.organization_member import OrganizationMember
 from app.models.pull_request import (
     PullRequest,
     PullRequestComment,
@@ -17,8 +18,48 @@ from app.models.pull_request import (
     PullRequestViewedFile,
 )
 from app.models.repository import Repository
+from app.models.repository_permission import RepositoryPermission
 from app.models.user import User
-from app.services.errors import ConflictError, NotFoundError
+from app.services.authorization import repository_access_for_actor
+from app.services.errors import ConflictError, ForbiddenError, NotFoundError
+from app.services.repository_service import get_repository_access_for_actor
+
+
+async def list_reviewer_candidates(
+    session: AsyncSession, *, repository: Repository, actor: User
+) -> list[User]:
+    """Return only discoverable active users who can read this repository."""
+    rows = await session.execute(
+        select(User, OrganizationMember, RepositoryPermission)
+        .outerjoin(
+            OrganizationMember,
+            and_(
+                OrganizationMember.user_id == User.id,
+                OrganizationMember.organization_id == repository.organization_id,
+            ),
+        )
+        .outerjoin(
+            RepositoryPermission,
+            and_(
+                RepositoryPermission.user_id == User.id,
+                RepositoryPermission.repository_id == repository.id,
+            ),
+        )
+        .where(User.is_active.is_(True))
+        .where(or_(OrganizationMember.id.is_not(None), RepositoryPermission.id.is_not(None)))
+        .order_by(User.display_name, User.id)
+    )
+    candidates = list(rows.all())
+    actor_row = next((row for row in candidates if row[0].id == actor.id), None)
+    if repository.archived_at is not None or not actor.is_active or actor_row is None:
+        raise NotFoundError("Repository not found.")
+    if not repository_access_for_actor(actor, actor_row[1], repository, actor_row[2]).can_write:
+        raise ForbiddenError("Repository write access required.")
+    return [
+        user
+        for user, membership, permission in candidates
+        if repository_access_for_actor(user, membership, repository, permission).can_read
+    ]
 
 
 async def _next_pr_number(session: AsyncSession, *, repository_id: UUID) -> int:
@@ -36,8 +77,9 @@ async def _load_pr_with_relations(
     *,
     repository_id: UUID,
     pull_request_id: UUID,
+    for_update: bool = True,
 ) -> PullRequest:
-    result = await session.scalar(
+    statement = (
         select(PullRequest)
         .options(
             selectinload(PullRequest.comments),
@@ -47,8 +89,13 @@ async def _load_pr_with_relations(
         # Scoping by repository is the authorization boundary: callers authorize the
         # repository in the URL, so a PR id from another repository must not resolve.
         .where(PullRequest.id == pull_request_id, PullRequest.repository_id == repository_id)
-        .with_for_update()
     )
+    if for_update:
+        # The session may already have loaded this PR before a slow Hg check.
+        # Refresh its relationships after acquiring the lock so a concurrent
+        # review or required-reviewer change cannot be missed by the merge gate.
+        statement = statement.with_for_update().execution_options(populate_existing=True)
+    result = await session.scalar(statement)
     if result is None:
         raise NotFoundError("Pull request not found.")
     return result
@@ -71,6 +118,11 @@ async def create_pull_request(
     draft: bool,
     author: User,
 ) -> PullRequest:
+    # Serialize per-repository number allocation before reading the latest number.
+    # PostgreSQL holds this row lock until the caller commits or rolls back.
+    await session.scalar(
+        select(Repository.id).where(Repository.id == repository.id).with_for_update()
+    )
     number = await _next_pr_number(session, repository_id=repository.id)
     state = PullRequestState.DRAFT if draft else PullRequestState.OPEN
     pr = PullRequest(
@@ -112,8 +164,12 @@ async def update_pull_request(
     if state is not None:
         if state == PullRequestState.CLOSED:
             pr.closed_at = utc_now()
-        elif state == PullRequestState.OPEN and pr.state == PullRequestState.DRAFT:
-            pass
+        elif (state, pr.state) in {
+            (PullRequestState.OPEN, PullRequestState.DRAFT),
+            (PullRequestState.DRAFT, PullRequestState.OPEN),
+        }:
+            if actor.id != pr.author_id:
+                raise ForbiddenError("Only the author may change draft status.")
         else:
             raise ConflictError(f"Cannot transition to state: {state}")
         pr.state = state
@@ -139,20 +195,57 @@ async def close_pull_request(
     )
 
 
-def _enforce_merge_gate(pr: PullRequest, *, merger: User) -> None:
+async def current_review_positions(
+    session: AsyncSession, pr: PullRequest
+) -> tuple[set[UUID], set[UUID]]:
+    """Count decisions only while their authors are active and can read the repository."""
+    repository = await session.scalar(
+        select(Repository)
+        .options(selectinload(Repository.organization))
+        .where(Repository.id == pr.repository_id)
+    )
+    if repository is None:
+        raise NotFoundError("Repository not found.")
+    approved: set[UUID] = set()
+    changes_requested: set[UUID] = set()
+    for review in pr.reviews:
+        if review.decision not in (ReviewDecision.APPROVED, ReviewDecision.CHANGES_REQUESTED):
+            continue
+        user = await session.get(User, review.reviewer_id)
+        if user is None or not user.is_active:
+            continue
+        try:
+            await get_repository_access_for_actor(
+                session,
+                organization=repository.organization,
+                repository_slug=repository.slug,
+                actor=user,
+                allow_archived=True,
+            )
+        except NotFoundError:
+            continue
+        if review.decision == ReviewDecision.APPROVED and user.id != pr.author_id:
+            approved.add(user.id)
+        elif review.decision == ReviewDecision.CHANGES_REQUESTED:
+            changes_requested.add(user.id)
+    return approved, changes_requested
+
+
+def _enforce_merge_gate(
+    pr: PullRequest, *, merger: User, approved: set[UUID], changes_requested: set[UUID]
+) -> None:
     """Block a merge unless the review workflow has been satisfied."""
     if merger.id == pr.author_id:
         raise ConflictError("The pull request author cannot merge their own pull request.")
     # With one review row per reviewer, any CHANGES_REQUESTED is the reviewer's
     # current position.
-    if any(review.decision == ReviewDecision.CHANGES_REQUESTED for review in pr.reviews):
+    if changes_requested:
         raise ConflictError("Pull request has unresolved change requests.")
-    approved = {
-        review.reviewer_id for review in pr.reviews if review.decision == ReviewDecision.APPROVED
-    }
     required = {reviewer.reviewer_id for reviewer in pr.reviewers if reviewer.required}
     if not required.issubset(approved):
         raise ConflictError("All required reviewers must approve before merging.")
+    if not approved:
+        raise ConflictError("At least one currently authorized reviewer must approve.")
 
 
 async def merge_pull_request(
@@ -168,7 +261,8 @@ async def merge_pull_request(
     )
     if pr.state != PullRequestState.OPEN:
         raise ConflictError("Only open pull requests can be merged.")
-    _enforce_merge_gate(pr, merger=merger)
+    approved, changes_requested = await current_review_positions(session, pr)
+    _enforce_merge_gate(pr, merger=merger, approved=approved, changes_requested=changes_requested)
     pr.state = PullRequestState.MERGED
     pr.merger_id = merger.id
     pr.merged_revision = merged_revision
@@ -248,8 +342,28 @@ async def get_pull_request(
     pull_request_id: UUID,
 ) -> PullRequest:
     return await _load_pr_with_relations(
-        session, repository_id=repository_id, pull_request_id=pull_request_id
+        session, repository_id=repository_id, pull_request_id=pull_request_id, for_update=False
     )
+
+
+async def get_pull_request_by_number(
+    session: AsyncSession, *, repository_id: UUID, number: int
+) -> PullRequest:
+    """Resolve a public number within its repository, rejecting ambiguous legacy data."""
+    ids = list(
+        (
+            await session.scalars(
+                select(PullRequest.id)
+                .where(PullRequest.repository_id == repository_id, PullRequest.number == number)
+                .limit(2)
+            )
+        ).all()
+    )
+    if not ids:
+        raise NotFoundError("Pull request not found.")
+    if len(ids) != 1:
+        raise ConflictError("Pull request number is ambiguous.")
+    return await get_pull_request(session, repository_id=repository_id, pull_request_id=ids[0])
 
 
 async def add_comment(
@@ -373,10 +487,27 @@ async def add_reviewer(
     pr = await _load_pr_with_relations(
         session, repository_id=repository_id, pull_request_id=pull_request_id
     )
-    if pr.state != PullRequestState.OPEN:
+    if pr.state not in (PullRequestState.OPEN, PullRequestState.DRAFT):
         raise ConflictError("Cannot modify reviewers on a closed or merged PR.")
     if reviewer_id == pr.author_id:
         raise ConflictError("The pull request author cannot be a reviewer.")
+    user = await session.get(User, reviewer_id)
+    repository = await session.scalar(
+        select(Repository)
+        .options(selectinload(Repository.organization))
+        .where(Repository.id == repository_id)
+    )
+    if user is None or not user.is_active or repository is None:
+        raise NotFoundError("Eligible reviewer not found.")
+    try:
+        await get_repository_access_for_actor(
+            session,
+            organization=repository.organization,
+            repository_slug=repository.slug,
+            actor=user,
+        )
+    except NotFoundError as exc:
+        raise NotFoundError("Eligible reviewer not found.") from exc
     existing = await session.scalar(
         select(PullRequestReviewer).where(
             PullRequestReviewer.pull_request_id == pull_request_id,
@@ -401,11 +532,12 @@ async def remove_reviewer(
     repository_id: UUID,
     pull_request_id: UUID,
     reviewer_id: UUID,
+    actor: User,
 ) -> None:
     pr = await _load_pr_with_relations(
         session, repository_id=repository_id, pull_request_id=pull_request_id
     )
-    if pr.state != PullRequestState.OPEN:
+    if pr.state not in (PullRequestState.OPEN, PullRequestState.DRAFT):
         raise ConflictError("Cannot remove reviewers on a closed or merged PR.")
     existing = await session.scalar(
         select(PullRequestReviewer).where(
@@ -415,6 +547,24 @@ async def remove_reviewer(
     )
     if existing is None:
         raise NotFoundError("Reviewer not found.")
+    if existing.required:
+        repository = await session.scalar(
+            select(Repository)
+            .options(selectinload(Repository.organization))
+            .where(Repository.id == repository_id)
+        )
+        if repository is None or not actor.is_active:
+            raise NotFoundError("Repository not found.")
+        _, access = await get_repository_access_for_actor(
+            session,
+            organization=repository.organization,
+            repository_slug=repository.slug,
+            actor=actor,
+        )
+        if not access.can_manage:
+            raise ForbiddenError(
+                "Repository admin access is required to remove a required reviewer."
+            )
     await session.delete(existing)
     await session.flush()
 
@@ -505,7 +655,9 @@ async def set_viewed_file(
 # ---------------------------------------------------------------------------
 
 
-def compute_merge_checks(pr: PullRequest) -> list[dict[str, object]]:
+def compute_merge_checks(
+    pr: PullRequest, *, approved_ids: set[UUID], changes_requested: set[UUID]
+) -> list[dict[str, object]]:
     """Return merge checks based on PR state and reviews (no hg access)."""
     checks: list[dict[str, object]] = []
 
@@ -519,7 +671,7 @@ def compute_merge_checks(pr: PullRequest) -> list[dict[str, object]]:
     )
 
     # 2. no_changes_requested
-    has_changes_requested = any(r.decision == ReviewDecision.CHANGES_REQUESTED for r in pr.reviews)
+    has_changes_requested = bool(changes_requested)
     checks.append(
         {
             "id": "no_changes_requested",
@@ -529,7 +681,6 @@ def compute_merge_checks(pr: PullRequest) -> list[dict[str, object]]:
     )
 
     # 3. required_reviewers
-    approved_ids = {r.reviewer_id for r in pr.reviews if r.decision == ReviewDecision.APPROVED}
     required_ids = {rv.reviewer_id for rv in pr.reviewers if rv.required}
     all_required_approved = required_ids.issubset(approved_ids)
     checks.append(
@@ -590,18 +741,25 @@ def build_timeline(
                 "type": "review_requested",
                 "actor": _user_ref(pr.author_id),
                 "at": pr.created_at,
-                "payload": {"reviewer_id": rv.reviewer_id},
+                "payload": {"reviewer": _user_ref(rv.reviewer_id), "required": rv.required},
             }
         )
 
     # comments
     for c in pr.comments:
+        if c.reply_to_comment_id is not None:
+            continue
         items.append(
             {
                 "type": "comment",
                 "actor": _user_ref(c.author_id),
                 "at": c.created_at,
-                "payload": {"comment_id": c.id, "file_path": c.file_path},
+                "payload": {
+                    "comment_id": c.id,
+                    "file_path": c.file_path,
+                    "line_number": c.line_number,
+                    "body": c.body,
+                },
             }
         )
 
@@ -703,7 +861,6 @@ async def list_my_pull_requests(
         )
     elif filter_ == "closed":
         base = base.where(
-            PullRequest.author_id == user_id,
             PullRequest.state.in_([PullRequestState.MERGED, PullRequestState.CLOSED]),
         )
 

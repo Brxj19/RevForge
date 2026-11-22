@@ -3,10 +3,12 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     SessionIdentity,
+    get_current_identity,
     get_mercurial_read_service,
     get_optional_identity,
     get_repository_storage_locator,
@@ -35,6 +37,7 @@ from app.models.pull_request import (
     PullRequestReviewer,
 )
 from app.models.repository import Repository
+from app.models.user import User
 from app.schemas.pull_requests import (
     CommentResolveRequest,
     CompareResponse,
@@ -54,12 +57,15 @@ from app.schemas.pull_requests import (
     PullRequestReviewResponse,
     PullRequestStateCounts,
     PullRequestUpdateRequest,
+    ReviewerCandidate,
+    ReviewerCandidatesResponse,
     TimelineEventResponse,
     TimelineResponse,
     UserRef,
     ViewedFileRequest,
     ViewedFileResponse,
 )
+from app.services.audit import record_audit_event
 from app.services.errors import (
     ConflictError,
     ForbiddenError,
@@ -68,6 +74,7 @@ from app.services.errors import (
 )
 from app.services.pr_diff_service import compute_diff, resolve_pull_request_revisions
 from app.services.pr_merge_service import verify_landed_merge
+from app.services.pr_webhook_outbox import enqueue as enqueue_pr_webhooks
 from app.services.pull_request_service import (
     add_comment,
     add_review,
@@ -76,8 +83,11 @@ from app.services.pull_request_service import (
     close_pull_request,
     compute_merge_checks,
     create_pull_request,
+    current_review_positions,
     get_pull_request,
+    get_pull_request_by_number,
     list_pull_requests,
+    list_reviewer_candidates,
     merge_pull_request,
     remove_reviewer,
     resolve_comment,
@@ -95,6 +105,36 @@ router = APIRouter(
     prefix="/organizations/{organization_slug}/repositories/{repository_slug}",
     tags=["pull_requests"],
 )
+
+
+async def _audit_pr_action(
+    session: AsyncSession,
+    *,
+    repo: Repository,
+    actor: User,
+    pull_request_id: UUID,
+    action: str,
+    details: dict[str, object] | None = None,
+) -> None:
+    event = await record_audit_event(
+        session,
+        event_type=f"pull_request.{action}",
+        actor_user_id=actor.id,
+        organization_id=repo.organization_id,
+        repository_id=repo.id,
+        metadata_json={"pull_request_id": str(pull_request_id), **(details or {})},
+    )
+    await enqueue_pr_webhooks(
+        session,
+        repository_id=repo.id,
+        event_type=event.event_type,
+        event_id=event.id,
+        metadata={
+            "pull_request_id": str(pull_request_id),
+            "actor_id": str(actor.id),
+            **(details or {}),
+        },
+    )
 
 
 async def _get_repo_for_write(
@@ -294,6 +334,9 @@ async def create_pull_request_route(
             draft=payload.draft,
             author=identity.user,
         )
+        await _audit_pr_action(
+            session, repo=repo, actor=identity.user, pull_request_id=pr.id, action="created"
+        )
         await session.commit()
         pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pr.id)
     except ForbiddenError as exc:
@@ -327,6 +370,58 @@ async def create_pull_request_route(
 # ---------------------------------------------------------------------------
 # Get single pull request
 # ---------------------------------------------------------------------------
+
+
+@router.get("/pull-requests/reviewer-candidates", response_model=ReviewerCandidatesResponse)
+async def reviewer_candidates_route(
+    organization_slug: str,
+    repository_slug: str,
+    identity: SessionIdentity = Depends(get_current_identity),
+    session: AsyncSession = Depends(get_session),
+) -> ReviewerCandidatesResponse:
+    try:
+        repo = await _get_repo_for_write(
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
+        )
+        users = await list_reviewer_candidates(session, repository=repo, actor=identity.user)
+    except ForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return ReviewerCandidatesResponse(
+        users=[ReviewerCandidate.model_validate(user) for user in users]
+    )
+
+
+@router.get("/pull-requests/by-number/{number}", response_model=PullRequestDetailResponse)
+async def get_pull_request_by_number_route(
+    organization_slug: str,
+    repository_slug: str,
+    number: int,
+    identity: SessionIdentity | None = Depends(get_optional_identity),
+    session: AsyncSession = Depends(get_session),
+) -> PullRequestDetailResponse:
+    if number < 1:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pull request not found.")
+    try:
+        repo = await _get_repo_for_read(
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
+            allow_archived=True,
+        )
+        pr = await get_pull_request_by_number(session, repository_id=repo.id, number=number)
+    except ForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return _serialize_detail(pr)
 
 
 @router.get(
@@ -388,6 +483,14 @@ async def update_pull_request_route(
             state=payload.state,
             actor=identity.user,
         )
+        await _audit_pr_action(
+            session,
+            repo=repo,
+            actor=identity.user,
+            pull_request_id=pr.id,
+            action="updated",
+            details={"state": pr.state.value},
+        )
         await session.commit()
         pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pr.id)
     except ForbiddenError as exc:
@@ -430,6 +533,9 @@ async def close_pull_request_route(
             repository_id=repo.id,
             pull_request_id=pull_request_id,
             actor=identity.user,
+        )
+        await _audit_pr_action(
+            session, repo=repo, actor=identity.user, pull_request_id=pr.id, action="closed"
         )
         await session.commit()
         pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pr.id)
@@ -482,6 +588,14 @@ async def add_comment_route(
             base_revision=payload.base_revision,
             head_revision=payload.head_revision,
         )
+        await _audit_pr_action(
+            session,
+            repo=repo,
+            actor=identity.user,
+            pull_request_id=pull_request_id,
+            action="commented",
+            details={"comment_id": str(comment.id)},
+        )
         await session.commit()
     except ForbiddenError as exc:
         await session.rollback()
@@ -527,6 +641,14 @@ async def resolve_comment_route(
             comment_id=comment_id,
             resolved=payload.resolved,
         )
+        await _audit_pr_action(
+            session,
+            repo=repo,
+            actor=identity.user,
+            pull_request_id=pull_request_id,
+            action="comment_resolution_changed",
+            details={"comment_id": str(comment.id), "resolved": payload.resolved},
+        )
         await session.commit()
         await session.refresh(comment)
     except ForbiddenError as exc:
@@ -570,6 +692,14 @@ async def add_review_route(
             reviewer=identity.user,
             decision=payload.decision,
             body=payload.body,
+        )
+        await _audit_pr_action(
+            session,
+            repo=repo,
+            actor=identity.user,
+            pull_request_id=pull_request_id,
+            action="reviewed",
+            details={"decision": payload.decision.value},
         )
         await session.commit()
     except ForbiddenError as exc:
@@ -616,6 +746,14 @@ async def add_reviewer_route(
             reviewer_id=payload.reviewer_id,
             required=payload.required,
         )
+        await _audit_pr_action(
+            session,
+            repo=repo,
+            actor=identity.user,
+            pull_request_id=pull_request_id,
+            action="reviewer_added",
+            details={"reviewer_id": str(payload.reviewer_id), "required": payload.required},
+        )
         await session.commit()
     except ForbiddenError as exc:
         await session.rollback()
@@ -654,6 +792,15 @@ async def remove_reviewer_route(
             repository_id=repo.id,
             pull_request_id=pull_request_id,
             reviewer_id=reviewer_id,
+            actor=identity.user,
+        )
+        await _audit_pr_action(
+            session,
+            repo=repo,
+            actor=identity.user,
+            pull_request_id=pull_request_id,
+            action="reviewer_removed",
+            details={"reviewer_id": str(reviewer_id)},
         )
         await session.commit()
     except ForbiddenError as exc:
@@ -761,7 +908,14 @@ async def get_timeline_route(
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    events = build_timeline(pr)
+    user_ids = {pr.author_id}
+    user_ids.update(c.author_id for c in pr.comments)
+    user_ids.update(r.reviewer_id for r in pr.reviews)
+    user_ids.update(r.reviewer_id for r in pr.reviewers)
+    if pr.merger_id:
+        user_ids.add(pr.merger_id)
+    users = await session.execute(select(User.id, User.display_name).where(User.id.in_(user_ids)))
+    events = build_timeline(pr, author_names={user_id: name for user_id, name in users})
     return TimelineResponse(
         items=[
             TimelineEventResponse(
@@ -804,7 +958,10 @@ async def get_merge_status_route(
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    raw_checks = compute_merge_checks(pr)
+    approved, changes_requested = await current_review_positions(session, pr)
+    raw_checks = compute_merge_checks(
+        pr, approved_ids=approved, changes_requested=changes_requested
+    )
     checks = [
         MergeCheckResponse(
             id=str(c["id"]),
@@ -997,6 +1154,14 @@ async def merge_pull_request_route(
             pull_request_id=pull_request_id,
             merged_revision=merged_revision,
             merger=identity.user,
+        )
+        await _audit_pr_action(
+            session,
+            repo=repo,
+            actor=identity.user,
+            pull_request_id=pr.id,
+            action="merged",
+            details={"merged_revision": merged_revision},
         )
         await session.commit()
         pr = await get_pull_request(session, repository_id=repo.id, pull_request_id=pr.id)

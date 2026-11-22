@@ -141,6 +141,18 @@ def victim_pull_request(client) -> dict[str, str]:
     _create_organization(client, "review")
     _create_repository(client, "review", "project")
     _create_repository(client, "review", "other")
+    member = client.post(
+        "/api/v1/organizations/review/members",
+        json={"user": "reviewer-b@example.com", "role": "member"},
+        headers=_csrf_headers(client),
+    )
+    assert member.status_code == 201, member.text
+    permission = client.put(
+        "/api/v1/organizations/review/repositories/project/permissions",
+        json={"user": "reviewer-b@example.com", "role": "read"},
+        headers=_csrf_headers(client),
+    )
+    assert permission.status_code in (200, 201), permission.text
     pull_request_id = _create_pull_request(client, _pr_base("review", "project"))
     # Seed a (non-author) reviewer so an unscoped remove-reviewer has something to delete.
     reviewer = client.post(

@@ -24,6 +24,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # This revision identifier exceeds Alembic's default 32-character column.
+    # Widen before Alembic records the new revision, including when 0008 was
+    # applied by an older release. Keeping the wider column on downgrade is safe.
+    if op.get_context().dialect.name == "postgresql":
+        op.alter_column("alembic_version", "version_num", type_=sa.String(64))
     # -- resolved column on comments --
     op.add_column(
         "pull_request_comments",

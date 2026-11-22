@@ -1,44 +1,62 @@
 import { useNavigate } from "@solidjs/router";
 import { createSignal, For, Match, Show, Switch } from "solid-js";
 import { useAuth } from "~/app/auth";
+import { MarkdownPreview } from "~/features/code";
 import { createRefsQuery, RefPicker, useRepo } from "~/features/repo";
-import { pullsApi, type DiffFileSummary } from "~/lib/api";
+import { pullsApi } from "~/lib/api";
 import { plural } from "~/lib/format";
-import { Button } from "~/ui/Button";
+import { useUrlState } from "~/lib/url";
+import { Button, ButtonLink } from "~/ui/Button";
 import { Card } from "~/ui/Card";
+import { ChangeBadge, changeKindOf, DiffBar } from "~/ui/DiffStat";
 import { EmptyState } from "~/ui/EmptyState";
-import { Field, InputGroup, Textarea } from "~/ui/Field";
-import { Icon } from "~/ui/icons";
-import { Pill } from "~/ui/Pill";
+import { Field, Input, Textarea } from "~/ui/Field";
+import { FileIcon, Icon } from "~/ui/icons";
 import { SkeletonText } from "~/ui/Skeleton";
+import { Tabs } from "~/ui/Tabs";
 import { showToast } from "~/ui/Toast";
 import { Pane, WsBody } from "~/ui/WorkspaceLayout";
 import { createCompareQuery } from "./queries";
+import { ReviewerPicker } from "./ReviewerPicker";
 import styles from "./pulls.module.css";
 
-/**
- * /:org/:repo/pulls/new (DESIGN.md Phase 3). Branch pickers, compare preview,
- * title/description form, and Create / Create draft buttons.
- */
+/** Branch comparison and creation form from the prototype's new pull request screen. */
 export default function NewPullRequestPage() {
   const repo = useRepo();
   const auth = useAuth();
   const navigate = useNavigate();
-
   const refs = createRefsQuery(repo.org, repo.repo, () => true);
-  const [baseBranch, setBaseBranch] = createSignal("default");
-  const [headBranch, setHeadBranch] = createSignal("");
+  const [url, setUrl] = useUrlState({ base: "default", head: "" });
   const [title, setTitle] = createSignal("");
   const [description, setDescription] = createSignal("");
+  const [draft, setDraft] = createSignal(false);
   const [submitting, setSubmitting] = createSignal(false);
-
-  const compare = createCompareQuery(repo.org, repo.repo, baseBranch, headBranch);
-
-  const submit = async (draft: boolean) => {
-    if (!title().trim()) {
-      showToast({ message: "Title is required" });
-      return;
-    }
+  const [reviewers, setReviewers] = createSignal<string[]>([]);
+  const canRequestReviews = () =>
+    !auth.isAnonymous() &&
+    !repo.detail().archived_at &&
+    (repo.detail().viewer_role === "write" ||
+      repo.detail().viewer_role === "admin");
+  const compare = createCompareQuery(
+    repo.org,
+    repo.repo,
+    () => url.base,
+    () => url.head,
+  );
+  const canSubmit = () =>
+    Boolean(
+      !repo.detail().archived_at &&
+      (repo.detail().viewer_role === "write" ||
+        repo.detail().viewer_role === "admin") &&
+      title().trim() &&
+      url.head &&
+      url.base !== url.head &&
+      compare.isSuccess &&
+      !compare.data.identical,
+    );
+  const submit = async () => {
+    if (!canSubmit() || !compare.isSuccess) return;
+    const compared = compare.data;
     setSubmitting(true);
     try {
       const pr = await pullsApi.create(
@@ -47,166 +65,281 @@ export default function NewPullRequestPage() {
         {
           title: title().trim(),
           description: description().trim() || undefined,
-          source_branch: headBranch(),
-          target_branch: baseBranch(),
-          draft,
+          source_revision: compared.head_node,
+          target_revision: compared.base_node,
+          source_branch: url.head,
+          target_branch: url.base,
+          draft: draft(),
         },
         auth.csrf(),
       );
-      showToast({ message: draft ? "Draft created" : "Pull request created" });
+      let failed = 0;
+      for (const reviewerId of reviewers()) {
+        try {
+          await pullsApi.addReviewer(
+            repo.org(),
+            repo.repo(),
+            pr.number,
+            { reviewer_id: reviewerId, required: false },
+            auth.csrf(),
+          );
+        } catch {
+          failed += 1;
+        }
+      }
+      showToast({
+        message: failed
+          ? `Pull request created, but ${failed} review request${failed === 1 ? "" : "s"} failed. Please add them from the pull request.`
+          : draft()
+            ? "Draft created"
+            : "Pull request created",
+      });
       navigate(repo.href(`pulls/${pr.number}`));
     } catch {
-      showToast({ message: "Failed to create pull request" });
+      showToast({ message: "Couldn't create pull request" });
     } finally {
       setSubmitting(false);
     }
   };
-
   return (
     <WsBody>
       <Pane>
-        <Card>
-          <h2 class="h2">New pull request</h2>
-
-          <div class={styles.branchPickers}>
+        <div class={styles.newPull}>
+          <h1 class="h2">Open a pull request</h1>
+          <p class={styles.newLead}>
+            Choose the branch with your changes and where it should land.
+          </p>
+          <Show
+            when={
+              repo.detail().archived_at ||
+              (repo.detail().viewer_role !== "write" &&
+                repo.detail().viewer_role !== "admin")
+            }
+          >
+            <p class="muted">
+              Write access to an active repository is required to open a pull
+              request.
+            </p>
+          </Show>
+          <Card class={styles.branchCard}>
+            <Icon name="merge" size={16} />
+            <span class="muted">Merge into</span>
             <RefPicker
               refs={refs.isSuccess ? refs.data : undefined}
               loading={refs.isPending}
-              current={baseBranch()}
-              onPick={setBaseBranch}
+              current={url.base}
+              onPick={(ref) => setUrl({ base: ref || "default" })}
               trigger={
-                <Button size="sm">
+                <span class={styles.refTrigger}>
                   <Icon name="branch" size={14} />
-                  base: {baseBranch() || "select"}
-                </Button>
+                  {url.base}
+                </span>
               }
             />
-            <span class={styles.arrow}>
-              <Icon name="chevr" size={16} />
+            <Icon name="chevr" size={14} />
+            <span class="muted">from</span>
+            <RefPicker
+              refs={refs.isSuccess ? refs.data : undefined}
+              loading={refs.isPending}
+              current={url.head}
+              onPick={(ref) => setUrl({ head: ref || "default" })}
+              trigger={
+                <span class={styles.refTrigger}>
+                  <Icon name="branch" size={14} />
+                  {url.head || "Choose a branch"}
+                </span>
+              }
+            />
+            <span class={styles.branchStatus}>
+              <Show when={compare.isSuccess && !compare.data.identical}>
+                {compare.data?.conflicts
+                  ? "Conflicts need attention"
+                  : `✓ No conflicts with ${url.base}`}
+              </Show>
             </span>
-            <RefPicker
-              refs={refs.isSuccess ? refs.data : undefined}
-              loading={refs.isPending}
-              current={headBranch()}
-              onPick={setHeadBranch}
-              trigger={
-                <Button size="sm">
-                  <Icon name="branch" size={14} />
-                  compare: {headBranch() || "select"}
-                </Button>
-              }
-            />
-          </div>
-
-          <Show when={baseBranch() && headBranch() && baseBranch() !== headBranch()}>
+          </Card>
+          <Show when={url.head && url.base === url.head}>
+            <Card class={styles.newCard}>
+              <EmptyState
+                art="clean-merge"
+                size="inline"
+                title="Nothing to compare"
+                body="These branches point at the same changeset. Push your work to a branch first, then come back."
+              />
+            </Card>
+          </Show>
+          <Show when={url.head && url.base !== url.head}>
             <Switch>
               <Match when={compare.isPending}>
-                <SkeletonText lines={["50%", "30%"]} label="Comparing branches" />
-              </Match>
-              <Match when={compare.isError}>
-                <EmptyState
-                  art="load-error"
-                  size="inline"
-                  title="Couldn't compare these branches"
-                  actions={
-                    <Button size="sm" onClick={() => void compare.refetch()}>
-                      Try again
-                    </Button>
-                  }
+                <SkeletonText
+                  lines={["65%", "40%"]}
+                  label="Comparing branches"
                 />
               </Match>
-              <Match when={compare.isSuccess && compare.data}>
-                {(data) => (
-                  <>
-                    <Show when={data().identical}>
-                      <EmptyState
-                        art="no-results"
-                        size="inline"
-                        title="These branches are identical"
-                        body="There is nothing to compare."
-                      />
-                    </Show>
-                    <Show when={!data().identical}>
-                      <div class={styles.compareStats}>
-                        <span>
-                          {plural(data().changesets.length, "changeset")}
-                        </span>
-                        <span>
-                          {plural(data().files.length, "file")} changed
-                        </span>
-                        <Show when={data().conflicts}>
-                          <Pill tone="red" dot>Conflicts</Pill>
-                        </Show>
-                      </div>
-                      <Show when={data().files.length > 0}>
-                        <ul>
-                          <For each={data().files}>
-                            {(f: DiffFileSummary) => (
-                              <li>
-                                <span>{f.path}</span>{" "}
-                                <span class="add">+{f.insertions}</span>{" "}
-                                <span class="del">-{f.deletions}</span>
-                              </li>
-                            )}
-                          </For>
-                        </ul>
-                      </Show>
-                    </Show>
-                  </>
-                )}
+              <Match when={compare.isError}>
+                <Card class={styles.newCard}>
+                  <EmptyState
+                    art="load-error"
+                    size="inline"
+                    title="Couldn't compare these branches"
+                    actions={
+                      <Button size="sm" onClick={() => void compare.refetch()}>
+                        Try again
+                      </Button>
+                    }
+                  />
+                </Card>
+              </Match>
+              <Match when={compare.data?.identical}>
+                <Card class={styles.newCard}>
+                  <EmptyState
+                    art="clean-merge"
+                    size="inline"
+                    title="Nothing to compare"
+                    body="These branches point at the same changeset."
+                  />
+                </Card>
               </Match>
             </Switch>
           </Show>
-
-          <Show when={baseBranch() === headBranch() && headBranch()}>
-            <EmptyState
-              art="no-results"
-              size="inline"
-              title="Same branch"
-              body="Select a different head branch to compare."
-            />
-          </Show>
-        </Card>
-
-        <Card>
-          <div class={styles.formGrid}>
-            <Field label="Title">
-              <InputGroup
-                aria-label="Title"
-                placeholder="A concise title for your changes"
-                value={title()}
-                onInput={(e) => setTitle(e.currentTarget.value)}
-                required
-              />
-            </Field>
-            <Field label="Description">
-              <Textarea
-                aria-label="Description"
-                placeholder="Describe the changes (optional)"
-                value={description()}
-                onInput={(e) => setDescription(e.currentTarget.value)}
-                rows={5}
-              />
-            </Field>
-            <div class={styles.formActions}>
+          <Card class={styles.newCard}>
+            <div class={styles.newForm}>
+              <Field label="Title">
+                <Input
+                  value={title()}
+                  onInput={(event) => setTitle(event.currentTarget.value)}
+                  placeholder="A concise title for your changes"
+                  required
+                />
+              </Field>
+              <Field label="Description" kind="group">
+                <div class={styles.composer}>
+                  <Tabs
+                    label="Description editor"
+                    panels={[
+                      {
+                        value: "write",
+                        label: "Write",
+                        content: (
+                          <Textarea
+                            aria-label="Description"
+                            value={description()}
+                            onInput={(event) =>
+                              setDescription(event.currentTarget.value)
+                            }
+                            rows={5}
+                          />
+                        ),
+                      },
+                      {
+                        value: "preview",
+                        label: "Preview",
+                        content: (
+                          <MarkdownPreview
+                            source={description()}
+                            path=""
+                            codeHref={(path) => repo.codeHref(path)}
+                            rawHref={() => ""}
+                            compact
+                            label="Description preview"
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                </div>
+              </Field>
+              <Field
+                label="Reviewers"
+                kind="group"
+                hint={
+                  !canRequestReviews()
+                    ? "Write access is required to select reviewers."
+                    : undefined
+                }
+              >
+                <ReviewerPicker
+                  org={repo.org()}
+                  repo={repo.repo()}
+                  enabled={canRequestReviews()}
+                  disabled={submitting()}
+                  excluded={[auth.user()?.id ?? ""]}
+                  selected={reviewers()}
+                  onChange={setReviewers}
+                />
+              </Field>
+              <label class={styles.draftChoice}>
+                <input
+                  type="checkbox"
+                  checked={draft()}
+                  onChange={(event) => setDraft(event.currentTarget.checked)}
+                />
+                <span>
+                  Open as a draft
+                  <small>
+                    Reviews and merging open up once you mark it ready
+                  </small>
+                </span>
+              </label>
+            </div>
+            <div class={styles.newFooter}>
+              <ButtonLink href={repo.href("pulls")} variant="ghost">
+                Cancel
+              </ButtonLink>
               <Button
                 variant="primary"
+                disabled={!canSubmit()}
                 loading={submitting()}
-                disabled={!title().trim() || !headBranch() || baseBranch() === headBranch()}
-                onClick={() => void submit(false)}
+                onClick={() => void submit()}
               >
-                Create pull request
-              </Button>
-              <Button
-                loading={submitting()}
-                disabled={!title().trim() || !headBranch() || baseBranch() === headBranch()}
-                onClick={() => void submit(true)}
-              >
-                Create draft
+                Open pull request
               </Button>
             </div>
-          </div>
-        </Card>
+          </Card>
+          <Show when={compare.data && !compare.data.identical && compare.data}>
+            {(data) => (
+              <>
+                <div class={styles.prStats}>
+                  <b>{plural(data().changesets.length, "changeset")}</b>
+                  <b>{plural(data().files.length, "file")} changed</b>
+                  <span class="add">
+                    +
+                    {data().files.reduce(
+                      (sum, file) => sum + file.insertions,
+                      0,
+                    )}
+                  </span>
+                  <span class="del">
+                    −
+                    {data().files.reduce(
+                      (sum, file) => sum + file.deletions,
+                      0,
+                    )}
+                  </span>
+                </div>
+                <Card>
+                  <For each={data().files}>
+                    {(file) => (
+                      <div class={styles.newFile}>
+                        <ChangeBadge kind={changeKindOf(file.status)} />
+                        <FileIcon
+                          name={file.path.split("/").pop() ?? file.path}
+                        />
+                        <span>{file.path}</span>
+                        <span class="add">+{file.insertions}</span>
+                        <span class="del">−{file.deletions}</span>
+                        <DiffBar
+                          additions={file.insertions}
+                          deletions={file.deletions}
+                        />
+                      </div>
+                    )}
+                  </For>
+                </Card>
+              </>
+            )}
+          </Show>
+        </div>
       </Pane>
     </WsBody>
   );

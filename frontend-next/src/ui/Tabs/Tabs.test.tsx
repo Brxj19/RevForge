@@ -30,6 +30,33 @@ describe("TabLinks", () => {
       screen.getByRole("link", { name: "History 12" }),
     ).not.toHaveAttribute("aria-current");
   });
+
+  it("keeps every route tab keyboard reachable", async () => {
+    render(() => (
+      <TabLinks
+        label="Repository"
+        items={[
+          { href: "/overview", label: "Overview" },
+          { href: "/code", label: "Code" },
+          { href: "/history", label: "History" },
+          { href: "/pulls", label: "Pull requests" },
+          { href: "/refs", label: "Branches & tags" },
+          { href: "/settings", label: "Settings" },
+        ]}
+      />
+    ));
+    for (const name of [
+      "Overview",
+      "Code",
+      "History",
+      "Pull requests",
+      "Branches & tags",
+      "Settings",
+    ]) {
+      await userEvent.tab();
+      expect(screen.getByRole("link", { name })).toHaveFocus();
+    }
+  });
 });
 
 describe("Tabs", () => {

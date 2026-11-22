@@ -9,11 +9,11 @@ type Str = Accessor<string>;
 export function createPullsListQuery(
   org: Str,
   repo: Str,
-  state: Accessor<string>,
+  filters: Accessor<{ state: string; q: string }>,
 ) {
   return createQuery(() => ({
-    queryKey: qk.pulls(org(), repo(), state()),
-    queryFn: () => pullsApi.list(org(), repo(), { state: state() }),
+    queryKey: [...qk.pulls(org(), repo(), filters().state), filters().q],
+    queryFn: () => pullsApi.list(org(), repo(), filters()),
     staleTime: 30_000,
   }));
 }

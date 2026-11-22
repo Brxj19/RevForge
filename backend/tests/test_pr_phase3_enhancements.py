@@ -6,15 +6,38 @@ viewed files, timeline, merge-status, compare, and /me/pull-requests.
 
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 from repo_fixtures import commit, hg, repository_path
+from sqlalchemy import select
+
+from app.models.audit_event import AuditEvent
+from app.schemas.pull_requests import (
+    PullRequestCommentCreateRequest,
+    PullRequestCreateRequest,
+    PullRequestUpdateRequest,
+)
 
 ORIGIN_HEADERS = {"Origin": "http://localhost:5173"}
 PASSWORD = "StrongPassword123"
 
 _FACTORY: dict[str, object] = {}
+
+
+def test_pull_request_input_rejects_blank_text_and_invalid_line_numbers() -> None:
+    with pytest.raises(ValidationError):
+        PullRequestCreateRequest(title="  ", source_revision="a", target_revision="b")
+    with pytest.raises(ValidationError):
+        PullRequestUpdateRequest(title="\n ")
+    with pytest.raises(ValidationError):
+        PullRequestCommentCreateRequest(body=" \n")
+    for line in (0, -1, 2147483648):
+        with pytest.raises(ValidationError):
+            PullRequestCommentCreateRequest(body="comment", line_number=line)
+    assert PullRequestCommentCreateRequest(body="comment", line_number=1).line_number == 1
 
 
 @pytest.fixture(autouse=True)
@@ -350,6 +373,7 @@ def test_timeline_has_opened_event(client) -> None:
     opened_events = [e for e in data["items"] if e["type"] == "opened"]
     assert len(opened_events) == 1
     assert opened_events[0]["actor"]["id"] == pr_data["author_id"]
+    assert opened_events[0]["actor"]["display_name"] == "owner"
 
 
 def test_timeline_includes_comments(client) -> None:
@@ -371,6 +395,7 @@ def test_timeline_includes_comments(client) -> None:
 
     comment_events = [e for e in data["items"] if e["type"] == "comment"]
     assert len(comment_events) == 1
+    assert comment_events[0]["payload"]["body"] == "A comment"
 
 
 def test_timeline_nonexistent_pr_returns_404(client) -> None:
@@ -490,6 +515,65 @@ def test_me_pull_requests_unauthenticated(client) -> None:
     client.cookies.clear()
     resp = client.get("/api/v1/me/pull-requests")
     assert resp.status_code == 401
+
+
+def test_me_pull_requests_omits_private_repositories_without_access(client) -> None:
+    org, repo = _setup_org_and_repo(client)
+    _create_pr(client, org, repo, title="Private review")
+    client.cookies.clear()
+    _register(client, "outsider@test.com")
+    _login(client, "outsider@test.com")
+    response = client.get("/api/v1/me/pull-requests", params={"filter": "open"})
+    assert response.status_code == 200
+    assert response.json()["pull_requests"] == []
+
+
+def test_reviewer_must_exist_and_have_repository_access(client) -> None:
+    org, repo = _setup_org_and_repo(client)
+    pr = _create_pr(client, org, repo)
+    outsider = _register(client, "outsider@test.com")
+    _login(client, "owner@test.com")
+    url = f"{_pr_base(org, repo)}/{pr['id']}/reviewers"
+    for reviewer_id in (outsider, str(uuid4())):
+        response = client.post(
+            url, json={"reviewer_id": reviewer_id}, headers=_csrf_headers(client)
+        )
+        assert response.status_code == 404, response.text
+
+
+def test_pull_request_actions_are_audited_without_comment_contents(client, session_factory) -> None:
+    org, repo = _setup_org_and_repo(client)
+    pr = _create_pr(client, org, repo)
+    url = f"{_pr_base(org, repo)}/{pr['id']}"
+    comment = client.post(
+        f"{url}/comments", json={"body": "private review text"}, headers=_csrf_headers(client)
+    )
+    assert comment.status_code == 201
+    rejected = client.post(
+        f"{url}/reviewers", json={"reviewer_id": str(uuid4())}, headers=_csrf_headers(client)
+    )
+    assert rejected.status_code == 404
+
+    async def read_events():
+        async with session_factory() as session:
+            return list(
+                (
+                    await session.scalars(
+                        select(AuditEvent).where(AuditEvent.event_type.like("pull_request.%"))
+                    )
+                ).all()
+            )
+
+    events = asyncio.run(read_events())
+    assert {event.event_type for event in events} == {
+        "pull_request.created",
+        "pull_request.commented",
+    }
+    assert all(event.metadata_json["pull_request_id"] == pr["id"] for event in events)
+    assert all(
+        event.repository_id is not None and event.actor_user_id is not None for event in events
+    )
+    assert all("private review text" not in str(event.metadata_json) for event in events)
 
 
 # ---------------------------------------------------------------------------

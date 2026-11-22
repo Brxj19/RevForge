@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.enums import PullRequestState, ReviewDecision
 
@@ -22,20 +22,41 @@ class PullRequestCreateRequest(BaseModel):
     target_branch: str | None = Field(default=None, max_length=200)
     draft: bool = False
 
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Title must not be blank")
+        return value
+
 
 class PullRequestUpdateRequest(BaseModel):
-    title: str | None = Field(default=None, max_length=200)
+    title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=10000)
     state: PullRequestState | None = None
+
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("Title must not be blank")
+        return value
 
 
 class PullRequestCommentCreateRequest(BaseModel):
     body: str = Field(min_length=1, max_length=10000)
     reply_to_comment_id: UUID | None = None
     file_path: str | None = Field(default=None, max_length=500)
-    line_number: int | None = None
+    line_number: int | None = Field(default=None, ge=1, le=2147483647)
     base_revision: str | None = Field(default=None, max_length=40)
     head_revision: str | None = Field(default=None, max_length=40)
+
+    @field_validator("body")
+    @classmethod
+    def body_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Comment must not be blank")
+        return value
 
 
 class PullRequestReviewCreateRequest(BaseModel):
@@ -60,6 +81,18 @@ class ViewedFileRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------
+
+
+class ReviewerCandidate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    display_name: str
+    email: str
+
+
+class ReviewerCandidatesResponse(BaseModel):
+    users: list[ReviewerCandidate]
 
 
 class PullRequestResponse(BaseModel):

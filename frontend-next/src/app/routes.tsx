@@ -26,9 +26,7 @@ const PullsListPage = lazy(() => import("~/features/pulls/PullsListPage"));
 const NewPullRequestPage = lazy(
   () => import("~/features/pulls/NewPullRequestPage"),
 );
-const PullRequestPage = lazy(
-  () => import("~/features/pulls/PullRequestPage"),
-);
+const PullRequestPage = lazy(() => import("~/features/pulls/PullRequestPage"));
 const ReviewsInboxPage = lazy(
   () => import("~/features/pulls/ReviewsInboxPage"),
 );
@@ -154,10 +152,7 @@ export function AppRoutes(): JSX.Element {
         path="/new"
         component={authed(soon("New repository", 4, "#/new"))}
       />
-      <Route
-        path="/reviews"
-        component={authed(ReviewsInboxPage)}
-      />
+      <Route path="/reviews" component={authed(ReviewsInboxPage)} />
       <Route
         path="/activity"
         component={authed(soon("Activity", 5, "#/activity"))}
@@ -225,11 +220,8 @@ export function AppRoutes(): JSX.Element {
         <Route path="/changesets/:node" component={ChangesetPage} />
         <Route path="/c/:node" component={ShortChangesetRedirect} />
         <Route path="/pulls" component={PullsListPage} />
-        <Route
-          path="/pulls/new"
-          component={authed(NewPullRequestPage)}
-        />
-        <Route path="/pulls/:n" component={PullRequestPage} />
+        <Route path="/pulls/new" component={authed(NewPullRequestPage)} />
+        <Route path="/pulls/:n/:section?" component={PullRequestPage} />
         <Route path="/refs/:kind?" component={RefsPage} />
         <Route
           path="/settings/:section?/:id?"

@@ -66,14 +66,22 @@ function reviewerId(n: number): string {
 
 // Nodes from the prototype; extend to 40-hex if needed (use NODEs from sigma-reckitt where they exist).
 const N = {
-  "9f2a1c4e7b30": NODE["0b486fec60de"] ?? "9f2a1c4e7b30d5e6f708192a3b4c5d6e7f809102",
-  "1c7450e15fcb": NODE["1c7450e15fcb"] ?? "1c7450e15fcbe499620a42a89b43139ca1ea6aa9",
-  "4b81e0c9d2aa": NODE["e7930bb0e457"] ?? "4b81e0c9d2aa5e6f708192a3b4c5d6e7f80911a3",
-  "77c0de11aa90": NODE["b2b5a019dbcb"] ?? "77c0de11aa905e6f708192a3b4c5d6e7f80911b4",
-  "0b486fec60de": NODE["0b486fec60de"] ?? "0b486fec60de599c0dfab1a065eca86a06651c31",
-  "628371ad0b32": NODE["628371ad0b32"] ?? "628371ad0b325b2985ea419592498e593c581657",
-  e0c8db2ddfe6: NODE["e0c8db2ddfe6"] ?? "e0c8db2ddfe6b6df66d78476c48be90e4d6070b0",
-  "2295bc3c1ae5": NODE["2295bc3c1ae5"] ?? "2295bc3c1ae54ab2aeaf6744687d72cb4267feed",
+  "9f2a1c4e7b30":
+    NODE["0b486fec60de"] ?? "9f2a1c4e7b30d5e6f708192a3b4c5d6e7f809102",
+  "1c7450e15fcb":
+    NODE["1c7450e15fcb"] ?? "1c7450e15fcbe499620a42a89b43139ca1ea6aa9",
+  "4b81e0c9d2aa":
+    NODE["e7930bb0e457"] ?? "4b81e0c9d2aa5e6f708192a3b4c5d6e7f80911a3",
+  "77c0de11aa90":
+    NODE["b2b5a019dbcb"] ?? "77c0de11aa905e6f708192a3b4c5d6e7f80911b4",
+  "0b486fec60de":
+    NODE["0b486fec60de"] ?? "0b486fec60de599c0dfab1a065eca86a06651c31",
+  "628371ad0b32":
+    NODE["628371ad0b32"] ?? "628371ad0b325b2985ea419592498e593c581657",
+  e0c8db2ddfe6:
+    NODE["e0c8db2ddfe6"] ?? "e0c8db2ddfe6b6df66d78476c48be90e4d6070b0",
+  "2295bc3c1ae5":
+    NODE["2295bc3c1ae5"] ?? "2295bc3c1ae54ab2aeaf6744687d72cb4267feed",
   aa01bc22dd33: "aa01bc22dd33599c0dfab1a065eca86a06651c66",
   c3d4e5f60718: "c3d4e5f607185e6f708192a3b4c5d6e7f80911c5",
   "9a8b7c6d5e4f": "9a8b7c6d5e4f5e6f708192a3b4c5d6e7f80911d6",
@@ -117,8 +125,20 @@ const pr7Summary: PullRequestSummary = {
 };
 
 const pr7Reviewers: PullRequestReviewer[] = [
-  { id: reviewerId(1), pull_request_id: prId(7), reviewer_id: USERS.brxj19.id, required: true },
-  { id: reviewerId(2), pull_request_id: prId(7), reviewer_id: BHUVNESH_ID, required: false },
+  {
+    id: reviewerId(1),
+    pull_request_id: prId(7),
+    reviewer_id: USERS.brxj19.id,
+    display_name: "Brxj19",
+    required: true,
+  },
+  {
+    id: reviewerId(2),
+    pull_request_id: prId(7),
+    reviewer_id: BHUVNESH_ID,
+    display_name: "Bhuvnesh Kumar",
+    required: false,
+  },
 ];
 
 const pr7Reviews: PullRequestReview[] = [
@@ -207,12 +227,17 @@ const pr7Timeline: TimelineEvent[] = [
     at: "2026-10-17T11:40:00.000Z",
     after: "9f2a1c4e",
     commits: 1,
+    review_outdated: true,
   },
 ];
 
 // --- PR #6: open, "Iterative in-order traversal for BinaryTree" ---
 const rvPreview6: ReviewerPreview[] = [
-  { display_name: "Tatwa Prasad", required: true, decision: "changes_requested" },
+  {
+    display_name: "Tatwa Prasad",
+    required: true,
+    decision: "changes_requested",
+  },
 ];
 
 const pr6Summary: PullRequestSummary = {
@@ -220,7 +245,8 @@ const pr6Summary: PullRequestSummary = {
   repository_id: REPO_ID,
   number: 6,
   title: "Iterative in-order traversal for BinaryTree",
-  description: "Replaces the recursive walk so deep trees don't blow the stack.",
+  description:
+    "Replaces the recursive walk so deep trees don't blow the stack.",
   state: "open",
   source_revision: N["4b81e0c9d2aa"]!,
   target_revision: N["1c7450e15fcb"]!,
@@ -264,7 +290,12 @@ const pr6Timeline: TimelineEvent[] = [
 ];
 
 const pr6Reviewers: PullRequestReviewer[] = [
-  { id: reviewerId(3), pull_request_id: prId(6), reviewer_id: USERS.tatwa.id, required: true },
+  {
+    id: reviewerId(3),
+    pull_request_id: prId(6),
+    reviewer_id: USERS.tatwa.id,
+    required: true,
+  },
 ];
 
 const pr6Reviews: PullRequestReview[] = [
@@ -310,8 +341,16 @@ const pr5Summary: PullRequestSummary = {
 };
 
 const pr5Timeline: TimelineEvent[] = [
-  { type: "opened", actor: PR_USERS_EXT.dheeraj!, at: "2026-10-14T08:00:00.000Z" },
-  { type: "converted_to_draft", actor: PR_USERS_EXT.dheeraj!, at: "2026-10-14T08:01:00.000Z" },
+  {
+    type: "opened",
+    actor: PR_USERS_EXT.dheeraj!,
+    at: "2026-10-14T08:00:00.000Z",
+  },
+  {
+    type: "converted_to_draft",
+    actor: PR_USERS_EXT.dheeraj!,
+    at: "2026-10-14T08:01:00.000Z",
+  },
 ];
 
 // --- PR #4: merged, "BinaryTree::contains and Graph::has_edge" ---
@@ -350,7 +389,12 @@ const pr4Summary: PullRequestSummary = {
 };
 
 const pr4Reviewers: PullRequestReviewer[] = [
-  { id: reviewerId(4), pull_request_id: prId(4), reviewer_id: USERS.tatwa.id, required: true },
+  {
+    id: reviewerId(4),
+    pull_request_id: prId(4),
+    reviewer_id: USERS.tatwa.id,
+    required: true,
+  },
 ];
 
 const pr4Reviews: PullRequestReview[] = [
@@ -373,7 +417,12 @@ const pr4Timeline: TimelineEvent[] = [
     reviewer: PR_USERS.tatwa,
     required: true,
   },
-  { type: "review", actor: PR_USERS.tatwa!, at: "2026-10-16T18:30:00.000Z", decision: "approved" },
+  {
+    type: "review",
+    actor: PR_USERS.tatwa!,
+    at: "2026-10-16T18:30:00.000Z",
+    decision: "approved",
+  },
   {
     type: "merged",
     actor: PR_USERS.brxj19!,
@@ -419,8 +468,18 @@ const pr3Summary: PullRequestSummary = {
 
 const pr3Timeline: TimelineEvent[] = [
   { type: "opened", actor: PR_USERS.brxj19!, at: "2026-10-16T17:00:00.000Z" },
-  { type: "review", actor: PR_USERS.tatwa!, at: "2026-10-16T17:30:00.000Z", decision: "approved" },
-  { type: "merged", actor: PR_USERS.brxj19!, at: "2026-10-16T18:00:00.000Z", merge_node: N["628371ad0b32"] },
+  {
+    type: "review",
+    actor: PR_USERS.tatwa!,
+    at: "2026-10-16T17:30:00.000Z",
+    decision: "approved",
+  },
+  {
+    type: "merged",
+    actor: PR_USERS.brxj19!,
+    at: "2026-10-16T18:00:00.000Z",
+    merge_node: N["628371ad0b32"],
+  },
 ];
 
 // --- PR #2: closed, "Experiment: AVL rebalancing" ---
@@ -455,8 +514,16 @@ const pr2Summary: PullRequestSummary = {
 };
 
 const pr2Timeline: TimelineEvent[] = [
-  { type: "opened", actor: PR_USERS_EXT.dheeraj!, at: "2026-10-03T08:00:00.000Z" },
-  { type: "closed", actor: PR_USERS_EXT.dheeraj!, at: "2026-10-10T12:00:00.000Z" },
+  {
+    type: "opened",
+    actor: PR_USERS_EXT.dheeraj!,
+    at: "2026-10-03T08:00:00.000Z",
+  },
+  {
+    type: "closed",
+    actor: PR_USERS_EXT.dheeraj!,
+    at: "2026-10-10T12:00:00.000Z",
+  },
 ];
 
 // --- PR #12 (payments-api): open, "Idempotency keys for refunds" ---
@@ -470,7 +537,8 @@ const pr12Summary: PullRequestSummary = {
   repository_id: REPO_ID_PAY,
   number: 12,
   title: "Idempotency keys for refunds",
-  description: "Stores a key per refund request so retries don't double-refund.",
+  description:
+    "Stores a key per refund request so retries don't double-refund.",
   state: "open",
   source_revision: N.c3d4e5f60718!,
   target_revision: N["9a8b7c6d5e4f"]!,
@@ -509,18 +577,53 @@ export const PR7_DIFF_FILES: DiffFile[] = [
     deletions: 0,
     too_large: false,
     truncated: false,
-    hunks: [{
-      header: "@@ -9,6 +9,9 @@ class Graph {",
-      old_start: 9, old_lines: 6, new_start: 9, new_lines: 9,
-      lines: [
-        { kind: "context", old_line: 9, new_line: 9, text: "    bool has_edge(int u, int v) const;" },
-        { kind: "context", old_line: 10, new_line: 10, text: "    void print_adj() const;" },
-        { kind: "add", old_line: null, new_line: 11, text: "    // Shortest path by edge count, or by weight when set." },
-        { kind: "add", old_line: null, new_line: 12, text: "    std::vector<int> shortest_path(int from, int to) const;" },
-        { kind: "add", old_line: null, new_line: 13, text: "    void set_weight(int u, int v, int w);" },
-        { kind: "context", old_line: 11, new_line: 14, text: "    std::vector<int> bfs(int start) const;" },
-      ],
-    }],
+    hunks: [
+      {
+        header: "@@ -9,6 +9,9 @@ class Graph {",
+        old_start: 9,
+        old_lines: 6,
+        new_start: 9,
+        new_lines: 9,
+        lines: [
+          {
+            kind: "context",
+            old_line: 9,
+            new_line: 9,
+            text: "    bool has_edge(int u, int v) const;",
+          },
+          {
+            kind: "context",
+            old_line: 10,
+            new_line: 10,
+            text: "    void print_adj() const;",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 11,
+            text: "    // Shortest path by edge count, or by weight when set.",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 12,
+            text: "    std::vector<int> shortest_path(int from, int to) const;",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 13,
+            text: "    void set_weight(int u, int v, int w);",
+          },
+          {
+            kind: "context",
+            old_line: 11,
+            new_line: 14,
+            text: "    std::vector<int> bfs(int start) const;",
+          },
+        ],
+      },
+    ],
   },
   {
     path: "src/graph.cpp",
@@ -533,27 +636,87 @@ export const PR7_DIFF_FILES: DiffFile[] = [
     deletions: 2,
     too_large: false,
     truncated: false,
-    hunks: [{
-      header: "@@ -18,3 +18,59 @@ bool Graph::has_edge(int u, int v) const {",
-      old_start: 18, old_lines: 3, new_start: 18, new_lines: 59,
-      lines: [
-        { kind: "context", old_line: 18, new_line: 18, text: "    return false;" },
-        { kind: "context", old_line: 19, new_line: 19, text: "}" },
-        { kind: "add", old_line: null, new_line: 20, text: "" },
-        { kind: "add", old_line: null, new_line: 21, text: "std::vector<int> Graph::shortest_path(int from, int to) const {" },
-        { kind: "add", old_line: null, new_line: 22, text: "    std::vector<int> dist(adj_.size(), INT_MAX), prev(adj_.size(), -1);" },
-        { kind: "add", old_line: null, new_line: 23, text: "    std::priority_queue<std::pair<int,int>> pq;" },
-        { kind: "add", old_line: null, new_line: 24, text: "    dist[from] = 0; pq.push({0, from});" },
-        { kind: "add", old_line: null, new_line: 25, text: "    while (!pq.empty()) {" },
-        { kind: "add", old_line: null, new_line: 26, text: "        auto [d, u] = pq.top(); pq.pop();" },
-        { kind: "add", old_line: null, new_line: 27, text: "        if (-d > dist[u]) continue;" },
-        { kind: "add", old_line: null, new_line: 28, text: "        for (int v : adj_[u]) {" },
-        { kind: "add", old_line: null, new_line: 29, text: "            int nd = dist[u] + weight(u, v);" },
-        { kind: "add", old_line: null, new_line: 30, text: "            if (nd < dist[v]) { dist[v] = nd; prev[v] = u; pq.push({-nd, v}); }" },
-        { kind: "add", old_line: null, new_line: 31, text: "        }" },
-        { kind: "add", old_line: null, new_line: 32, text: "    }" },
-      ],
-    }],
+    hunks: [
+      {
+        header: "@@ -18,3 +18,59 @@ bool Graph::has_edge(int u, int v) const {",
+        old_start: 18,
+        old_lines: 3,
+        new_start: 18,
+        new_lines: 59,
+        lines: [
+          {
+            kind: "context",
+            old_line: 18,
+            new_line: 18,
+            text: "    return false;",
+          },
+          { kind: "context", old_line: 19, new_line: 19, text: "}" },
+          { kind: "add", old_line: null, new_line: 20, text: "" },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 21,
+            text: "std::vector<int> Graph::shortest_path(int from, int to) const {",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 22,
+            text: "    std::vector<int> dist(adj_.size(), INT_MAX), prev(adj_.size(), -1);",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 23,
+            text: "    std::priority_queue<std::pair<int,int>> pq;",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 24,
+            text: "    dist[from] = 0; pq.push({0, from});",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 25,
+            text: "    while (!pq.empty()) {",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 26,
+            text: "        auto [d, u] = pq.top(); pq.pop();",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 27,
+            text: "        if (-d > dist[u]) continue;",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 28,
+            text: "        for (int v : adj_[u]) {",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 29,
+            text: "            int nd = dist[u] + weight(u, v);",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 30,
+            text: "            if (nd < dist[v]) { dist[v] = nd; prev[v] = u; pq.push({-nd, v}); }",
+          },
+          { kind: "add", old_line: null, new_line: 31, text: "        }" },
+          { kind: "add", old_line: null, new_line: 32, text: "    }" },
+        ],
+      },
+    ],
   },
   {
     path: "main.cpp",
@@ -566,19 +729,59 @@ export const PR7_DIFF_FILES: DiffFile[] = [
     deletions: 2,
     too_large: false,
     truncated: false,
-    hunks: [{
-      header: "@@ -27,4 +27,8 @@ int main(){",
-      old_start: 27, old_lines: 4, new_start: 27, new_lines: 8,
-      lines: [
-        { kind: "context", old_line: 27, new_line: 27, text: "    auto order = g.bfs(0);" },
-        { kind: "del", old_line: 28, new_line: null, text: '    for (int v : order) cout << v << " ";' },
-        { kind: "add", old_line: null, new_line: 28, text: "    for (int v : order) cout << v << ' ';" },
-        { kind: "add", old_line: null, new_line: 29, text: "    auto path = g.shortest_path(0, 4);" },
-        { kind: "add", old_line: null, new_line: 30, text: '    cout << "\\nShortest 0 -> 4: ";' },
-        { kind: "add", old_line: null, new_line: 31, text: "    for (int v : path) cout << v << ' ';" },
-        { kind: "context", old_line: 29, new_line: 32, text: "    cout << endl;" },
-      ],
-    }],
+    hunks: [
+      {
+        header: "@@ -27,4 +27,8 @@ int main(){",
+        old_start: 27,
+        old_lines: 4,
+        new_start: 27,
+        new_lines: 8,
+        lines: [
+          {
+            kind: "context",
+            old_line: 27,
+            new_line: 27,
+            text: "    auto order = g.bfs(0);",
+          },
+          {
+            kind: "del",
+            old_line: 28,
+            new_line: null,
+            text: '    for (int v : order) cout << v << " ";',
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 28,
+            text: "    for (int v : order) cout << v << ' ';",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 29,
+            text: "    auto path = g.shortest_path(0, 4);",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 30,
+            text: '    cout << "\\nShortest 0 -> 4: ";',
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 31,
+            text: "    for (int v : path) cout << v << ' ';",
+          },
+          {
+            kind: "context",
+            old_line: 29,
+            new_line: 32,
+            text: "    cout << endl;",
+          },
+        ],
+      },
+    ],
   },
   {
     path: "tests/test_graph.cpp",
@@ -591,34 +794,79 @@ export const PR7_DIFF_FILES: DiffFile[] = [
     deletions: 0,
     too_large: false,
     truncated: false,
-    hunks: [{
-      header: "@@ -8,3 +8,32 @@ int main() {",
-      old_start: 8, old_lines: 3, new_start: 8, new_lines: 32,
-      lines: [
-        { kind: "context", old_line: 8, new_line: 8, text: "    assert(!g.has_edge(0, 2));" },
-        { kind: "add", old_line: null, new_line: 9, text: "    auto p = g.shortest_path(0, 1);" },
-        { kind: "add", old_line: null, new_line: 10, text: "    assert((p == std::vector<int>{0, 1}));" },
-        { kind: "add", old_line: null, new_line: 11, text: "    Graph lone(3);" },
-        { kind: "add", old_line: null, new_line: 12, text: "    assert(lone.shortest_path(0, 2).empty());" },
-      ],
-    }],
+    hunks: [
+      {
+        header: "@@ -8,3 +8,32 @@ int main() {",
+        old_start: 8,
+        old_lines: 3,
+        new_start: 8,
+        new_lines: 32,
+        lines: [
+          {
+            kind: "context",
+            old_line: 8,
+            new_line: 8,
+            text: "    assert(!g.has_edge(0, 2));",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 9,
+            text: "    auto p = g.shortest_path(0, 1);",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 10,
+            text: "    assert((p == std::vector<int>{0, 1}));",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 11,
+            text: "    Graph lone(3);",
+          },
+          {
+            kind: "add",
+            old_line: null,
+            new_line: 12,
+            text: "    assert(lone.shortest_path(0, 2).empty());",
+          },
+        ],
+      },
+    ],
   },
 ];
 
 /** Inline threads for PR #7 (prototype PRTHREADS[7]). */
-export const PR7_THREADS = [{
-  file: "src/graph.cpp",
-  after_line: 29,
-  after_text: "            int nd = dist[u] + weight(u, v);",
-  items: [
-    { user: "Brxj19", time: "1h", body: "`dist[u] + weight(u, v)` can overflow when `dist[u]` is `INT_MAX`. Skip unreachable nodes first?" },
-    { user: "Tatwa Prasad", time: "40m", body: "Good catch, the `-d > dist[u]` guard doesn't cover it. Will push a fix." },
-  ],
-}];
+export const PR7_THREADS = [
+  {
+    file: "src/graph.cpp",
+    after_line: 29,
+    after_text: "            int nd = dist[u] + weight(u, v);",
+    items: [
+      {
+        user: "Brxj19",
+        time: "1h",
+        body: "`dist[u] + weight(u, v)` can overflow when `dist[u]` is `INT_MAX`. Skip unreachable nodes first?",
+      },
+      {
+        user: "Tatwa Prasad",
+        time: "40m",
+        body: "Good catch, the `-d > dist[u]` guard doesn't cover it. Will push a fix.",
+      },
+    ],
+  },
+];
 
 // --- Merge checks for PR #7 (prototype gateOf) ---
 export const PR7_MERGE_CHECKS: MergeCheck[] = [
-  { id: "changes-req", ok: true, message: "No outstanding change requests", detail: "" },
+  {
+    id: "changes-req",
+    ok: true,
+    message: "No outstanding change requests",
+    detail: "",
+  },
   {
     id: "approvals-req",
     ok: false,
@@ -626,8 +874,18 @@ export const PR7_MERGE_CHECKS: MergeCheck[] = [
     message: "1 of 2 required reviewers approved",
     detail: "Waiting on Brxj19",
   },
-  { id: "approvals", ok: true, message: "1 of 1 approvals needed", detail: "Approvals from the author don't count" },
-  { id: "conflicts", ok: true, message: "No conflicts with default", detail: "Checked against 1c7450e15fcb" },
+  {
+    id: "approvals",
+    ok: true,
+    message: "1 of 1 approvals needed",
+    detail: "Approvals from the author don't count",
+  },
+  {
+    id: "conflicts",
+    ok: true,
+    message: "No conflicts with default",
+    detail: "Checked against 1c7450e15fcb",
+  },
   { id: "ready", ok: true, message: "Ready for review" },
 ];
 
@@ -645,7 +903,14 @@ export const PR_SUMMARIES: PullRequestSummary[] = [
 export const PR_SUMMARIES_PAY: PullRequestSummary[] = [pr12Summary];
 
 /** All PRs across all repos (for reviews inbox). */
-export const ALL_PRS: PullRequestSummary[] = [...PR_SUMMARIES, pr12Summary];
+export const ALL_PRS: PullRequestSummary[] = [
+  ...PR_SUMMARIES.map((pr) => ({
+    ...pr,
+    organization_slug: "sigma",
+    repository_slug: "sigma-reckitt",
+  })),
+  { ...pr12Summary, organization_slug: "sigma" },
+];
 
 export const PR_DETAILS: Record<number, PullRequestDetail> = {
   7: {
@@ -676,7 +941,14 @@ export const PR_DETAILS: Record<number, PullRequestDetail> = {
     ...pr3Summary,
     comments: [],
     reviews: [],
-    reviewers: [{ id: reviewerId(5), pull_request_id: prId(3), reviewer_id: USERS.tatwa.id, required: true }],
+    reviewers: [
+      {
+        id: reviewerId(5),
+        pull_request_id: prId(3),
+        reviewer_id: USERS.tatwa.id,
+        required: true,
+      },
+    ],
   },
   2: {
     ...pr2Summary,

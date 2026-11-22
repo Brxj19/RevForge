@@ -3,11 +3,7 @@ import type { IconName } from "~/ui/icons";
 export type PrState = "open" | "draft" | "merged" | "closed";
 
 export type ReviewDecision =
-  | "approved"
-  | "changes_requested"
-  | "comment"
-  | "commented"
-  | "pending";
+  "approved" | "changes_requested" | "comment" | "commented" | "pending";
 
 export function prStateIcon(state: PrState): IconName {
   switch (state) {
@@ -35,9 +31,7 @@ export function prStateLabel(state: PrState): string {
   }
 }
 
-export function reviewDecisionLabel(
-  decision: ReviewDecision,
-): string {
+export function reviewDecisionLabel(decision: ReviewDecision): string {
   switch (decision) {
     case "approved":
       return "Approved";
@@ -51,9 +45,7 @@ export function reviewDecisionLabel(
   }
 }
 
-export function reviewDecisionIcon(
-  decision: ReviewDecision,
-): IconName {
+export function reviewDecisionIcon(decision: ReviewDecision): IconName {
   switch (decision) {
     case "approved":
       return "check";
