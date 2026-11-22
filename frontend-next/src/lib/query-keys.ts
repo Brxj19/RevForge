@@ -50,4 +50,17 @@ export const qk = {
     ["code-search", o, r, rev, q] as const,
   fileSearch: (o: string, r: string, rev: string, q: string) =>
     ["file-search", o, r, rev, q] as const,
+  // Phase 3: Pull requests
+  pulls: (o: string, r: string, state: string) =>
+    ["pulls", o, r, state] as const,
+  pull: (o: string, r: string, n: number) => ["pull", o, r, n] as const,
+  pullTimeline: (o: string, r: string, n: number) =>
+    ["pull", o, r, n, "timeline"] as const,
+  pullMergeStatus: (o: string, r: string, n: number) =>
+    ["pull", o, r, n, "merge-status"] as const,
+  pullDiff: (o: string, r: string, n: number) =>
+    ["pull", o, r, n, "diff"] as const,
+  compare: (o: string, r: string, base: string, head: string) =>
+    ["compare", o, r, base, head] as const,
+  myPulls: (filter: string) => ["my-pulls", filter] as const,
 };

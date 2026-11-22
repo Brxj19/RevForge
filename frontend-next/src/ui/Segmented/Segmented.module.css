@@ -1,11 +1,11 @@
 .seg {
   display: inline-flex;
+  flex-wrap: wrap;
   border: 1px solid var(--border-2);
   border-radius: var(--r);
   padding: 2px;
   background: var(--raised);
   max-width: 100%;
-  overflow-x: auto;
 }
 .item {
   position: relative;

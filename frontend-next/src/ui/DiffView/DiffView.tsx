@@ -56,6 +56,11 @@ export interface DiffViewProps {
   fileHref?: (file: DiffViewFile) => string | undefined;
   /** Extra header controls per file (pull requests: Viewed checkbox). */
   fileActions?: (file: DiffViewFile) => JSX.Element;
+  /** Review workspaces use the prototype's compact file header. */
+  compactHeader?: boolean;
+  /** Optional review controls and thread content for each displayed diff line. */
+  lineAction?: (file: DiffViewFile, line: DiffViewLine) => JSX.Element;
+  afterLine?: (file: DiffViewFile, line: DiffViewLine) => JSX.Element;
 }
 
 const baseName = (p: string) => p.split("/").pop() ?? p;
@@ -77,6 +82,9 @@ export function DiffView(props: DiffViewProps) {
             lang={props.langFor?.(file.path) ?? null}
             href={props.fileHref?.(file)}
             actions={props.fileActions?.(file)}
+            compactHeader={props.compactHeader}
+            lineAction={props.lineAction}
+            afterLine={props.afterLine}
           />
         )}
       </For>
@@ -98,6 +106,9 @@ function DiffFileView(props: {
   lang: string | null;
   href?: string;
   actions?: JSX.Element;
+  compactHeader?: boolean;
+  lineAction?: DiffViewProps["lineAction"];
+  afterLine?: DiffViewProps["afterLine"];
 }) {
   const f = () => props.file;
   const kind = () => changeKindOf(f().status);
@@ -156,7 +167,9 @@ function DiffFileView(props: {
               </span>
             )}
           </Show>
-          <CopyButton text={f().path} label="Copy path" size="xs" />
+          <Show when={!props.compactHeader}>
+            <CopyButton text={f().path} label="Copy path" size="xs" />
+          </Show>
         </span>
         <span class={styles.meta}>
           <Show when={modeNote(f())}>
@@ -168,6 +181,7 @@ function DiffFileView(props: {
           {/* Nothing to count for pure renames, copies and mode changes. */}
           <Show
             when={
+              !props.compactHeader &&
               !f().binary &&
               (f().hunks.length > 0 || f().insertions + f().deletions > 0)
             }
@@ -226,6 +240,9 @@ function DiffFileView(props: {
               <caption class="visually-hidden">Changes to {f().path}</caption>
               <thead class="visually-hidden">
                 <tr>
+                  <Show when={props.lineAction}>
+                    <th scope="col">Review</th>
+                  </Show>
                   <th scope="col">Old line</th>
                   <th scope="col">New line</th>
                   <th scope="col">Change</th>
@@ -235,36 +252,57 @@ function DiffFileView(props: {
                 {(h, hi) => (
                   <tbody>
                     <tr class={styles.hunk}>
+                      <Show when={props.lineAction}>
+                        <td />
+                      </Show>
                       <td class={styles.ln} />
                       <td class={styles.ln} />
                       <td class={styles.code}>{visibleText(h.header, MARK)}</td>
                     </tr>
                     <For each={h.lines}>
                       {(l, li) => (
-                        <tr data-kind={l.kind}>
-                          <td class={styles.ln}>{l.old_line ?? ""}</td>
-                          <td class={styles.ln}>{l.new_line ?? ""}</td>
-                          <td class={styles.code}>
-                            <span class={styles.glyph}>
-                              {l.kind === "add"
-                                ? "+"
-                                : l.kind === "del"
-                                  ? "−"
-                                  : " "}
-                            </span>
-                            <span class="visually-hidden">
-                              {l.kind === "add"
-                                ? "added: "
-                                : l.kind === "del"
-                                  ? "removed: "
-                                  : ""}
-                            </span>
-                            <LineText
-                              text={l.text}
-                              tokens={tokens()?.[(offsets()[hi()] ?? 0) + li()]}
-                            />
-                          </td>
-                        </tr>
+                        <>
+                          <tr data-kind={l.kind}>
+                            <Show when={props.lineAction}>
+                              <td class={styles.lineAction}>
+                                {props.lineAction?.(f(), l)}
+                              </td>
+                            </Show>
+                            <td class={styles.ln}>{l.old_line ?? ""}</td>
+                            <td class={styles.ln}>{l.new_line ?? ""}</td>
+                            <td class={styles.code}>
+                              <span class={styles.glyph}>
+                                {l.kind === "add"
+                                  ? "+"
+                                  : l.kind === "del"
+                                    ? "−"
+                                    : " "}
+                              </span>
+                              <span class="visually-hidden">
+                                {l.kind === "add"
+                                  ? "added: "
+                                  : l.kind === "del"
+                                    ? "removed: "
+                                    : ""}
+                              </span>
+                              <LineText
+                                text={l.text}
+                                tokens={
+                                  tokens()?.[(offsets()[hi()] ?? 0) + li()]
+                                }
+                              />
+                            </td>
+                          </tr>
+                          <Show when={props.afterLine?.(f(), l)}>
+                            {(content) => (
+                              <tr class={styles.thread}>
+                                <td colspan={props.lineAction ? 4 : 3}>
+                                  {content()}
+                                </td>
+                              </tr>
+                            )}
+                          </Show>
+                        </>
                       )}
                     </For>
                   </tbody>

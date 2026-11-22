@@ -5,6 +5,7 @@ import {
   type RouteSectionProps,
 } from "@solidjs/router";
 import { createMemo, Match, Show, Switch } from "solid-js";
+import { createPrCountQuery } from "~/features/pulls";
 import { Skeleton, SkeletonText } from "~/ui/Skeleton";
 import { Pane, Panes, Workspace, WsBody } from "~/ui/WorkspaceLayout";
 import {
@@ -39,6 +40,7 @@ export default function RepoLayout(props: RouteSectionProps) {
       ? r.branches.length + r.bookmarks.length + r.tags.length
       : undefined;
   };
+  const prCount = createPrCountQuery(org, repo, ready);
   const base = () =>
     `/${encodeURIComponent(org())}/${encodeURIComponent(repo())}`;
   const rev = () => (typeof search.rev === "string" ? search.rev : "");
@@ -94,7 +96,7 @@ export default function RepoLayout(props: RouteSectionProps) {
         <Match when={query.data}>
           {(detail) => (
             <RepoContext.Provider value={ctx(detail)}>
-              <RepoHeader refCount={refCount()} />
+              <RepoHeader refCount={refCount()} prOpenCount={prCount.data} />
               <Show when={ready() || onSettings()} fallback={<RepoNotReady />}>
                 {props.children}
               </Show>

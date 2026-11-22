@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from urllib.parse import urlsplit
+from uuid import UUID
 
 import structlog
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
@@ -12,6 +14,7 @@ from app.db.session import SessionLocal
 from app.mercurial.provisioning_service import sweep_stale_provisioning
 from app.mercurial.version_check import ensure_mercurial_versions_match
 from app.models.repository_event import EventSpoolEntry
+from app.models.webhook import Webhook
 from app.services.event_service import EventService
 from app.services.event_spool import FileEventSpoolReader
 from app.services.webhook_service import WebhookService
@@ -86,44 +89,98 @@ class RevForgeWorker:
         self._running = False
 
     async def _process_batch(self) -> None:
-        async with self._session_factory() as session:
-            entries = await self._event_service.claim_events(session, batch_size=self._batch_size)
-            if not entries:
-                return
-            for entry in entries:
+        # Claim and commit one event per transaction. Keeping all batch locks while
+        # making outbound requests can deadlock workers and delay webhook changes.
+        for _ in range(self._batch_size):
+            async with self._session_factory() as session:
+                entries = await self._event_service.claim_events(session, batch_size=1)
+                if not entries:
+                    return
+                entry = entries[0]
                 try:
-                    await self._process_entry(session, entry)
-                    await self._event_service.mark_event_completed(session, entry_id=entry.id)
-                except Exception as exc:
+                    # Isolate a failed entry's DB operations from the rest of the batch.
+                    async with session.begin_nested():
+                        delivered = await self._process_entry(session, entry)
+                    if delivered:
+                        await self._event_service.mark_event_completed(session, entry_id=entry.id)
+                    else:
+                        await self._event_service.mark_event_failed(
+                            session, entry_id=entry.id, error_message="Webhook delivery failed."
+                        )
+                except Exception:
                     await self._event_service.mark_event_failed(
                         session,
                         entry_id=entry.id,
-                        error_message=str(exc),
+                        error_message="Event processing failed.",
                     )
-                    logger.warning("worker.entry_failed", entry_id=str(entry.id), error=str(exc))
-            await session.commit()
+                    logger.warning("worker.entry_failed", entry_id=str(entry.id))
+                await session.commit()
 
     async def _process_entry(
         self,
         session: AsyncSession,
         entry: EventSpoolEntry,
-    ) -> None:
+    ) -> bool:
         if entry.event_type == "repository.push.accepted":
             await self._process_push_event(session, entry)
+        elif entry.event_type.startswith("pull_request."):
+            return await self._process_pr_event(session, entry)
+        return True
+
+    async def _process_pr_event(self, session: AsyncSession, entry: EventSpoolEntry) -> bool:
+        try:
+            webhook_id = UUID(str(entry.payload_json["webhook_id"]))
+            event_id = UUID(str(entry.payload_json["event_id"]))
+        except (KeyError, TypeError, ValueError):
+            return False
+        webhook = await session.scalar(
+            select(Webhook)
+            .where(Webhook.id == webhook_id, Webhook.repository_id == entry.repository_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        # Disabled, deleted, or unsubscribed recipients must not receive queued data.
+        if webhook is None or not webhook.is_active or entry.event_type not in webhook.event_types:
+            return True
+        try:
+            if urlsplit(webhook.url).scheme.lower() != "https":
+                return False
+        except ValueError:
+            return False
+        metadata = entry.payload_json.get("metadata")
+        if not isinstance(metadata, dict):
+            return False
+        delivery = await self._webhook_service.deliver_webhook(
+            session,
+            webhook_id=webhook_id,
+            event_type=entry.event_type,
+            payload={
+                "event_type": entry.event_type,
+                "event_id": str(event_id),
+                "repository_id": str(entry.repository_id),
+                "payload": metadata,
+                "idempotency_key": entry.idempotency_key,
+            },
+            idempotency_key=entry.idempotency_key,
+        )
+        return delivery.status == "delivered"
 
     async def _process_push_event(
         self,
         session: AsyncSession,
         entry: EventSpoolEntry,
     ) -> None:
-        webhooks_result = await session.execute(
-            text("SELECT id FROM webhooks WHERE repository_id = :repo_id AND is_active = TRUE"),
-            {"repo_id": entry.repository_id},
+        webhooks_result = await session.scalars(
+            select(Webhook).where(
+                Webhook.repository_id == entry.repository_id,
+                Webhook.is_active.is_(True),
+            )
         )
-        webhook_rows = webhooks_result.fetchall()
 
-        for row in webhook_rows:
-            webhook_id = row[0]
+        for webhook in webhooks_result:
+            if not self._webhook_service.subscribes_to_event(webhook, entry.event_type):
+                continue
+            webhook_id = webhook.id
             payload: dict[str, object] = {
                 "event_type": entry.event_type,
                 "repository_id": str(entry.repository_id),
@@ -143,11 +200,10 @@ class RevForgeWorker:
                     delivery_id=str(delivery.id),
                     status=delivery.status,
                 )
-            except Exception as exc:
+            except Exception:
                 logger.warning(
                     "worker.webhook_delivery_failed",
                     webhook_id=str(webhook_id),
-                    error=str(exc),
                 )
 
 

@@ -502,6 +502,13 @@ export interface RepositoryTransportMetadata {
   } | null;
 }
 
+/** Reviewer preview returned in the PR list so the row can show avatars + decision. */
+export interface ReviewerPreview {
+  display_name: string;
+  required: boolean;
+  decision: "pending" | "approved" | "changes_requested" | "commented";
+}
+
 export interface PullRequestSummary {
   id: string;
   repository_id: string;
@@ -524,6 +531,22 @@ export interface PullRequestSummary {
   changes_requested_count: number;
   reviewer_count: number;
   comment_count: number;
+  /** Display name of the author, populated by the list endpoint. */
+  author_display_name?: string;
+  /** Repository slug, populated for cross-repo queries (reviews inbox). */
+  repository_slug?: string;
+  /** Organization slug, populated for cross-repository queries. */
+  organization_slug?: string;
+  /** Commit count (changesets), when known from the list. */
+  commit_count?: number;
+  /** Files changed count, when known from the list. */
+  files_changed_count?: number;
+  /** Total insertions, when known from the list. */
+  total_insertions?: number;
+  /** Total deletions, when known from the list. */
+  total_deletions?: number;
+  /** Reviewer summaries for the list row avatars. */
+  reviewers_preview?: ReviewerPreview[];
 }
 
 export interface PullRequestComment {
@@ -537,6 +560,7 @@ export interface PullRequestComment {
   base_revision: string | null;
   head_revision: string | null;
   outdated: boolean;
+  resolved: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -555,6 +579,7 @@ export interface PullRequestReviewer {
   pull_request_id: string;
   reviewer_id: string;
   required: boolean;
+  display_name?: string;
 }
 
 export interface PullRequestDetail extends PullRequestSummary {
@@ -618,6 +643,75 @@ export interface PinList {
  */
 export interface Viewer extends CurrentUser {
   is_platform_admin?: boolean;
+}
+
+// Phase 3: Pull Requests
+
+export interface UserRef {
+  id: string;
+  display_name: string;
+  email: string;
+}
+
+export type TimelineEventType =
+  | "opened"
+  | "review_requested"
+  | "review"
+  | "comment"
+  | "push"
+  | "merged"
+  | "closed"
+  | "reopened"
+  | "ready_for_review"
+  | "converted_to_draft";
+
+export interface TimelineEvent {
+  type: TimelineEventType;
+  actor: UserRef;
+  at: string;
+  /** Extra data per event type (review decision, push nodes, comment id, etc). */
+  [key: string]: unknown;
+}
+
+export interface MergeCheck {
+  id: string;
+  ok: boolean;
+  pending?: boolean;
+  message: string;
+  detail?: string;
+}
+
+export interface MergeStatus {
+  mergeable: boolean;
+  checks: MergeCheck[];
+}
+
+export interface DiffFileSummary {
+  path: string;
+  status: string;
+  insertions: number;
+  deletions: number;
+}
+
+export interface CompareResult {
+  base_node: string;
+  head_node: string;
+  merge_base: string;
+  changesets: ChangesetSummary[];
+  files: DiffFileSummary[];
+  conflicts: boolean;
+  identical: boolean;
+}
+
+export interface PullRequestListResponse {
+  pull_requests: PullRequestSummary[];
+  counts: { open: number; draft: number; merged: number; closed: number };
+  next_cursor: string | null;
+}
+
+export interface ViewedFile {
+  path: string;
+  viewed: boolean;
 }
 
 /** A repository from an organization's list (RepositorySummary) with the org slug it was listed under. */

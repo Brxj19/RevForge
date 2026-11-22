@@ -5,8 +5,8 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import socket
 from datetime import UTC, datetime
-from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 import httpx
@@ -45,33 +45,55 @@ class WebhookService:
             return False
         return bool(ip.is_global)
 
-    async def _check_ssrf(self, url: str) -> bool:
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return False
-        hostname = parsed.hostname
-        if not hostname:
-            return False
+    async def _resolve_destination(self, url: str) -> tuple[httpx.URL, str] | None:
+        try:
+            parsed = httpx.URL(url)
+        except httpx.InvalidURL:
+            return None
+        if (
+            parsed.scheme not in ("http", "https")
+            or not parsed.host
+            or parsed.userinfo
+            or parsed.fragment
+        ):
+            return None
+        hostname = parsed.raw_host.decode("ascii")
         # Resolve the destination. IP literals are checked directly; names are
         # resolved via the event loop so we never block the request thread.
         try:
             literal = ipaddress.ip_address(hostname)
         except ValueError:
             try:
-                infos = await asyncio.get_running_loop().getaddrinfo(hostname, None)
-            except OSError:
-                return False
+                infos = await asyncio.wait_for(
+                    asyncio.get_running_loop().getaddrinfo(
+                        hostname, parsed.port, type=socket.SOCK_STREAM
+                    ),
+                    timeout=5,
+                )
+            except (OSError, TimeoutError):
+                return None
             candidates = []
             for info in infos:
                 try:
                     candidates.append(ipaddress.ip_address(info[4][0]))
                 except ValueError:
-                    return False
+                    return None
             if not candidates:
-                return False
+                return None
         else:
             candidates = [literal]
-        return all(self._ip_is_safe(ip) for ip in candidates)
+        if not all(self._ip_is_safe(ip) for ip in candidates):
+            return None
+        return parsed.copy_with(host=str(candidates[0])), hostname
+
+    async def _check_ssrf(self, url: str) -> bool:
+        return await self._resolve_destination(url) is not None
+
+    @staticmethod
+    def subscribes_to_event(webhook: Webhook, event_type: str) -> bool:
+        return event_type in webhook.event_types or (
+            event_type == "repository.push.accepted" and "repository.push" in webhook.event_types
+        )
 
     async def list_webhooks(
         self,
@@ -172,14 +194,18 @@ class WebhookService:
         webhook_id: UUID,
         event_type: str,
         payload: dict[str, object],
+        idempotency_key: str | None = None,
     ) -> WebhookDelivery:
         webhook = await session.get(Webhook, webhook_id)
         if webhook is None:
             raise ValueError(f"Webhook {webhook_id} not found.")
         if not webhook.is_active:
             raise ValueError(f"Webhook {webhook_id} is not active.")
+        if not self.subscribes_to_event(webhook, event_type):
+            raise ValueError("Webhook is not subscribed to this event.")
 
-        if not await self._check_ssrf(webhook.url):
+        destination = await self._resolve_destination(webhook.url)
+        if destination is None:
             delivery = WebhookDelivery(
                 webhook_id=webhook_id,
                 event_type=event_type,
@@ -199,7 +225,10 @@ class WebhookService:
             "X-RevForge-Event": event_type,
             "X-RevForge-Signature-256": f"sha256={signature}",
             "User-Agent": "RevForge-Webhook/1.0",
+            "Host": httpx.URL(webhook.url).netloc.decode("ascii"),
         }
+        if idempotency_key is not None:
+            headers["Idempotency-Key"] = idempotency_key
         body_str = body.decode("utf-8")
 
         delivery = WebhookDelivery(
@@ -217,24 +246,35 @@ class WebhookService:
         await session.flush()
 
         try:
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
-                response = await client.post(
-                    webhook.url,
+            pinned_url, hostname = destination
+            async with (
+                asyncio.timeout(15),
+                httpx.AsyncClient(timeout=10.0, follow_redirects=False, trust_env=False) as client,
+                client.stream(
+                    "POST",
+                    pinned_url,
                     content=body,
                     headers=headers,
+                    extensions={"sni_hostname": hostname},
+                ) as response,
+            ):
+                delivery.response_status_code = response.status_code
+                response_body = bytearray()
+                async for chunk in response.aiter_raw():
+                    response_body.extend(chunk[: max(0, 10000 - len(response_body))])
+                    if len(response_body) >= 10000:
+                        break
+                delivery.response_body_truncated = response_body.decode("utf-8", errors="replace")
+                delivery.status = "delivered" if 200 <= response.status_code < 300 else "failed"
+                delivery.error_message = (
+                    None if delivery.status == "delivered" else f"HTTP {response.status_code}"
                 )
-            delivery.response_status_code = response.status_code
-            delivery.response_body_truncated = response.text[:10000]
-            delivery.status = "delivered" if response.status_code < 500 else "failed"
-            delivery.error_message = (
-                None if response.status_code < 500 else f"HTTP {response.status_code}"
-            )
-        except httpx.TimeoutException:
+        except (httpx.TimeoutException, TimeoutError):
             delivery.status = "failed"
             delivery.error_message = "request timed out"
-        except httpx.RequestError as exc:
+        except httpx.RequestError:
             delivery.status = "failed"
-            delivery.error_message = str(exc)[:2000]
+            delivery.error_message = "request failed"
 
         delivery.completed_at = datetime.now(UTC)
         await session.flush()

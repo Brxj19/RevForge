@@ -54,14 +54,14 @@ Scaffold (phase-0-setup.md), tokens, every `ui/` primitive + `/dev/ui` kit, icon
 ## Phase 3 — Pull requests and reviews
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| PR list (repo) | `#/r/sigma-reckitt/pulls` | `pulls` | 🔁 `GET R/pull-requests?state=&q=&author=&cursor=` + counts per state | I32 | todo |
-| Reviews inbox | `#/reviews` | `reviews` | 🆕 `GET /me/pull-requests?filter=` | — | todo |
-| New PR | `#/r/sigma-reckitt/pulls/new` | `pulls` | 🆕 `GET R/compare?base=&head=` · 🔁 `POST R/pull-requests` pin full nodes | I8 🔒, I31 🔒, I32 | todo |
-| PR conversation + timeline | `#/r/sigma-reckitt/pulls/7` | `pulls` | ✅ `GET R/pull-requests/{id}` · 🆕 `GET …/timeline` · ✅ `POST …/comments` | I33, I35 🔒, F9 🔒 | todo |
-| Merge box + merge dialog | `#/r/sigma-reckitt/pulls/7` | `pulls` | 🆕 `GET …/merge-status` · ✅ `POST …/merge` | I31 🔒 | todo |
-| Review dialog, reviewers | PR side panel | `pulls` | ✅ `POST …/reviews` · 🔁 `POST …/reviewers` validate user + read access | I9 🔒, I35 | todo |
-| Files changed + inline threads | `#/r/sigma-reckitt/pulls/7/files` | `pulls` | 🔁 `GET …/diff` merge-base hunks · ✅ `POST …/comments` (file_path, line_number ≥ 1) · 🆕 `POST …/comments/{cid}/resolve` · 🆕 `PUT …/viewed` | I7 🔒, I34, I35 🔒, F9 🔒 | todo |
-| Draft / closed / merged states | `#/r/sigma-reckitt/pulls/5`, `/4` | `pulls` | ✅ `PATCH …/{id}` (draft, title) · ✅ `POST …/close` | — | todo |
+| PR list (repo) | `#/r/sigma-reckitt/pulls` | `pulls` | 🔁 `GET R/pull-requests?state=&q=&author=&cursor=` + counts per state | I32 | done |
+| Reviews inbox | `#/reviews` | `reviews` | 🆕 `GET /me/pull-requests?filter=` | — | done |
+| New PR | `#/r/sigma-reckitt/pulls/new` | `pulls` | 🆕 `GET R/compare?base=&head=` · 🔁 `POST R/pull-requests` pin full nodes | I8 🔒, I31 🔒, I32 | done |
+| PR conversation + timeline | `#/r/sigma-reckitt/pulls/7` | `pulls` | ✅ `GET R/pull-requests/{id}` · 🆕 `GET …/timeline` · ✅ `POST …/comments` | I33, I35 🔒, F9 🔒 | done |
+| Merge box + merge dialog | `#/r/sigma-reckitt/pulls/7` | `pulls` | 🆕 `GET …/merge-status` · ✅ `POST …/merge` | I31 🔒 | done |
+| Review dialog, reviewers | PR side panel | `pulls` | ✅ `POST …/reviews` · 🔁 `POST …/reviewers` validate user + read access | I9 🔒, I35 | done |
+| Files changed + inline threads | `#/r/sigma-reckitt/pulls/7/files` | `pulls` | 🔁 `GET …/diff` merge-base hunks · ✅ `POST …/comments` (file_path, line_number ≥ 1) · 🆕 `POST …/comments/{cid}/resolve` · 🆕 `PUT …/viewed` | I7 🔒, I34, I35 🔒, F9 🔒 | done |
+| Draft / closed / merged states | `#/r/sigma-reckitt/pulls/5`, `/4` | `pulls` | ✅ `PATCH …/{id}` (draft, title) · ✅ `POST …/close` | — | done |
 
 ## Phase 4 — Organizations, settings, credentials, webhooks
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
