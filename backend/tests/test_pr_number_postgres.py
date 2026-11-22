@@ -13,8 +13,11 @@ from app.models.organization import Organization
 from app.models.pull_request import PullRequestReviewer
 from app.models.repository import Repository
 from app.models.user import User
-from app.services.pull_request_service import create_pull_request, get_pull_request
-from app.services.pull_request_service import _load_pr_with_relations
+from app.services.pull_request_service import (
+    _load_pr_with_relations,
+    create_pull_request,
+    get_pull_request,
+)
 
 DATABASE_URL = os.environ.get("REVFORGE_MIGRATION_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(DATABASE_URL is None, reason="Disposable PostgreSQL URL not set")

@@ -27,7 +27,10 @@ describe("routes", () => {
   it("shows a placeholder for screens that aren't built yet", async () => {
     renderApp("/sigma/sigma-reckitt/settings");
     expect(
-      await screen.findByRole("heading", { name: "Repository settings", level: 1 }),
+      await screen.findByRole("heading", {
+        name: "Repository settings",
+        level: 1,
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Not built yet" }),
