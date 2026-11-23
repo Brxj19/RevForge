@@ -63,4 +63,25 @@ export const qk = {
   compare: (o: string, r: string, base: string, head: string) =>
     ["compare", o, r, base, head] as const,
   myPulls: (filter: string) => ["my-pulls", filter] as const,
+  // Phase 4B: Organization management
+  orgMembers: (o: string, page: number) => ["org", o, "members", page] as const,
+  orgInvitations: (o: string) => ["org", o, "invitations"] as const,
+  orgSlugCheck: (slug: string) => ["org-slug-check", slug] as const,
+  repoSlugCheck: (o: string, slug: string) =>
+    ["repo-slug-check", o, slug] as const,
+  // Phase 4A: User settings
+  profile: ["me", "profile"] as const,
+  sshKeys: ["me", "ssh-keys"] as const,
+  tokens: ["me", "tokens"] as const,
+  sessions: ["sessions"] as const,
+  notificationSettings: ["me", "notification-settings"] as const,
+  preferences: ["me", "preferences"] as const,
+  // Phase 4C/D: Repository settings and webhooks
+  repoPermissions: (o: string, r: string) =>
+    ["repo", o, r, "permissions"] as const,
+  webhooks: (o: string, r: string) => ["repo", o, r, "webhooks"] as const,
+  webhook: (o: string, r: string, id: string) =>
+    ["repo", o, r, "webhooks", id] as const,
+  webhookDeliveries: (o: string, r: string, id: string) =>
+    ["repo", o, r, "webhooks", id, "deliveries"] as const,
 };

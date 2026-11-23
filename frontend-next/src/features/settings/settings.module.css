@@ -1,0 +1,338 @@
+/* Settings layout: 200px subnav + content pane (max-width 860px) */
+
+.heading {
+  flex: none;
+  margin: 0;
+}
+
+.subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r);
+  font-size: 13.5px;
+  color: var(--text-2);
+  text-decoration: none;
+  transition: background-color 120ms ease-out;
+}
+
+.navLink:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.navLink[data-active] {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.content {
+  max-width: 860px;
+}
+
+/* Settings row (switch rows, session rows, notification rows) */
+.settingsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settingsRow:last-child {
+  border-bottom: none;
+}
+
+.rowInfo {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.rowDesc {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* Key / token table rows */
+.keyRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.keyRow:last-child {
+  border-bottom: none;
+}
+
+.keyRow[data-revoked] {
+  opacity: 0.5;
+}
+
+.keyMeta {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.keyLabel {
+  font-size: 13.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keyFingerprint {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.keyActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.keyTime {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Token table - scrollable */
+.tokenTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tokenTable th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--raised);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+
+.tokenTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.tokenTable tr:last-child td {
+  border-bottom: none;
+}
+
+.tokenTable tr[data-expired] {
+  opacity: 0.5;
+}
+
+.tokenName {
+  display: grid;
+  gap: 2px;
+}
+
+.tokenPrefix {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tokenLastUsed {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Session row */
+.sessionRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sessionRow:last-child {
+  border-bottom: none;
+}
+
+.sessionMeta {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sessionTime {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Notification row */
+.notifRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notifRow:last-child {
+  border-bottom: none;
+}
+
+.notifToggles {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.notifToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Palette picker */
+.palGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 4px;
+}
+
+.palBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--r-card);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease-out,
+    background-color 120ms ease-out;
+  min-width: 110px;
+}
+
+.palBtn:hover {
+  background: var(--hover);
+}
+
+.palBtn[data-active] {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.palSwatches {
+  display: flex;
+  gap: 6px;
+}
+
+.palSwatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.palName {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.palBtn[data-active] .palName {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Profile avatar */
+.profileAvatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1f6feb, #8957e5);
+  display: grid;
+  place-items: center;
+  font: 20px var(--display);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.avatarRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Profile form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+.formFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--raised);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+}
+
+/* Scrollable table wrapper */
+.scrollX {
+  overflow-x: auto;
+}
+
+/* Token "copy your token" dialog */
+.tokenReveal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (max-width: 860px) {
+  .content {
+    max-width: none;
+  }
+}

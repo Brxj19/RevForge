@@ -44,18 +44,26 @@ async def get_membership(
     return result
 
 
-async def count_owners(session: AsyncSession, *, organization_id: UUID) -> int:
+async def count_owners(
+    session: AsyncSession,
+    *,
+    organization_id: UUID,
+    for_update: bool = False,
+) -> int:
+    """Count owner members. With *for_update* the rows are locked (Postgres)."""
     from app.domain.enums import OrganizationRole
 
-    return int(
-        await session.scalar(
-            select(func.count(OrganizationMember.id)).where(
-                OrganizationMember.organization_id == organization_id,
-                OrganizationMember.role == OrganizationRole.OWNER,
-            )
-        )
-        or 0
+    stmt = select(func.count(OrganizationMember.id)).where(
+        OrganizationMember.organization_id == organization_id,
+        OrganizationMember.role == OrganizationRole.OWNER,
     )
+    if for_update:
+        try:
+            stmt = stmt.with_for_update()
+        except Exception:
+            # SQLite does not support FOR UPDATE; fall through to unlocked count.
+            pass
+    return int(await session.scalar(stmt) or 0)
 
 
 async def list_members_for_organization(

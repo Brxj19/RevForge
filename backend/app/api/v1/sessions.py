@@ -5,11 +5,18 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import SessionIdentity, get_request_id, get_session, require_csrf
+from app.api.deps import (
+    SessionIdentity,
+    get_current_identity,
+    get_request_id,
+    get_session,
+    require_csrf,
+)
 from app.models.user_session import UserSession
 from app.schemas.sessions import UserSessionResponse
 from app.services.authentication import list_user_sessions, revoke_user_session
 from app.services.errors import NotFoundError
+from app.services.user_settings import revoke_other_sessions
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -29,14 +36,30 @@ def _serialize_session(
 
 @router.get("", response_model=list[UserSessionResponse])
 async def list_sessions(
-    identity: SessionIdentity = Depends(require_csrf),
+    identity: SessionIdentity = Depends(get_current_identity),
     session: AsyncSession = Depends(get_session),
 ) -> list[UserSessionResponse]:
     sessions = await list_user_sessions(session, user=identity.user)
     return [
         _serialize_session(user_session, current_session_id=identity.session.id)
         for user_session in sessions
+        if user_session.revoked_at is None
     ]
+
+
+@router.post("/revoke-others", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_other_sessions_route(
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> Response:
+    await revoke_other_sessions(
+        session,
+        user=identity.user,
+        current_session_id=identity.session.id,
+        request_id=request_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -40,7 +40,13 @@ async def list_tokens(
     session: AsyncSession = Depends(get_session),
 ) -> list[PersonalAccessTokenResponse]:
     tokens = await list_personal_access_tokens(session, user_id=identity.user.id)
-    return [PersonalAccessTokenResponse.model_validate(token) for token in tokens]
+    results: list[PersonalAccessTokenResponse] = []
+    for token in tokens:
+        resp = PersonalAccessTokenResponse.model_validate(token)
+        if token.organization_id is not None and token.organization is not None:
+            resp.organization_name = token.organization.display_name
+        results.append(resp)
+    return results
 
 
 @router.post(

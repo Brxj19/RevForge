@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.reserved_slugs import is_reserved_slug
 from app.core.security import (
     normalize_optional_text,
     validate_display_name,
@@ -69,6 +70,9 @@ async def create_organization(
         normalized_name = validate_display_name(display_name)
     except ValueError as exc:
         raise ValidationFailure(str(exc)) from exc
+
+    if is_reserved_slug(normalized_slug):
+        raise ValidationFailure("This organization slug is reserved.")
 
     if await get_organization_by_slug(session, slug=normalized_slug) is not None:
         raise ConflictError("Organization slug is already in use.")
@@ -143,6 +147,50 @@ async def list_organization_members(
     organization: Organization,
 ) -> list[OrganizationMember]:
     return await list_members_for_organization(session, organization_id=organization.id)
+
+
+async def list_organization_members_paginated(
+    session: AsyncSession,
+    *,
+    organization_id: UUID,
+    page: int = 1,
+    per_page: int = 20,
+) -> tuple[list[OrganizationMember], int]:
+    """Return a page of members and the total count."""
+    total = int(
+        await session.scalar(
+            select(func.count(OrganizationMember.id)).where(
+                OrganizationMember.organization_id == organization_id,
+            )
+        )
+        or 0
+    )
+    offset = (page - 1) * per_page
+    result = await session.execute(
+        select(OrganizationMember)
+        .options(selectinload(OrganizationMember.user))
+        .where(OrganizationMember.organization_id == organization_id)
+        .order_by(OrganizationMember.created_at.asc())
+        .offset(offset)
+        .limit(per_page)
+    )
+    return list(result.scalars()), total
+
+
+async def count_organization_repositories(
+    session: AsyncSession,
+    *,
+    organization_id: UUID,
+) -> int:
+    """Return the number of repositories in an organization."""
+    return int(
+        await session.scalar(
+            select(func.count(Repository.id)).where(
+                Repository.organization_id == organization_id,
+            )
+        )
+        or 0
+    )
 
 
 async def add_member(
@@ -230,7 +278,7 @@ async def update_member_role(
         raise ForbiddenError("Only organization owners can assign the owner role.")
 
     if membership.role == OrganizationRole.OWNER and new_role != OrganizationRole.OWNER:
-        owner_count = await count_owners(session, organization_id=organization.id)
+        owner_count = await count_owners(session, organization_id=organization.id, for_update=True)
         if owner_count <= 1:
             raise ConflictError("At least one organization owner must remain.")
 
@@ -286,7 +334,7 @@ async def remove_member(
     if membership.role == OrganizationRole.OWNER:
         if not can_manage_owner_memberships(actor_membership.role):
             raise ForbiddenError("Only organization owners can remove owner memberships.")
-        owner_count = await count_owners(session, organization_id=organization.id)
+        owner_count = await count_owners(session, organization_id=organization.id, for_update=True)
         if owner_count <= 1:
             raise ConflictError("At least one organization owner must remain.")
 

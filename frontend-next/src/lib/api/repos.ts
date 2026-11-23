@@ -6,6 +6,7 @@ import type {
   CodeSearchResponse,
   ContentKind,
   HistoryFilters,
+  RepositoryAccessEntry,
   RepositoryBlame,
   RepositoryBlameLine,
   RepositoryBrowseFile,
@@ -17,6 +18,13 @@ import type {
   RepositoryStats,
   RepositorySummary,
   RepositoryTransportMetadata,
+  RepositoryUpdateRequest,
+  TransportUpdateRequest,
+  Webhook,
+  WebhookCreateRequest,
+  WebhookCreateResponse,
+  WebhookDelivery,
+  WebhookSecretRotateResponse,
 } from "./types";
 
 /** Every dynamic segment goes through `path` (F7): slugs and nodes can't add path segments. */
@@ -209,5 +217,160 @@ export const reposApi = {
         rev: opts.rev,
         limit: opts.limit,
       }),
+    ),
+
+  // Phase 4C: Repository settings mutations
+
+  /** Update repository details (name, slug, description, visibility). I29, I39. */
+  update: (
+    org: string,
+    repo: string,
+    data: RepositoryUpdateRequest,
+    csrf: string | null,
+  ) =>
+    request<RepositoryDetail>(R(org, repo), {
+      method: "PATCH",
+      json: data,
+      csrf,
+    }),
+
+  /** Delete a repository. I37. */
+  deleteRepo: (org: string, repo: string, csrf: string | null) =>
+    request<undefined>(R(org, repo), { method: "DELETE", csrf }),
+
+  /** Archive or unarchive a repository. */
+  archive: (
+    org: string,
+    repo: string,
+    archived: boolean,
+    csrf: string | null,
+  ) =>
+    request<RepositoryDetail>(R(org, repo), {
+      method: "PATCH",
+      json: { archived },
+      csrf,
+    }),
+
+  /** List who can access a repository: org roles + direct grants. I29. */
+  permissions: (org: string, repo: string) =>
+    request<RepositoryAccessEntry[]>(`${R(org, repo)}/permissions`),
+
+  /** Update a user's direct grant. */
+  updatePermission: (
+    org: string,
+    repo: string,
+    data: { user_id: string; role: string },
+    csrf: string | null,
+  ) =>
+    request(`${R(org, repo)}/permissions`, {
+      method: "PUT",
+      json: data,
+      csrf,
+    }),
+
+  /** Revoke a direct grant. */
+  removePermission: (
+    org: string,
+    repo: string,
+    userId: string,
+    csrf: string | null,
+  ) =>
+    request(`${R(org, repo)}${path`/permissions/${userId}`}`, {
+      method: "DELETE",
+      csrf,
+    }),
+
+  /** Update transport toggles (SSH, HTTPS, anonymous clone). API-GAP: transport-toggle. */
+  updateTransport: (
+    org: string,
+    repo: string,
+    data: TransportUpdateRequest,
+    csrf: string | null,
+  ) =>
+    request<RepositoryTransportMetadata>(`${R(org, repo)}/transport`, {
+      method: "PATCH",
+      json: data,
+      csrf,
+    }),
+
+  // Phase 4D: Webhooks
+
+  /** List webhooks for a repository. */
+  webhooks: (org: string, repo: string) =>
+    request<Webhook[]>(
+      path`/organizations/${org}/repositories/${repo}/webhooks`,
+    ),
+
+  /** Create a webhook. The signing secret is in the response (shown once). I5, I6. */
+  createWebhook: (
+    org: string,
+    repo: string,
+    data: WebhookCreateRequest,
+    csrf: string | null,
+  ) =>
+    request<WebhookCreateResponse>(
+      path`/organizations/${org}/repositories/${repo}/webhooks`,
+      { method: "POST", json: data, csrf },
+    ),
+
+  /** Get a single webhook by id. */
+  webhook: (org: string, repo: string, webhookId: string) =>
+    request<Webhook>(
+      path`/organizations/${org}/repositories/${repo}/webhooks/${webhookId}`,
+    ),
+
+  /** Delete a webhook. */
+  deleteWebhook: (
+    org: string,
+    repo: string,
+    webhookId: string,
+    csrf: string | null,
+  ) =>
+    request<undefined>(
+      path`/organizations/${org}/repositories/${repo}/webhooks/${webhookId}`,
+      { method: "DELETE", csrf },
+    ),
+
+  /** Recent deliveries for a webhook. */
+  webhookDeliveries: (org: string, repo: string, webhookId: string) =>
+    request<WebhookDelivery[]>(
+      path`/organizations/${org}/repositories/${repo}/webhooks/${webhookId}/deliveries`,
+    ),
+
+  /** Send a test ping to a webhook. */
+  pingWebhook: (
+    org: string,
+    repo: string,
+    webhookId: string,
+    csrf: string | null,
+  ) =>
+    request<WebhookDelivery>(
+      path`/organizations/${org}/repositories/${repo}/webhooks/${webhookId}/ping`,
+      { method: "POST", csrf },
+    ),
+
+  /** Rotate the webhook signing secret. */
+  rotateWebhookSecret: (
+    org: string,
+    repo: string,
+    webhookId: string,
+    csrf: string | null,
+  ) =>
+    request<WebhookSecretRotateResponse>(
+      path`/organizations/${org}/repositories/${repo}/webhooks/${webhookId}/rotate-secret`,
+      { method: "POST", csrf },
+    ),
+
+  /** Redeliver a past webhook delivery. */
+  redeliverWebhook: (
+    org: string,
+    repo: string,
+    webhookId: string,
+    deliveryId: string,
+    csrf: string | null,
+  ) =>
+    request<WebhookDelivery>(
+      path`/organizations/${org}/repositories/${repo}/webhooks/${webhookId}${path`/deliveries/${deliveryId}/redeliver`}`,
+      { method: "POST", csrf },
     ),
 };

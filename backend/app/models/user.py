@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import Boolean, String
+from typing import Any
+
+from sqlalchemy import JSON, Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -12,6 +14,16 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    author_aliases: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, server_default="[]"
+    )
+    preferences: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, default=dict, server_default="{}"
+    )
+    notification_settings: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, default=dict, server_default="{}"
+    )
 
     memberships = relationship(
         "OrganizationMember", back_populates="user", cascade="all, delete-orphan"

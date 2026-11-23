@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import (
     SessionIdentity,
     get_current_identity,
+    get_request_id,
     get_session,
     require_csrf,
 )
@@ -15,10 +16,13 @@ from app.models.repository import Repository
 from app.models.webhook import Webhook, WebhookDelivery
 from app.schemas.events import (
     WebhookCreateRequest,
+    WebhookCreateResponse,
     WebhookDeliveryResponse,
     WebhookResponse,
+    WebhookSecretResponse,
     WebhookUpdateRequest,
 )
+from app.services.audit import record_audit_event
 from app.services.errors import ForbiddenError, NotFoundError, ValidationFailure
 from app.services.repository_service import (
     get_organization_by_slug_for_repo_routes,
@@ -111,14 +115,15 @@ async def list_webhooks(
     return [_serialize_webhook(w) for w in webhooks]
 
 
-@router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=WebhookCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_webhook(
     organization_slug: str,
     repository_slug: str,
     payload: WebhookCreateRequest,
     identity: SessionIdentity = Depends(require_csrf),
     session: AsyncSession = Depends(get_session),
-) -> WebhookResponse:
+    request_id: str | None = Depends(get_request_id),
+) -> WebhookCreateResponse:
     try:
         repository = await _get_repo_for_admin(
             session,
@@ -135,6 +140,17 @@ async def create_webhook(
             secret=payload.secret,
             created_by_user_id=identity.user.id,
         )
+        # Capture plaintext secret before commit; the service stores it in cleartext
+        # on the model for now (hashing is a follow-up).
+        plaintext_secret = webhook.secret
+        await record_audit_event(
+            session,
+            event_type="webhook.created",
+            actor_user_id=identity.user.id,
+            repository_id=repository.id,
+            request_id=request_id,
+            metadata_json={"webhook_url": webhook.url},
+        )
         await session.commit()
         await session.refresh(webhook)
     except ForbiddenError as exc:
@@ -148,7 +164,10 @@ async def create_webhook(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
-    return _serialize_webhook(webhook)
+    return WebhookCreateResponse(
+        webhook=_serialize_webhook(webhook),
+        secret=plaintext_secret,
+    )
 
 
 @router.patch("/{webhook_id}", response_model=WebhookResponse)
@@ -159,6 +178,7 @@ async def update_webhook(
     payload: WebhookUpdateRequest,
     identity: SessionIdentity = Depends(require_csrf),
     session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
 ) -> WebhookResponse:
     try:
         repository = await _get_repo_for_admin(
@@ -178,6 +198,14 @@ async def update_webhook(
         )
         if webhook is None:
             raise NotFoundError("Webhook not found.")
+        await record_audit_event(
+            session,
+            event_type="webhook.updated",
+            actor_user_id=identity.user.id,
+            repository_id=repository.id,
+            request_id=request_id,
+            metadata_json={"webhook_id": str(webhook_id)},
+        )
         await session.commit()
     except ForbiddenError as exc:
         await session.rollback()
@@ -200,6 +228,7 @@ async def delete_webhook(
     webhook_id: UUID,
     identity: SessionIdentity = Depends(require_csrf),
     session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
 ) -> None:
     try:
         repository = await _get_repo_for_admin(
@@ -214,6 +243,14 @@ async def delete_webhook(
         )
         if not deleted:
             raise NotFoundError("Webhook not found.")
+        await record_audit_event(
+            session,
+            event_type="webhook.deleted",
+            actor_user_id=identity.user.id,
+            repository_id=repository.id,
+            request_id=request_id,
+            metadata_json={"webhook_id": str(webhook_id)},
+        )
         await session.commit()
     except ForbiddenError as exc:
         await session.rollback()
@@ -254,3 +291,139 @@ async def list_webhook_deliveries(
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return [_serialize_delivery(d) for d in deliveries]
+
+
+@router.post(
+    "/{webhook_id}/rotate-secret",
+    response_model=WebhookSecretResponse,
+)
+async def rotate_webhook_secret(
+    organization_slug: str,
+    repository_slug: str,
+    webhook_id: UUID,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> WebhookSecretResponse:
+    try:
+        repository = await _get_repo_for_admin(
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
+        )
+        service = _get_webhook_service()
+        webhook, new_secret = await service.rotate_secret(
+            session, repository_id=repository.id, webhook_id=webhook_id
+        )
+        if webhook is None:
+            raise NotFoundError("Webhook not found.")
+        await record_audit_event(
+            session,
+            event_type="webhook.secret_rotated",
+            actor_user_id=identity.user.id,
+            repository_id=repository.id,
+            request_id=request_id,
+            metadata_json={"webhook_id": str(webhook_id)},
+        )
+        await session.commit()
+    except ForbiddenError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return WebhookSecretResponse(secret=new_secret)
+
+
+@router.post(
+    "/{webhook_id}/ping",
+    response_model=WebhookDeliveryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def ping_webhook(
+    organization_slug: str,
+    repository_slug: str,
+    webhook_id: UUID,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> WebhookDeliveryResponse:
+    try:
+        repository = await _get_repo_for_admin(
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
+        )
+        service = _get_webhook_service()
+        delivery = await service.create_ping_delivery(
+            session, repository_id=repository.id, webhook_id=webhook_id
+        )
+        await record_audit_event(
+            session,
+            event_type="webhook.ping",
+            actor_user_id=identity.user.id,
+            repository_id=repository.id,
+            request_id=request_id,
+            metadata_json={"webhook_id": str(webhook_id)},
+        )
+        await session.commit()
+        await session.refresh(delivery)
+    except ForbiddenError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _serialize_delivery(delivery)
+
+
+@router.post(
+    "/{webhook_id}/deliveries/{delivery_id}/redeliver",
+    response_model=WebhookDeliveryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def redeliver_webhook(
+    organization_slug: str,
+    repository_slug: str,
+    webhook_id: UUID,
+    delivery_id: UUID,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> WebhookDeliveryResponse:
+    try:
+        repository = await _get_repo_for_admin(
+            session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            identity=identity,
+        )
+        service = _get_webhook_service()
+        delivery = await service.redeliver(
+            session,
+            repository_id=repository.id,
+            webhook_id=webhook_id,
+            delivery_id=delivery_id,
+        )
+        await record_audit_event(
+            session,
+            event_type="webhook.redelivered",
+            actor_user_id=identity.user.id,
+            repository_id=repository.id,
+            request_id=request_id,
+            metadata_json={
+                "webhook_id": str(webhook_id),
+                "original_delivery_id": str(delivery_id),
+            },
+        )
+        await session.commit()
+        await session.refresh(delivery)
+    except ForbiddenError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _serialize_delivery(delivery)

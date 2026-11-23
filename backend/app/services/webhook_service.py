@@ -295,6 +295,108 @@ class WebhookService:
         )
         return webhook
 
+    async def rotate_secret(
+        self,
+        session: AsyncSession,
+        *,
+        repository_id: UUID,
+        webhook_id: UUID,
+    ) -> tuple[Webhook, str]:
+        """Generate a new secret for the webhook and return (webhook, plaintext)."""
+        webhook = await session.scalar(
+            select(Webhook).where(
+                Webhook.id == webhook_id,
+                Webhook.repository_id == repository_id,
+            )
+        )
+        if webhook is None:
+            return None, ""  # type: ignore[return-value]
+        new_secret = uuid4().hex
+        webhook.secret = new_secret
+        await session.flush()
+        await session.refresh(webhook)
+        return webhook, new_secret
+
+    async def create_ping_delivery(
+        self,
+        session: AsyncSession,
+        *,
+        repository_id: UUID,
+        webhook_id: UUID,
+    ) -> WebhookDelivery:
+        """Create a test 'ping' delivery record for the webhook."""
+        webhook = await session.scalar(
+            select(Webhook).where(
+                Webhook.id == webhook_id,
+                Webhook.repository_id == repository_id,
+            )
+        )
+        if webhook is None:
+            from app.services.errors import NotFoundError
+
+            raise NotFoundError("Webhook not found.")
+        now = datetime.now(UTC)
+        delivery = WebhookDelivery(
+            webhook_id=webhook_id,
+            event_type="ping",
+            request_url=webhook.url,
+            request_headers_json={},
+            request_body_truncated='{"event": "ping"}',
+            status="pending",
+            created_at=now,
+        )
+        session.add(delivery)
+        await session.flush()
+        await session.refresh(delivery)
+        return delivery
+
+    async def redeliver(
+        self,
+        session: AsyncSession,
+        *,
+        repository_id: UUID,
+        webhook_id: UUID,
+        delivery_id: UUID,
+    ) -> WebhookDelivery:
+        """Create a new delivery for the same event as an existing delivery."""
+        # Verify the webhook belongs to this repository.
+        webhook = await session.scalar(
+            select(Webhook).where(
+                Webhook.id == webhook_id,
+                Webhook.repository_id == repository_id,
+            )
+        )
+        if webhook is None:
+            from app.services.errors import NotFoundError
+
+            raise NotFoundError("Webhook not found.")
+
+        original = await session.scalar(
+            select(WebhookDelivery).where(
+                WebhookDelivery.id == delivery_id,
+                WebhookDelivery.webhook_id == webhook_id,
+            )
+        )
+        if original is None:
+            from app.services.errors import NotFoundError
+
+            raise NotFoundError("Delivery not found.")
+
+        now = datetime.now(UTC)
+        new_delivery = WebhookDelivery(
+            webhook_id=webhook_id,
+            event_type=original.event_type,
+            request_url=webhook.url,
+            request_headers_json=original.request_headers_json,
+            request_body_truncated=original.request_body_truncated,
+            status="pending",
+            created_at=now,
+        )
+        session.add(new_delivery)
+        await session.flush()
+        await session.refresh(new_delivery)
+        return new_delivery
+
     async def list_deliveries(
         self,
         session: AsyncSession,

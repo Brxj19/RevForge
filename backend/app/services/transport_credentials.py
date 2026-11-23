@@ -21,6 +21,7 @@ from app.core.security import (
 from app.domain.enums import RepositoryRole
 from app.mercurial.authorized_keys import sync_authorized_keys
 from app.models.organization import Organization
+from app.models.organization_member import OrganizationMember
 from app.models.personal_access_token import PersonalAccessToken
 from app.models.repository import Repository
 from app.models.ssh_public_key import SshPublicKey
@@ -47,6 +48,7 @@ async def list_personal_access_tokens(
 ) -> list[PersonalAccessToken]:
     result = await session.execute(
         select(PersonalAccessToken)
+        .options(selectinload(PersonalAccessToken.organization))
         .where(PersonalAccessToken.user_id == user_id)
         .order_by(PersonalAccessToken.created_at.asc())
     )
@@ -75,16 +77,25 @@ async def create_personal_access_token(
         raise ValidationFailure("Transport tokens only support read or write capability.")
     if expires_at is not None and expires_at <= utc_now():
         raise ValidationFailure("Token expiry must be in the future.")
+    if organization_id is not None:
+        organization = await session.get(Organization, organization_id)
+        if organization is None:
+            raise ValidationFailure("Organization scope is invalid.")
+        membership = await session.scalar(
+            select(OrganizationMember).where(
+                OrganizationMember.organization_id == organization_id,
+                OrganizationMember.user_id == user.id,
+            )
+        )
+        if membership is None:
+            raise ValidationFailure("You are not a member of this organization.")
+
     if repository_id is not None:
         repository = await session.get(Repository, repository_id)
         if repository is None:
             raise ValidationFailure("Repository scope is invalid.")
         if organization_id is not None and repository.organization_id != organization_id:
             raise ValidationFailure("Repository scope must belong to the selected organization.")
-    elif organization_id is not None:
-        organization = await session.get(Organization, organization_id)
-        if organization is None:
-            raise ValidationFailure("Organization scope is invalid.")
     token = PersonalAccessToken(
         user_id=user.id,
         name=normalized_name,

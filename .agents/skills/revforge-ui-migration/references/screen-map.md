@@ -66,19 +66,19 @@ Scaffold (phase-0-setup.md), tokens, every `ui/` primitive + `/dev/ui` kit, icon
 ## Phase 4 — Organizations, settings, credentials, webhooks
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Org overview / members / general / danger | `#/org/members` | `org` | ✅ `GET O` · 🔁 `GET O/members?cursor=` · 🔁 `PATCH O/members/{id}` last-owner lock (row lock) · ✅ `DELETE O/members/{id}` | I27 🔒, I30 | todo |
-| Invitations | `#/org/members` (pending card) | `org` | 🆕 `GET/POST O/invitations` · 🆕 `POST O/invitations/{id}/resend` · 🆕 `DELETE O/invitations/{id}` · 🆕 `POST /invitations/{token}/accept` | 🔒 | todo |
-| New organization | `#/orgs/new` | `org` | ✅ `POST /organizations` · 🆕 `GET /organizations/check-slug?s=` | I30c, I39a | todo |
-| New repository | `#/new` | `repos` | ✅ `POST O/repositories` · 🆕 `GET O/repositories/check-slug?s=` | I39a | todo |
-| Repo settings: general (visibility, rename, default branch) | `#/r/sigma-reckitt/settings/general` | `repo-settings` | 🔁 `PATCH R` (PUBLIC needs org admin + high-severity audit; slug conflict → 409) | I29 🔒, I39 | todo |
-| Repo settings: access | `…/settings/access` | `repo-settings` | ✅ `GET/PUT R/permissions` · ✅ `DELETE R/permissions/{user_id}` | I29 | todo |
-| Repo settings: transport | `…/settings/transport` | `repo-settings` | ✅ `GET R/transport` · 🆕 `PATCH R/transport` (ssh/https/anonymous toggles) | 🔒 | todo |
-| Webhooks list / create (secret once) / detail / deliveries | `…/settings/webhooks/1` | `repo-settings` | 🔁 `POST R/webhooks` return secret once · ✅ `GET …/deliveries` · 🆕 `POST …/deliveries/{id}/redeliver` · 🆕 `POST …/{id}/rotate-secret` · 🆕 `POST …/{id}/ping` | I5, I6 🔒 | todo |
-| Danger zone (archive, transfer, delete) | `…/settings/danger` | `repo-settings` | 🔁 `DELETE R` org admins only, audit before delete | I37 🔒, I39c | todo |
-| Your settings: profile / sessions / appearance | `#/settings/profile` | `settings` | ✅ `GET/DELETE /sessions` · 🆕 `PATCH /me` · 🆕 `GET/PUT /me/preferences` (accent, graph default, compact) | I24, I26 | todo |
-| SSH keys (incl. restore) | `#/settings/ssh-keys` | `settings` | ✅ `GET/POST/DELETE /ssh-keys` | — (C11 done) | todo |
-| Access tokens (org scope, expiry) | `#/settings/tokens` | `settings` | 🔁 `POST /tokens` validate org membership · 🔁 `GET /tokens` add `last_used_at`, `organization` | I12 🔒 | todo |
-| Notification settings | `#/settings/notifications` | `settings` | 🆕 `GET/PUT /me/notification-settings` | — | todo |
+| Org overview / members / general / danger | `#/org/members` | `org` | ✅ `GET O` · 🔁 `GET O/members?cursor=` · 🔁 `PATCH O/members/{id}` last-owner lock (row lock) · ✅ `DELETE O/members/{id}` | I27 🔒, I30 | done |
+| Invitations | `#/org/members` (pending card) | `org` | 🆕 `GET/POST O/invitations` · 🆕 `POST O/invitations/{id}/resend` · 🆕 `DELETE O/invitations/{id}` · 🆕 `POST /invitations/{token}/accept` | 🔒 | done |
+| New organization | `#/orgs/new` | `org` | ✅ `POST /organizations` · 🆕 `GET /organizations/check-slug?s=` | I30c, I39a | done |
+| New repository | `#/new` | `repos` | ✅ `POST O/repositories` · 🆕 `GET O/repositories/check-slug?s=` | I39a | done |
+| Repo settings: general (visibility, rename, default branch) | `#/r/sigma-reckitt/settings/general` | `repo-settings` | 🔁 `PATCH R` (PUBLIC needs org admin + high-severity audit; slug conflict → 409) | I29 🔒, I39 | done |
+| Repo settings: access | `…/settings/access` | `repo-settings` | ✅ `GET/PUT R/permissions` · ✅ `DELETE R/permissions/{user_id}` | I29 | done |
+| Repo settings: transport | `…/settings/transport` | `repo-settings` | ✅ `GET R/transport` · 🆕 `PATCH R/transport` (ssh/https/anonymous toggles) | 🔒 | done |
+| Webhooks list / create (secret once) / detail / deliveries | `…/settings/webhooks/1` | `repo-settings` | 🔁 `POST R/webhooks` return secret once · ✅ `GET …/deliveries` · 🆕 `POST …/deliveries/{id}/redeliver` · 🆕 `POST …/{id}/rotate-secret` · 🆕 `POST …/{id}/ping` | I5, I6 🔒 | done |
+| Danger zone (archive, transfer, delete) | `…/settings/danger` | `repo-settings` | 🔁 `DELETE R` org admins only, audit before delete | I37 🔒, I39c | done |
+| Your settings: profile / sessions / appearance | `#/settings/profile` | `settings` | ✅ `GET/DELETE /sessions` · 🆕 `PATCH /me` · 🆕 `GET/PUT /me/preferences` (accent, graph default, compact) | I24, I26 | done |
+| SSH keys (incl. restore) | `#/settings/ssh-keys` | `settings` | ✅ `GET/POST/DELETE /ssh-keys` | — (C11 done) | done |
+| Access tokens (org scope, expiry) | `#/settings/tokens` | `settings` | 🔁 `POST /tokens` validate org membership · 🔁 `GET /tokens` add `last_used_at`, `organization` | I12 🔒 | done |
+| Notification settings | `#/settings/notifications` | `settings` | 🆕 `GET/PUT /me/notification-settings` | — | done |
 
 ## Phase 5 — Discovery, access, people, notifications
 | Screen | Prototype | Feature | Endpoints | Audit | Status |

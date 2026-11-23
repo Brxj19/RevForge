@@ -88,6 +88,54 @@ export interface OrganizationSummary {
 
 export interface OrganizationDetail extends OrganizationSummary {
   member_count: number;
+  repository_count: number;
+}
+
+// Phase 4B: Organization management
+
+export interface OrganizationCreateRequest {
+  slug: string;
+  display_name: string;
+  description?: string;
+}
+
+export interface OrganizationUpdateRequest {
+  display_name?: string;
+  description?: string;
+}
+
+export interface Invitation {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: "owner" | "admin" | "member";
+  status: "pending" | "accepted" | "expired" | "revoked";
+  invited_by_email: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface InvitationCreateResponse extends Invitation {
+  token: string;
+}
+
+export interface SlugCheckResponse {
+  available: boolean;
+  reason?: "taken" | "reserved" | "invalid";
+}
+
+export interface RepositoryCreateRequest {
+  slug: string;
+  display_name: string;
+  description?: string;
+  visibility: "public" | "internal" | "private";
+}
+
+export interface PaginatedMembers {
+  items: OrganizationMember[];
+  total: number;
+  page: number;
+  per_page: number;
 }
 
 export interface OrganizationMember {
@@ -716,3 +764,69 @@ export interface ViewedFile {
 
 /** A repository from an organization's list (RepositorySummary) with the org slug it was listed under. */
 export type OrgRepository = RepositorySummary & { organization_slug: string };
+
+// Phase 4A: User settings
+
+export interface UserProfile {
+  display_name: string;
+  email: string;
+  author_aliases: string[];
+}
+
+export type AccentPalette = "default" | "tech" | "professional" | "luxury";
+
+export interface UserPreferences {
+  accent: AccentPalette;
+  graph_default: boolean;
+  compact: boolean;
+  reduce_motion: boolean;
+}
+
+export interface NotificationChannel {
+  in_app: boolean;
+  email: boolean;
+  locked?: boolean;
+}
+
+export type NotificationSettings = Record<string, NotificationChannel>;
+
+// Phase 4C/D: Repository settings and webhooks
+
+export interface RepositoryUpdateRequest {
+  slug?: string;
+  display_name?: string;
+  description?: string;
+  visibility?: "public" | "internal" | "private";
+  archived?: boolean;
+}
+
+export interface TransportUpdateRequest {
+  ssh?: boolean;
+  https?: boolean;
+  anonymous_clone?: boolean;
+}
+
+export interface WebhookCreateRequest {
+  url: string;
+  event_types: string[];
+}
+
+export interface WebhookCreateResponse {
+  webhook: Webhook;
+  /** The signing secret is shown only once at creation or rotation. */
+  secret: string;
+}
+
+export interface WebhookSecretRotateResponse {
+  secret: string;
+}
+
+/** Access entry in the repo permissions table: either an org role or a direct grant. */
+export interface RepositoryAccessEntry {
+  user_id: string;
+  display_name: string;
+  email: string;
+  role: "read" | "write" | "admin" | "owner";
+  /** "org_role" (inherited) or "direct" (explicit grant). */
+  source: "org_role" | "direct";
+}
