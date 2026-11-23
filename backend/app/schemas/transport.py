@@ -24,6 +24,7 @@ class PersonalAccessTokenResponse(BaseModel):
     token_prefix: str
     capability: RepositoryRole
     organization_id: UUID | None
+    organization_name: str | None = None
     repository_id: UUID | None
     expires_at: datetime | None
     created_at: datetime

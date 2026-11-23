@@ -7,7 +7,6 @@ import {
 } from "@solidjs/router";
 import { lazy, Show, type Component, type JSX } from "solid-js";
 import { isReservedSlug } from "~/lib/reserved";
-import { Pane, WsBody } from "~/ui/WorkspaceLayout";
 import { RequireAuth, RequirePlatformAdmin, useAuth } from "./auth";
 
 const Placeholder = lazy(
@@ -30,6 +29,13 @@ const PullRequestPage = lazy(() => import("~/features/pulls/PullRequestPage"));
 const ReviewsInboxPage = lazy(
   () => import("~/features/pulls/ReviewsInboxPage"),
 );
+const SettingsLayout = lazy(() => import("~/features/settings/SettingsLayout"));
+const OrgLayout = lazy(() => import("~/features/orgs/OrgLayout"));
+const NewOrgPage = lazy(() => import("~/features/new-org/NewOrgPage"));
+const NewRepoPage = lazy(() => import("~/features/new-repo/NewRepoPage"));
+const RepoSettingsLayout = lazy(
+  () => import("~/features/repo-settings/RepoSettingsLayout"),
+);
 const UiKitPage = lazy(() => import("~/features/dev-ui/UiKitPage"));
 const IllustrationsPage = lazy(
   () => import("~/features/dev-ui/IllustrationsPage"),
@@ -39,22 +45,6 @@ const IllustrationsPage = lazy(
 const soon = (screen: string, phase: number, prototype?: string): Component =>
   function NotBuiltYet() {
     return <Placeholder screen={screen} phase={phase} prototype={prototype} />;
-  };
-
-/** Not-yet-built repository tab: rendered inside RepoLayout's workspace so the body scrolls. */
-const soonInRepo = (
-  screen: string,
-  phase: number,
-  prototype?: string,
-): Component =>
-  function NotBuiltYetInRepo() {
-    return (
-      <WsBody>
-        <Pane>
-          <Placeholder screen={screen} phase={phase} prototype={prototype} />
-        </Pane>
-      </WsBody>
-    );
   };
 
 const authed =
@@ -148,10 +138,7 @@ export function AppRoutes(): JSX.Element {
         path="/repos"
         component={authed(soon("Repositories", 5, "#/repos"))}
       />
-      <Route
-        path="/new"
-        component={authed(soon("New repository", 4, "#/new"))}
-      />
+      <Route path="/new" component={authed(NewRepoPage)} />
       <Route path="/reviews" component={authed(ReviewsInboxPage)} />
       <Route
         path="/activity"
@@ -180,18 +167,9 @@ export function AppRoutes(): JSX.Element {
       />
       <Route path="/error/:code" component={ErrorPage} />
 
-      <Route
-        path="/org/:org/:section?"
-        component={authed(soon("Organization", 4, "#/org/members"))}
-      />
-      <Route
-        path="/orgs/new"
-        component={authed(soon("New organization", 4, "#/orgs/new"))}
-      />
-      <Route
-        path="/settings/:section?"
-        component={authed(soon("Your settings", 4, "#/settings/profile"))}
-      />
+      <Route path="/org/:org/:section?" component={authed(OrgLayout)} />
+      <Route path="/orgs/new" component={authed(NewOrgPage)} />
+      <Route path="/settings/:section?" component={authed(SettingsLayout)} />
       <Route
         path="/admin/:section?"
         component={() => (
@@ -225,13 +203,7 @@ export function AppRoutes(): JSX.Element {
         <Route path="/refs/:kind?" component={RefsPage} />
         <Route
           path="/settings/:section?/:id?"
-          component={authed(
-            soonInRepo(
-              "Repository settings",
-              4,
-              "#/r/sigma-reckitt/settings/general",
-            ),
-          )}
+          component={authed(RepoSettingsLayout)}
         />
         <Route path="*" component={NotFoundPage} />
       </Route>

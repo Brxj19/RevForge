@@ -167,7 +167,9 @@ def test_organization_creation_and_last_owner_protection(client, session_factory
     members = client.get("/api/v1/organizations/acme/members")
     assert members.status_code == 200
     owner_member_id = next(
-        member["id"] for member in members.json() if member["user_email"] == "owner@example.com"
+        member["id"]
+        for member in members.json()["items"]
+        if member["user_email"] == "owner@example.com"
     )
     last_owner_demotion = client.patch(
         f"/api/v1/organizations/acme/members/{owner_member_id}",
@@ -301,7 +303,9 @@ def test_repository_visibility_permissions_and_cross_org_isolation(client, sessi
     assert _login(client).status_code == 200
     member_listing = client.get("/api/v1/organizations/acme/members")
     member_record = next(
-        member for member in member_listing.json() if member["user_email"] == "member@example.com"
+        member
+        for member in member_listing.json()["items"]
+        if member["user_email"] == "member@example.com"
     )
     remove_member = client.delete(
         f"/api/v1/organizations/acme/members/{member_record['id']}",

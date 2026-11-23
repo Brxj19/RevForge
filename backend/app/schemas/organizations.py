@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -52,5 +53,55 @@ class OrganizationMemberResponse(BaseModel):
     user_display_name: str
 
 
+class PaginatedMembersResponse(BaseModel):
+    items: list[OrganizationMemberResponse]
+    total: int
+    page: int
+    per_page: int
+
+
 class OrganizationDetailResponse(OrganizationSummary):
     member_count: int
+    repository_count: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Slug check
+# ---------------------------------------------------------------------------
+
+
+class SlugCheckResponse(BaseModel):
+    available: bool
+    reason: Literal["taken", "reserved", "invalid"] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Invitations
+# ---------------------------------------------------------------------------
+
+
+class InvitationCreateRequest(BaseModel):
+    email: str = Field(min_length=1, max_length=320)
+    role: OrganizationRole
+
+
+class InvitationResponse(BaseModel):
+    id: UUID
+    organization_id: UUID
+    email: str
+    role: str
+    status: str
+    invited_by_email: str | None
+    created_at: datetime
+    expires_at: datetime
+
+
+class InvitationCreateResponse(InvitationResponse):
+    """Returned on creation only -- includes the raw token shown once."""
+
+    token: str
+
+
+class InvitationAcceptResponse(BaseModel):
+    organization: OrganizationSummary
+    role: str

@@ -53,6 +53,19 @@ class WebhookResponse(BaseModel):
     updated_at: datetime
 
 
+class WebhookCreateResponse(BaseModel):
+    """Returned only on POST create -- includes the plaintext secret."""
+
+    webhook: WebhookResponse
+    secret: str
+
+
+class WebhookSecretResponse(BaseModel):
+    """Returned when a webhook secret is rotated."""
+
+    secret: str
+
+
 class WebhookDeliveryResponse(BaseModel):
     id: UUID
     webhook_id: UUID

@@ -1,0 +1,59 @@
+/* New organization page */
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 28px 64px;
+}
+
+.page h1 {
+  margin: 0;
+}
+
+.lead {
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+.formFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--raised);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+}
+
+.slugPrefix {
+  color: var(--subtle);
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.slugStatus {
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+
+.slugStatus[data-status="available"] {
+  color: var(--green);
+}
+
+.slugStatus[data-status="taken"],
+.slugStatus[data-status="reserved"],
+.slugStatus[data-status="invalid"] {
+  color: var(--red);
+}
+
+.slugStatus[data-status="checking"] {
+  color: var(--muted);
+}

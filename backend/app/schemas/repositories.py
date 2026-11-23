@@ -336,3 +336,16 @@ class RepositoryTransportResponse(BaseModel):
     # Null for anonymous viewers of public repositories (HTTPS anonymous clone only).
     ssh: RepositorySshTransportResponse | None
     setup: RepositoryTransportSetupResponse
+
+
+class TransportSettingsUpdateRequest(BaseModel):
+    """Toggle per-repo transport settings.
+
+    TODO: requires a migration when transport config is stored per-repo.
+    Currently accepts the payload, validates it, and returns the current
+    transport metadata unchanged (config-derived, not per-repo).
+    """
+
+    ssh: bool | None = None
+    https: bool | None = None
+    anonymous_clone: bool | None = None

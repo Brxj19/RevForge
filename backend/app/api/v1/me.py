@@ -2,15 +2,27 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import SessionIdentity, get_current_identity, get_session
+from app.api.deps import (
+    SessionIdentity,
+    get_current_identity,
+    get_request_id,
+    get_session,
+    require_csrf,
+)
 from app.domain.enums import ReviewDecision
 from app.schemas.contributions import (
     ContributionActivityResponse,
     ContributionDayResponse,
     ContributionRangeResponse,
+)
+from app.schemas.me import (
+    NotificationSettingsResponse,
+    UserPreferences,
+    UserProfileResponse,
+    UserUpdateRequest,
 )
 from app.schemas.pull_requests import (
     MyPullRequestsResponse,
@@ -18,9 +30,17 @@ from app.schemas.pull_requests import (
     RepositoryContextResponse,
 )
 from app.services.contribution_activity import list_user_contribution_activity
-from app.services.errors import NotFoundError
+from app.services.errors import ConflictError, NotFoundError, ValidationFailure
 from app.services.pull_request_service import MyPullRequestFilter, list_my_pull_requests
 from app.services.repository_service import get_repository_access_for_actor
+from app.services.user_settings import (
+    get_notification_settings,
+    get_user_preferences,
+    get_user_profile,
+    update_notification_settings,
+    update_user_preferences,
+    update_user_profile,
+)
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -106,3 +126,79 @@ async def list_my_pull_requests_route(
             )
         )
     return MyPullRequestsResponse(pull_requests=items)
+
+
+@router.get("/profile", response_model=UserProfileResponse)
+async def get_profile(
+    identity: SessionIdentity = Depends(get_current_identity),
+    session: AsyncSession = Depends(get_session),
+) -> UserProfileResponse:
+    return await get_user_profile(session, user=identity.user)
+
+
+@router.patch("/profile", response_model=UserProfileResponse)
+async def patch_profile(
+    payload: UserUpdateRequest,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> UserProfileResponse:
+    try:
+        return await update_user_profile(
+            session,
+            user=identity.user,
+            payload=payload,
+            request_id=request_id,
+        )
+    except ValidationFailure as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    except ConflictError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get("/preferences", response_model=UserPreferences)
+async def get_preferences_route(
+    identity: SessionIdentity = Depends(get_current_identity),
+) -> UserPreferences:
+    return get_user_preferences(identity.user)
+
+
+@router.put("/preferences", response_model=UserPreferences)
+async def put_preferences(
+    preferences: UserPreferences,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+) -> UserPreferences:
+    return await update_user_preferences(session, user=identity.user, preferences=preferences)
+
+
+@router.get("/notification-settings", response_model=NotificationSettingsResponse)
+async def get_notification_settings_route(
+    identity: SessionIdentity = Depends(get_current_identity),
+) -> NotificationSettingsResponse:
+    return get_notification_settings(identity.user)
+
+
+@router.put("/notification-settings", response_model=NotificationSettingsResponse)
+async def put_notification_settings(
+    settings: NotificationSettingsResponse,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> NotificationSettingsResponse:
+    try:
+        return await update_notification_settings(
+            session,
+            user=identity.user,
+            settings=settings,
+            request_id=request_id,
+        )
+    except ValidationFailure as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc

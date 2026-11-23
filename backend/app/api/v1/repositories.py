@@ -21,6 +21,7 @@ from app.api.deps import (
 from app.api.rate_limit import history_rate_limited, rate_limited
 from app.core.config import Settings, get_settings
 from app.core.errors import ApiError
+from app.core.security import SLUG_RE
 from app.domain.enums import PROVISIONING_ERROR_CODES, RepositoryRole, RepositoryVisibility
 from app.mercurial.command_runner import HgCommandRunner
 from app.mercurial.diff_model import DiffFile
@@ -67,7 +68,8 @@ from app.models.repository import Repository
 from app.models.repository_permission import RepositoryPermission
 from app.models.user import User
 from app.repositories.organizations import get_membership
-from app.repositories.repositories import get_permission
+from app.repositories.repositories import get_permission, get_repository_by_slug
+from app.schemas.organizations import SlugCheckResponse
 from app.schemas.repositories import (
     ChangesetChangedFileResponse,
     ChangesetDetailResponse,
@@ -102,6 +104,7 @@ from app.schemas.repositories import (
     RepositoryTransportSetupResponse,
     RepositoryTreeEntryResponse,
     RepositoryUpdateRequest,
+    TransportSettingsUpdateRequest,
     TreeEntryChangesetResponse,
 )
 from app.services.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailure
@@ -663,6 +666,43 @@ async def create_repository_route(
     )
 
 
+# ---------------------------------------------------------------------------
+# Check repository slug — MUST be registered before /{repository_slug} routes
+# ---------------------------------------------------------------------------
+
+
+@router.get("/check-slug", response_model=SlugCheckResponse)
+async def check_repository_slug(
+    organization_slug: str,
+    s: str = Query(..., min_length=1, max_length=80),
+    identity: SessionIdentity = Depends(get_current_identity),
+    session: AsyncSession = Depends(get_session),
+) -> SlugCheckResponse:
+    # Must be an org member to check repository slugs.
+    try:
+        organization = await get_organization_by_slug_for_repo_routes(
+            session, organization_slug=organization_slug
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    membership = await get_membership(
+        session, organization_id=organization.id, user_id=identity.user.id
+    )
+    if membership is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
+
+    normalized = s.strip().lower()
+    if len(normalized) < 2 or len(normalized) > 39 or not SLUG_RE.match(normalized):
+        return SlugCheckResponse(available=False, reason="invalid")
+    existing = await get_repository_by_slug(
+        session, organization_id=organization.id, slug=normalized
+    )
+    if existing is not None:
+        return SlugCheckResponse(available=False, reason="taken")
+    return SlugCheckResponse(available=True)
+
+
 @router.post("/{repository_slug}/provision", response_model=RepositoryProvisionResponse)
 async def provision_repository_route(
     organization_slug: str,
@@ -868,6 +908,96 @@ async def get_repository_transport(
             username=settings.transport_hg_username,
             port=settings.ssh_public_port,
             # A server filesystem path: repository admins only.
+            authorized_keys_path_hint=settings.ssh_authorized_keys_path if can_manage else None,
+        ),
+        setup=RepositoryTransportSetupResponse(
+            has_active_token=active_token,
+            has_active_ssh_key=active_ssh_key,
+            recommended_next_step=recommended_next_transport_step(
+                repository=repository,
+                can_read=can_read,
+                has_active_token=active_token,
+                has_active_ssh_key=active_ssh_key,
+            ),
+        ),
+    )
+
+
+@router.patch("/{repository_slug}/transport", response_model=RepositoryTransportResponse)
+async def patch_repository_transport(
+    organization_slug: str,
+    repository_slug: str,
+    payload: TransportSettingsUpdateRequest,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> RepositoryTransportResponse:
+    """Toggle per-repo transport settings (ssh, https, anonymous_clone).
+
+    TODO: transport settings are currently derived from global config, not stored
+    per-repo.  This endpoint validates the payload and returns the current transport
+    metadata.  A migration is needed to persist per-repo transport flags.
+    """
+    try:
+        (
+            organization,
+            repository,
+            viewer_role,
+            can_manage,
+            _inherited_access,
+        ) = await _get_repository_with_access(
+            session=session,
+            organization_slug=organization_slug,
+            repository_slug=repository_slug,
+            actor=identity.user,
+            allow_archived=True,
+        )
+        if not can_manage:
+            raise ForbiddenError("Repository admin access required.")
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+    # Return current transport metadata (config-derived for now).
+    can_read = viewer_role is not None
+    can_write = viewer_role in {RepositoryRole.WRITE, RepositoryRole.ADMIN}
+    active_token = await has_active_personal_access_token(session, user_id=identity.user.id)
+    active_ssh_key = await has_active_ssh_key(session, user_id=identity.user.id)
+    https_clone_url = build_https_clone_url(
+        settings,
+        organization_slug=organization.slug,
+        repository_slug=repository.slug,
+    )
+    ssh_clone_url = build_ssh_clone_url(
+        settings,
+        organization_slug=organization.slug,
+        repository_slug=repository.slug,
+    )
+
+    return RepositoryTransportResponse(
+        repository=RepositoryTransportInfo(
+            organization_slug=organization.slug,
+            repository_slug=repository.slug,
+            provisioning_state=repository.provisioning_state,
+            is_browsable=repository_is_browsable(repository),
+            viewer_role=viewer_role,
+            can_read=can_read,
+            can_write=can_write,
+        ),
+        https=RepositoryHttpsTransportResponse(
+            enabled=payload.https if payload.https is not None else True,
+            clone_url=https_clone_url,
+            clone_command=f"hg clone {https_clone_url}",
+            username_hint=identity.user.email,
+            password_hint="Personal Access Token",
+        ),
+        ssh=RepositorySshTransportResponse(
+            enabled=payload.ssh if payload.ssh is not None else True,
+            clone_url=ssh_clone_url,
+            clone_command=f"hg clone {ssh_clone_url}",
+            username=settings.transport_hg_username,
+            port=settings.ssh_public_port,
             authorized_keys_path_hint=settings.ssh_authorized_keys_path if can_manage else None,
         ),
         setup=RepositoryTransportSetupResponse(

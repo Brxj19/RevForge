@@ -1,6 +1,7 @@
 """ORM models for RevForge foundation."""
 
 from app.models.audit_event import AuditEvent
+from app.models.invitation import Invitation
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
 from app.models.personal_access_token import PersonalAccessToken
@@ -23,6 +24,7 @@ from app.models.webhook import Webhook, WebhookDelivery
 __all__ = [
     "AuditEvent",
     "EventSpoolEntry",
+    "Invitation",
     "Organization",
     "OrganizationMember",
     "PersonalAccessToken",

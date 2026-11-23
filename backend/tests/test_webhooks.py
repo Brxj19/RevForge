@@ -49,7 +49,9 @@ def _mk_webhook(client, org: str, repo: str, url: str = GLOBAL_URL) -> str:
         headers=_csrf(client),
     )
     assert r.status_code == 201, r.text
-    return r.json()["id"]
+    body = r.json()
+    # create response is { webhook: {...}, secret: "..." }
+    return body["webhook"]["id"]
 
 
 def test_webhook_cannot_be_modified_cross_repository(client) -> None:

@@ -4,6 +4,8 @@ import { meHandlers } from "./me";
 import { orgHandlers } from "./orgs";
 import { pullHandlers } from "./pulls";
 import { repoHandlers } from "./repos";
+import { repoSettingsHandlers } from "./repo-settings";
+import { settingsHandlers } from "./settings";
 
 export const handlers = [
   ...healthHandlers,
@@ -11,6 +13,8 @@ export const handlers = [
   ...meHandlers,
   ...orgHandlers,
   ...repoHandlers,
+  ...repoSettingsHandlers,
   ...pullHandlers,
+  ...settingsHandlers,
 ];
 export { apiError } from "./util";
