@@ -251,6 +251,22 @@ export const ART = {
       IL.spark(34, 50, 4) +
       IL.spark(168, 96, 3),
   },
+  "no-invitations": {
+    cat: "First run",
+    title: "No pending invitations",
+    body: "Invited teammates appear here until they accept or you revoke the link.",
+    acts: ["Invite member"],
+    used: "Organization › Members › Pending invitations",
+    draw: () =>
+      IL.glow(100, 68, 58) +
+      IL.floor(100, 124, 68) +
+      `<rect class="dsf" x="44" y="38" width="112" height="72" rx="8"/>` +
+      `<path class="ds" d="M48 44l52 36l52-36"/>` +
+      IL.bars(60, 88, [46, 28], "ln", 8) +
+      IL.badge(152, 40, 11, "plus") +
+      IL.spark(32, 56, 4) +
+      IL.spark(170, 96, 3),
+  },
   "no-permissions": {
     cat: "First run",
     title: "No direct permissions yet",
@@ -280,6 +296,24 @@ export const ART = {
       `<path class="st" d="M42 84H170" style="stroke:#222"/><path class="acs" d="M42 84H88l6-12l8 22l6-10H158"/>` +
       IL.node(158, 84, 3.5) +
       IL.spark(178, 30, 4),
+  },
+  "no-pulls": {
+    cat: "First run",
+    title: "No pull requests yet",
+    body: "Push a branch, then open a pull request to review changes before merging them into default.",
+    acts: ["New pull request"],
+    used: "Repository › Pull requests",
+    draw: () =>
+      IL.glow(100, 68, 60) +
+      IL.floor(100, 124, 68) +
+      `<path class="acs" d="M52 26V112"/><path class="ds" d="M84 48V74C84 86 52 84 52 96"/>` +
+      IL.node(52, 36, 4.5) +
+      IL.node(52, 98, 4.5) +
+      IL.ring(84, 46, 4.5, "ds bgk") +
+      `<rect class="dsf" x="102" y="34" width="66" height="68" rx="7"/>` +
+      IL.bars(114, 50, [38, 28, 42, 24], "ln2", 11) +
+      IL.badge(164, 34, 11, "plus") +
+      IL.spark(34, 62, 4),
   },
   "reviews-off": {
     cat: "First run",
@@ -630,6 +664,32 @@ export const ART = {
       `<rect class="pn2" x="122" y="56" width="24" height="28" rx="5"/><circle class="bgk" cx="132" cy="64" r="2"/><circle class="bgk" cx="132" cy="76" r="2"/><path class="st" d="M146 70H180"/>` +
       `<path class="ams spk" d="M100 56l4 8h-8l4 8M110 76l-3 6M92 82l3-5"/>`,
   },
+  "rate-limited": {
+    cat: "Errors",
+    title: "Too many requests",
+    body: "You’ve made a lot of requests in a short time. Wait a minute, then try again.",
+    acts: ["Try again"],
+    used: "429 rate limit",
+    draw: () =>
+      IL.glow(100, 66, 58) +
+      IL.floor(100, 124, 66) +
+      `<rect class="pn" x="34" y="28" width="132" height="84" rx="8"/>` +
+      `<path class="ds" d="M44 54H156" style="stroke:var(--amber)"/>` +
+      [
+        [52, 74, 26, "ln2"],
+        [72, 62, 38, "ln2"],
+        [92, 56, 44, "ac"],
+        [112, 46, 54, "am"],
+        [132, 42, 58, "am"],
+      ]
+        .map(
+          ([x, y, h, cls]) =>
+            `<rect class="${cls}" x="${x}" y="${y}" width="12" height="${h}" rx="3"/>`,
+        )
+        .join("") +
+      IL.badge(158, 32, 11, "clock", "am") +
+      IL.spark(26, 48, 4, "ams"),
+  },
   "session-expired": {
     cat: "Errors",
     title: "Your session has expired",
@@ -658,4 +718,15 @@ export const ILLUSTRATION_IDS = Object.keys(ART) as IllustrationId[];
 
 export function artOf(id: IllustrationId): ArtSpec {
   return ART[id] as ArtSpec;
+}
+
+const SVG_CACHE = new Map<IllustrationId, string>();
+
+/** Returns the static SVG inner markup for `id`, cached across renders. */
+export function drawArt(id: IllustrationId): string {
+  const cached = SVG_CACHE.get(id);
+  if (cached !== undefined) return cached;
+  const rendered = artOf(id).draw();
+  SVG_CACHE.set(id, rendered);
+  return rendered;
 }

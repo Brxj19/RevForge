@@ -11,6 +11,7 @@ import { Pill } from "~/ui/Pill";
 import { Icon } from "~/ui/icons";
 import { useAuth } from "../auth";
 import { useCurrentOrg } from "./data";
+import { NotificationBell } from "./NotificationBell";
 import styles from "./shell.module.css";
 
 function Brand(props: { href: string }) {
@@ -110,28 +111,33 @@ export function TopBar(props: TopBarProps) {
     },
   ];
 
+  const userHandle = () =>
+    auth.user()?.handle ??
+    auth.user()?.email.split("@")[0] ??
+    "";
+
   const userGroups = (): MenuGroupDef[] => [
     {
       items: [
+        ...(userHandle()
+          ? [
+              {
+                label: "Your profile",
+                icon: "user" as const,
+                onSelect: () =>
+                  navigate(`/u/${encodeURIComponent(userHandle())}`),
+              },
+            ]
+          : []),
         {
           label: "Your settings",
           icon: "gear",
           onSelect: () => navigate("/settings/profile"),
         },
         {
-          label: "SSH keys",
-          icon: "key",
-          onSelect: () => navigate("/settings/ssh-keys"),
-        },
-        {
-          label: "Access tokens",
-          icon: "lock",
-          onSelect: () => navigate("/settings/tokens"),
-        },
-        {
-          label: "Appearance",
-          icon: "palette",
-          onSelect: () => navigate("/settings/preferences"),
+          label: "Notifications",
+          icon: "bell",
+          onSelect: () => navigate("/settings/notifications"),
         },
       ],
     },
@@ -177,29 +183,7 @@ export function TopBar(props: TopBarProps) {
     },
   ];
 
-  // API-GAP: notifications (Phase 5) — the menu shows the empty state until GET /me/notifications exists.
-  const notificationGroups = (): MenuGroupDef[] => [
-    {
-      label: "Unread",
-      items: [
-        {
-          label: "You're all caught up",
-          hint: "Reviews, merges and webhook failures show up here",
-          icon: "check",
-          disabled: true,
-        },
-      ],
-    },
-    {
-      items: [
-        {
-          label: "Notification settings",
-          icon: "gear",
-          onSelect: () => navigate("/settings/notifications"),
-        },
-      ],
-    },
-  ];
+  // Phase 5: notifications handled by NotificationBell component.
 
   return (
     <header class={styles.top}>
@@ -255,20 +239,7 @@ export function TopBar(props: TopBarProps) {
             </Button>
           )}
         />
-        <Menu
-          groups={notificationGroups()}
-          placement="bottom-end"
-          width={360}
-          header={<b class={styles.menuHead}>Notifications</b>}
-          trigger={(p: Record<string, unknown>) => (
-            <IconButton
-              {...p}
-              icon="bell"
-              label="Notifications"
-              tooltip={false}
-            />
-          )}
-        />
+        <NotificationBell />
         <IconButton icon="book" label="Developer docs" href="/docs" />
         <Menu
           groups={userGroups()}

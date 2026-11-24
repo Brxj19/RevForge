@@ -12,6 +12,7 @@ import {
   orgsApi,
   reposApi,
   request,
+  type BreakGlassSession,
   type PinRef,
 } from "~/lib/api";
 import { qk } from "~/lib/query-keys";
@@ -61,14 +62,7 @@ export function createHealthQuery() {
   }));
 }
 
-/** API-GAP: admin — GET /me/break-glass → active session | null. Only platform admins ask. */
-export interface BreakGlassSession {
-  id: string;
-  org: string;
-  repo: string;
-  reason: string;
-  expires_at: string;
-}
+export type { BreakGlassSession };
 
 export function createBreakGlassQuery() {
   const auth = useAuth();

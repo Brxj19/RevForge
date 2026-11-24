@@ -32,6 +32,7 @@ const BARE = new Set([
   "register",
   "verify",
   "forgot",
+  "reset-password",
   "suspended",
 ]);
 

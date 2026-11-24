@@ -1,10 +1,10 @@
 import { Match, Show, Switch as SSwitch, type Component } from "solid-js";
 import { createQuery } from "@tanstack/solid-query";
-import { ApiError, isRetryable, reposApi } from "~/lib/api";
+import { isRetryable, reposApi } from "~/lib/api";
 import { useRepo } from "~/features/repo";
 import { Card, CardBody, CardHeader } from "~/ui/Card";
 import { CopyLine } from "~/ui/CopyButton";
-import { EmptyState } from "~/ui/EmptyState";
+import { ErrorState } from "~/ui/EmptyState";
 import { Pill } from "~/ui/Pill";
 import { Skeleton } from "~/ui/Skeleton";
 import { Switch } from "~/ui/Switch";
@@ -36,17 +36,14 @@ const RepoTransportPage: Component = () => {
         </Card>
       </Match>
       <Match when={transport.isError}>
-        <EmptyState
-          art="load-error"
-          title="Something went wrong"
-          body="Couldn't load transport settings."
-          size="card"
-          requestId={
-            transport.error instanceof ApiError
-              ? transport.error.requestId
-              : undefined
-          }
-        />
+        <Card>
+          <ErrorState
+            error={transport.error}
+            what="transport settings"
+            size="card"
+            onRetry={() => void transport.refetch()}
+          />
+        </Card>
       </Match>
       <Match when={transport.data}>
         {(data) => (

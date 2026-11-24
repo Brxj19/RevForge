@@ -11,12 +11,63 @@ from app.models.repository_event import EventSpoolEntry, RepositoryEvent
 
 
 class EventService:
+    def __init__(self) -> None:
+        self.last_reclaimed: int = 0
+
+    async def reclaim_stale_claims(
+        self,
+        session: AsyncSession,
+        *,
+        stale_after_seconds: int = 600,
+        max_retries: int = 5,
+    ) -> int:
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(seconds=stale_after_seconds)
+        result = await session.execute(
+            select(EventSpoolEntry)
+            .where(
+                EventSpoolEntry.status == "claimed",
+                EventSpoolEntry.claimed_at.is_not(None),
+                EventSpoolEntry.claimed_at <= cutoff,
+            )
+            .limit(100)
+            .with_for_update(skip_locked=True)
+        )
+        entries = list(result.scalars())
+        reclaimed = 0
+        for entry in entries:
+            entry.retry_count += 1
+            entry.claimed_at = None
+            if entry.retry_count >= max_retries:
+                entry.status = "dead_letter"
+                entry.last_error = (
+                    entry.last_error or "Claim timed out; exceeded maximum retries."
+                )[:2000]
+            else:
+                entry.status = "pending"
+                entry.scheduled_for = now
+                entry.last_error = "Reclaimed stale claim."
+            reclaimed += 1
+        if reclaimed:
+            await session.flush()
+        self.last_reclaimed = reclaimed
+        return reclaimed
+
     async def claim_events(
         self,
         session: AsyncSession,
         *,
         batch_size: int = 10,
+        reclaim_stale: bool = True,
+        stale_after_seconds: int = 600,
+        max_retries: int = 5,
     ) -> list[EventSpoolEntry]:
+        if reclaim_stale:
+            await self.reclaim_stale_claims(
+                session,
+                stale_after_seconds=stale_after_seconds,
+                max_retries=max_retries,
+            )
         now = datetime.now(UTC)
         result = await session.execute(
             select(EventSpoolEntry)

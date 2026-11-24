@@ -1,8 +1,10 @@
 import { useParams } from "@solidjs/router";
-import { For, lazy, Match, Switch } from "solid-js";
+import { For, lazy, Match, Suspense, Switch } from "solid-js";
 import { useRepo } from "~/features/repo";
+import { Card, CardBody } from "~/ui/Card";
 import { EmptyState } from "~/ui/EmptyState";
 import { Icon, type IconName } from "~/ui/icons";
+import { SkeletonText } from "~/ui/Skeleton";
 import { Pane, Panes, WsBody } from "~/ui/WorkspaceLayout";
 import styles from "./repo-settings.module.css";
 
@@ -72,7 +74,19 @@ export default function RepoSettingsLayout() {
         </Pane>
         <Pane>
           <div class={styles.content}>
-            <Switch
+            <Suspense
+              fallback={
+                <Card>
+                  <CardBody>
+                    <SkeletonText
+                      lines={["45%", "80%", "65%", "55%"]}
+                      label="Loading settings"
+                    />
+                  </CardBody>
+                </Card>
+              }
+            >
+              <Switch
               fallback={
                 <EmptyState
                   art="not-found"
@@ -134,7 +148,8 @@ export default function RepoSettingsLayout() {
                   size="card"
                 />
               </Match>
-            </Switch>
+              </Switch>
+            </Suspense>
           </div>
         </Pane>
       </Panes>

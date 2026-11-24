@@ -1,6 +1,7 @@
 import { Navigate, useParams } from "@solidjs/router";
 import { For, lazy, Match, Show, Switch, type Component } from "solid-js";
 import { ApiError } from "~/lib/api/client";
+import { ButtonLink } from "~/ui/Button";
 import { Icon, type IconName } from "~/ui/icons";
 import { EmptyState } from "~/ui/EmptyState";
 import { Skeleton } from "~/ui/Skeleton";
@@ -72,9 +73,9 @@ const OrgLayout: Component = () => {
                 body="It may have been renamed or you don't have access."
                 size="page"
                 actions={
-                  <a class="btn primary" href="/">
+                  <ButtonLink variant="primary" href="/">
                     Go home
-                  </a>
+                  </ButtonLink>
                 }
               />
             </Pane>

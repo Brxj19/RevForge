@@ -1,13 +1,13 @@
 import { Show, type JSX } from "solid-js";
-import { artOf, Illustration, type IllustrationId } from "../illustrations";
+import {
+  artOf,
+  Illustration,
+  type IllustrationId,
+  type IllustrationSize,
+} from "../illustrations";
 import styles from "./EmptyState.module.css";
 
-export type EmptyStateSize = "inline" | "card" | "page";
-const WIDTH: Record<EmptyStateSize, number> = {
-  inline: 96,
-  card: 140,
-  page: 200,
-};
+export type EmptyStateSize = IllustrationSize;
 
 export interface EmptyStateProps {
   art: IllustrationId;
@@ -33,7 +33,7 @@ export function EmptyState(props: EmptyStateProps) {
       data-size={size()}
       data-compact={props.compact || undefined}
     >
-      <Illustration id={props.art} size={WIDTH[size()]} label="" />
+      <Illustration id={props.art} size={size()} decorative />
       {props.level === 3 ? (
         <h3 class={styles.title}>{props.title ?? artOf(props.art).title}</h3>
       ) : (

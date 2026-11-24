@@ -1,13 +1,13 @@
-import { For, Match, Switch as SSwitch, type Component } from "solid-js";
-import { ApiError } from "~/lib/api/client";
+import { For, Match, Show, Switch as SSwitch, type Component } from "solid-js";
 import { useRepo } from "~/features/repo";
 import { Avatar } from "~/ui/Avatar";
 import { Button } from "~/ui/Button";
 import { Card, CardHeader } from "~/ui/Card";
-import { EmptyState } from "~/ui/EmptyState";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { Icon } from "~/ui/icons";
 import { Pill } from "~/ui/Pill";
 import { Skeleton } from "~/ui/Skeleton";
+import { Table, Td, Th } from "~/ui/Table";
 import { useRepoPermissions, useRevokePermission } from "./queries";
 import styles from "./repo-settings.module.css";
 
@@ -46,15 +46,14 @@ const RepoAccessPage: Component = () => {
         </Card>
       </Match>
       <Match when={perms.isError}>
-        <EmptyState
-          art="load-error"
-          title="Something went wrong"
-          body="Couldn't load access permissions."
-          size="card"
-          requestId={
-            perms.error instanceof ApiError ? perms.error.requestId : undefined
-          }
-        />
+        <Card>
+          <ErrorState
+            error={perms.error}
+            what="access permissions"
+            size="card"
+            onRetry={() => void perms.refetch()}
+          />
+        </Card>
       </Match>
       <Match when={perms.data}>
         {(entries) => (
@@ -66,21 +65,24 @@ const RepoAccessPage: Component = () => {
                 Add person
               </Button>
             </CardHeader>
-            <div class="scroll-x">
-              <table class={styles.accessTable}>
+            <Show
+              when={entries().length > 0}
+              fallback={<EmptyState art="no-permissions" size="card" />}
+            >
+              <Table caption={`Access permissions for ${ctx.repo()}`}>
                 <thead>
                   <tr>
-                    <th>Person</th>
-                    <th>Role</th>
-                    <th>Source</th>
-                    <th />
+                    <Th>Person</Th>
+                    <Th>Role</Th>
+                    <Th>Source</Th>
+                    <Th />
                   </tr>
                 </thead>
                 <tbody>
                   <For each={entries()}>
                     {(entry) => (
                       <tr>
-                        <td>
+                        <Td>
                           <div class={styles.personCell}>
                             <Avatar name={entry.display_name} size={26} />
                             <div class={styles.personMeta}>
@@ -90,16 +92,16 @@ const RepoAccessPage: Component = () => {
                               </span>
                             </div>
                           </div>
-                        </td>
-                        <td>
+                        </Td>
+                        <Td>
                           <Pill tone={roleTone(entry.role)}>{entry.role}</Pill>
-                        </td>
-                        <td class={styles.sourceCell}>
+                        </Td>
+                        <Td class={styles.sourceCell}>
                           {entry.source === "org_role"
                             ? "Organization role"
                             : "Direct grant"}
-                        </td>
-                        <td style={{ "text-align": "right" }}>
+                        </Td>
+                        <Td style={{ "text-align": "right" }}>
                           {entry.source === "direct" && (
                             <Button
                               variant="ghost"
@@ -114,13 +116,13 @@ const RepoAccessPage: Component = () => {
                               Revoke
                             </Button>
                           )}
-                        </td>
+                        </Td>
                       </tr>
                     )}
                   </For>
                 </tbody>
-              </table>
-            </div>
+              </Table>
+            </Show>
           </Card>
         )}
       </Match>

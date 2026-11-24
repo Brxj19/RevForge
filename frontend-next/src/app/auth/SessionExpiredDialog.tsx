@@ -13,8 +13,14 @@ export function SessionExpiredDialog() {
   const navigate = useNavigate();
   const location = useLocation();
   const next = () => `${location.pathname}${location.search}`;
+  const isIdleTimeout = () => auth.sessionExpiredReason() === "idle_timeout";
+  const description = () =>
+    isIdleTimeout()
+      ? "Your session expired after 30 minutes without activity. Sign in again to continue."
+      : "Your session ended. Sign in again to keep working.";
   const toLogin = () => {
-    const target = `/login?state=expired&next=${encodeURIComponent(next())}`;
+    const reason = isIdleTimeout() ? "&reason=idle_timeout" : "";
+    const target = `/login?state=expired${reason}&next=${encodeURIComponent(next())}`;
     auth.abandonSession();
     navigate(target, { replace: true });
   };
@@ -25,7 +31,7 @@ export function SessionExpiredDialog() {
         if (!open) toLogin();
       }}
       title="Your session has expired"
-      description="Sign in again to keep going. Unsaved changes on this page are kept."
+      description={description()}
       footer={
         <Button variant="ghost" onClick={toLogin}>
           Go to sign-in page
@@ -33,12 +39,16 @@ export function SessionExpiredDialog() {
       }
     >
       <div class={styles.expired}>
-        <Illustration id="session-expired" size={96} label="" />
+        <Illustration id="session-expired" size="inline" decorative />
       </div>
       <Show when={auth.sessionExpired()}>
         <SignInForm
           email={auth.user()?.email}
           submitLabel="Sign in and continue"
+          onSuspended={() => {
+            auth.abandonSession();
+            navigate("/suspended", { replace: true });
+          }}
           onFailure={(attempts) => {
             if (attempts >= 2) toLogin();
           }}

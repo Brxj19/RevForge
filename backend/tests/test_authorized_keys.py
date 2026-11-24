@@ -20,15 +20,14 @@ def _csrf_headers(client) -> dict[str, str]:
 
 
 def _register(client) -> None:
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "owner@example.com",
-            "display_name": "Owner User",
-            "password": "StrongPassword123",
-        },
+    from tests.auth_helpers import register_and_login
+
+    register_and_login(
+        client,
+        email="owner@example.com",
+        display_name="Owner User",
+        password="StrongPassword123",
     )
-    assert response.status_code == 201
 
 
 def _create_ssh_key(client) -> dict[str, str]:

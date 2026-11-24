@@ -16,7 +16,7 @@ import type {
   RepositoryTreeEntry,
 } from "~/lib/api/types";
 import { languageOf } from "~/features/code/file-kinds";
-import { db, findRepo, ORGS, REPOS, roleFor } from "../db";
+import { db, findRepo, ORGS, REPOS, USERS, roleFor } from "../db";
 import type { RepoFixture } from "../fixtures/forge";
 import {
   BINARY_FILES,
@@ -33,7 +33,7 @@ import {
   TOO_LARGE,
 } from "../fixtures/sigma-reckitt";
 import { DIFFS } from "../fixtures/sigma-reckitt-diffs";
-import { API, apiError, csrfFailure, notFound } from "./util";
+import { API, apiError, csrfFailure, notFound, unauthorized } from "./util";
 
 const R = `${API}/organizations/:org/repositories/:repo`;
 
@@ -832,4 +832,47 @@ export const repoHandlers = [
       results,
     });
   }),
+
+  // API-GAP: access-requests — POST R/access-requests
+  http.post(
+    `${API}/organizations/:org/repositories/:repo/access-requests`,
+    async ({ params, request }) => {
+      if (!db.session) return unauthorized();
+      const bad = csrfFailure(request);
+      if (bad) return bad;
+      let body: { role?: string; message?: string } = {};
+      try {
+        body = (await request.json()) as { role?: string; message?: string };
+      } catch {
+        // empty body defaults to read
+      }
+      return HttpResponse.json(
+        {
+          id: "ar-001",
+          user_id: USERS[db.session]?.id ?? "",
+          user_display_name: USERS[db.session]?.display_name ?? "",
+          user_handle: (USERS[db.session] as unknown as { handle: string })
+            ?.handle ?? "",
+          repository_slug: params.repo as string,
+          role: body.role ?? "read",
+          message: body.message ?? null,
+          status: "pending",
+          created_at: new Date().toISOString(),
+          reviewed_at: null,
+        },
+        { status: 201 },
+      );
+    },
+  ),
+
+  // API-GAP: access-requests — DELETE R/access-requests/:id
+  http.delete(
+    `${API}/organizations/:org/repositories/:repo/access-requests/:id`,
+    ({ request }) => {
+      if (!db.session) return unauthorized();
+      const bad = csrfFailure(request);
+      if (bad) return bad;
+      return new HttpResponse(null, { status: 204 });
+    },
+  ),
 ];

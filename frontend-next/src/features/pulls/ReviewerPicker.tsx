@@ -9,8 +9,9 @@ import {
 } from "solid-js";
 import { pullsApi } from "~/lib/api";
 import { Avatar } from "~/ui/Avatar";
-import { Button } from "~/ui/Button";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { Input } from "~/ui/Field";
+import { SkeletonText } from "~/ui/Skeleton";
 import { Icon } from "~/ui/icons";
 import styles from "./pulls.module.css";
 
@@ -132,16 +133,20 @@ export function ReviewerPicker(props: {
         }}
       />
       <Show when={props.enabled && candidates.isPending}>
-        <p role="status" class="muted">
-          Loading people…
-        </p>
+        <div style={{ padding: "12px" }}>
+          <SkeletonText lines={["65%", "50%", "75%"]} label="Loading people" />
+        </div>
       </Show>
       <Show when={candidates.isError}>
         <div role="alert">
-          Couldn't load reviewers.{" "}
-          <Button size="sm" onClick={() => void candidates.refetch()}>
-            Try again
-          </Button>
+          <ErrorState
+            error={candidates.error}
+            what="reviewers"
+            size="inline"
+            compact
+            level={3}
+            onRetry={() => void candidates.refetch()}
+          />
         </div>
       </Show>
       <Show when={candidates.isSuccess}>
@@ -159,7 +164,16 @@ export function ReviewerPicker(props: {
           </Show>
           <For
             each={options()}
-            fallback={<p class="muted">No people match.</p>}
+            fallback={
+              <EmptyState
+                art="no-results"
+                size="inline"
+                compact
+                level={3}
+                title="No people match"
+                body={`Only ${props.org} members with repository access can be added as reviewers.`}
+              />
+            }
           >
             {(user, position) => (
               <button

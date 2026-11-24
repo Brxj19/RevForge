@@ -198,6 +198,7 @@ async def authenticate_personal_access_token(
         token is None
         or user is None
         or not user.is_active
+        or user.email_verified_at is None
         or (token.expires_at is not None and token.expires_at <= utc_now())
     ):
         raise AuthenticationError("Authentication required.")
@@ -341,7 +342,13 @@ async def authenticate_ssh_public_key(
         .where(SshPublicKey.id == key_id)
     )
     user = key.user if key is not None else None
-    if key is None or user is None or key.revoked_at is not None or not user.is_active:
+    if (
+        key is None
+        or user is None
+        or key.revoked_at is not None
+        or not user.is_active
+        or user.email_verified_at is None
+    ):
         raise AuthenticationError("Authentication required.")
 
     key.last_used_at = utc_now()

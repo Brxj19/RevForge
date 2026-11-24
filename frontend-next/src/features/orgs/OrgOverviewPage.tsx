@@ -6,12 +6,14 @@ import type { RepositorySummary } from "~/lib/api/types";
 import { qk } from "~/lib/query-keys";
 import { relativeTime } from "~/lib/format";
 import { AvatarStack } from "~/ui/Avatar";
-import { Button } from "~/ui/Button";
+import { ButtonLink } from "~/ui/Button";
 import { Card, CardBody, CardHeader } from "~/ui/Card";
-import { EmptyState } from "~/ui/EmptyState";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { Icon } from "~/ui/icons";
 import { Pill, type PillTone } from "~/ui/Pill";
 import { Skeleton } from "~/ui/Skeleton";
+import { Sparkline } from "~/ui/Sparkline";
+import { Table, Td, Th } from "~/ui/Table";
 import { useOrgMembers } from "./queries";
 import styles from "./orgs.module.css";
 
@@ -66,48 +68,6 @@ function mockActivity(slug: string, state: string): number[] {
   });
 }
 
-function Sparkline(props: { values: number[]; color: string }) {
-  const w = 72;
-  const h = 20;
-  const vals = props.values;
-  const max = Math.max(...vals, 1);
-  const step = w / (vals.length - 1);
-  const pts = vals.map((v, i) => [
-    +(i * step).toFixed(1),
-    +(h - 3 - (v / max) * (h - 6)).toFixed(1),
-  ]);
-  const line = pts.map((p, i) => (i ? "L" : "M") + p[0] + " " + p[1]).join(" ");
-  const last = pts[pts.length - 1] ?? [0, 0];
-  const gid = "g" + props.color.replace("#", "");
-
-  return (
-    <svg
-      width={w}
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      aria-hidden="true"
-      style={{ overflow: "visible", display: "block" }}
-    >
-      <defs>
-        <linearGradient id={gid} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stop-color={props.color} stop-opacity=".28" />
-          <stop offset="1" stop-color={props.color} stop-opacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={`${line} L${w} ${h} L0 ${h}Z`} fill={`url(#${gid})`} />
-      <path
-        d={line}
-        fill="none"
-        stroke={props.color}
-        stroke-width="1.6"
-        stroke-linejoin="round"
-        stroke-linecap="round"
-      />
-      <circle cx={last[0]} cy={last[1]} r="2.4" fill={props.color} />
-    </svg>
-  );
-}
-
 function RepoRow(props: { repo: RepositorySummary; org: string }) {
   const activity = () =>
     mockActivity(props.repo.slug, props.repo.provisioning_state);
@@ -116,7 +76,7 @@ function RepoRow(props: { repo: RepositorySummary; org: string }) {
 
   return (
     <tr>
-      <td>
+      <Td>
         <a
           href={`/${encodeURIComponent(props.org)}/${encodeURIComponent(props.repo.slug)}`}
           class={styles.repoLink}
@@ -126,8 +86,8 @@ function RepoRow(props: { repo: RepositorySummary; org: string }) {
             <span class={styles.repoDesc}>{props.repo.description}</span>
           )}
         </a>
-      </td>
-      <td>
+      </Td>
+      <Td>
         <span class={styles.pillRow}>
           <Pill>
             <Icon name={visIcon(props.repo.visibility)} size={11} />
@@ -139,16 +99,21 @@ function RepoRow(props: { repo: RepositorySummary; org: string }) {
             </Pill>
           )}
         </span>
-      </td>
-      <td>
+      </Td>
+      <Td>
         <Pill tone={stateTone(props.repo.provisioning_state)} dot>
           {props.repo.provisioning_state}
         </Pill>
-      </td>
-      <td class={styles.activityCell}>
-        <Sparkline values={activity()} color={sparkColor()} />
-      </td>
-      <td class={styles.numCell}>{relativeTime(props.repo.updated_at)}</td>
+      </Td>
+      <Td class={styles.activityCell}>
+        <Sparkline
+          values={activity()}
+          color={sparkColor()}
+          width={72}
+          height={20}
+        />
+      </Td>
+      <Td numeric>{relativeTime(props.repo.updated_at)}</Td>
     </tr>
   );
 }
@@ -173,12 +138,10 @@ const OrgOverviewPage: Component = () => {
       <Card>
         <CardHeader>
           <h2 class="h2">Repositories</h2>
-          <a href="/new">
-            <Button size="sm" variant="primary">
-              <Icon name="plus" size={13} />
-              New
-            </Button>
-          </a>
+          <ButtonLink size="sm" variant="primary" href="/new">
+            <Icon name="plus" size={13} />
+            New
+          </ButtonLink>
         </CardHeader>
         <Switch>
           <Match when={reposQuery.isPending}>
@@ -188,10 +151,13 @@ const OrgOverviewPage: Component = () => {
           </Match>
           <Match when={reposQuery.isError}>
             <CardBody>
-              <EmptyState
-                art="load-error"
-                title="Couldn't load repositories"
+              <ErrorState
+                error={reposQuery.error}
+                what="repositories"
                 size="inline"
+                compact
+                level={3}
+                onRetry={() => void reposQuery.refetch()}
               />
             </CardBody>
           </Match>
@@ -202,29 +168,34 @@ const OrgOverviewPage: Component = () => {
                 title="No repositories yet"
                 body="Create a repository, then push your first changeset."
                 size="inline"
+                compact
+                level={3}
+                actions={
+                  <ButtonLink size="sm" variant="primary" href="/new">
+                    New repository
+                  </ButtonLink>
+                }
               />
             </CardBody>
           </Match>
           <Match when={reposQuery.data}>
             {(repos) => (
-              <div class={styles.scrollX}>
-                <table class={styles.repoTable}>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Access</th>
-                      <th>Status</th>
-                      <th class={styles.hideNarrow}>Activity</th>
-                      <th style={{ "text-align": "right" }}>Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <For each={repos()}>
-                      {(repo) => <RepoRow repo={repo} org={params.org} />}
-                    </For>
-                  </tbody>
-                </table>
-              </div>
+              <Table caption="Organization repositories">
+                <thead>
+                  <tr>
+                    <Th>Name</Th>
+                    <Th>Access</Th>
+                    <Th>Status</Th>
+                    <Th class={styles.hideNarrow}>Activity</Th>
+                    <Th numeric>Updated</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={repos()}>
+                    {(repo) => <RepoRow repo={repo} org={params.org} />}
+                  </For>
+                </tbody>
+              </Table>
             )}
           </Match>
         </Switch>
@@ -234,16 +205,28 @@ const OrgOverviewPage: Component = () => {
       <Card>
         <CardHeader>
           <h2 class="h2">Members</h2>
-          <a href={`/org/${encodeURIComponent(params.org)}/members`}>
-            <Button size="sm" variant="ghost">
-              Manage
-            </Button>
-          </a>
+          <ButtonLink
+            size="sm"
+            variant="ghost"
+            href={`/org/${encodeURIComponent(params.org)}/members`}
+          >
+            Manage
+          </ButtonLink>
         </CardHeader>
         <div class={styles.membersFooter}>
           <Switch>
             <Match when={membersQuery.isPending}>
               <Skeleton width="120px" height={26} />
+            </Match>
+            <Match when={membersQuery.isError}>
+              <ErrorState
+                error={membersQuery.error}
+                what="members"
+                size="inline"
+                compact
+                level={3}
+                onRetry={() => void membersQuery.refetch()}
+              />
             </Match>
             <Match when={membersQuery.data}>
               {(data) => (

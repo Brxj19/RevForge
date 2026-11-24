@@ -1,0 +1,421 @@
+/* Forge admin layout & screens — matches prototype pageAdmin & DESIGN.md tokens */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
+.shieldBadge {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  color: var(--purple);
+  flex-shrink: 0;
+}
+
+.headerText h1 {
+  margin: 0;
+}
+
+.hostSub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r);
+  font-size: 13.5px;
+  color: var(--text-2);
+  text-decoration: none;
+  transition: background-color var(--t-fast) var(--ease-out);
+  white-space: nowrap;
+}
+
+.navLink:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.navLink[data-active] {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.content {
+  max-width: 920px;
+}
+
+.stack {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Overview stat cards (prototype .card.stat) */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.statCard {
+  padding: 14px 16px;
+}
+
+.statLabel {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.statValue {
+  display: block;
+  font: 22px/1.2 var(--display);
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.statSub {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 16px;
+}
+
+/* Attention list (prototype .attn) */
+.attn {
+  display: grid;
+}
+
+.attnItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13.5px;
+  align-items: flex-start;
+  text-decoration: none;
+}
+
+.attnItem:last-child {
+  border-bottom: 0;
+}
+
+.attnItem:hover {
+  background: var(--raised);
+}
+
+.attnItem > svg {
+  margin-top: 2px;
+  color: var(--text-2);
+}
+
+.attnItem span {
+  display: grid;
+  gap: 2px;
+}
+
+.attnItem small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Card headers with filters */
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  width: 240px;
+}
+
+/* Table cell helpers */
+.userCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.userMeta {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.userNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.userEmail {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mutedCell {
+  color: var(--muted);
+}
+
+.actionsCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.orgCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.orgCell:hover {
+  color: var(--accent-2);
+}
+
+.orgDot {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-xs);
+  background: var(--accent-bg);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font: 11px var(--display);
+  flex-shrink: 0;
+}
+
+.repoLink {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.repoLink:hover {
+  color: var(--accent-2);
+  text-decoration: underline;
+}
+
+.repoErr {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Audit feed rows (prototype .feed-i / .feed-ic) */
+.auditItem {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.auditItem:last-child {
+  border-bottom: 0;
+}
+
+.auditIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.auditIcon[data-high] {
+  color: var(--red);
+  border-color: var(--red-line);
+}
+
+.auditBody {
+  min-width: 0;
+}
+
+.auditSummary {
+  font-size: 13px;
+}
+
+.auditSummary b {
+  font-weight: 500;
+}
+
+.auditDetail {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.auditTime {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* System health rows (prototype .set-row) */
+.healthRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.healthRow:last-child {
+  border-bottom: 0;
+}
+
+.healthName {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.healthDetail {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Break-glass active session & recent history */
+.kv {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px 12px;
+  font-size: 13px;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--muted);
+}
+
+.kv dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.activeActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.recentRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.recentRow:last-child {
+  border-bottom: 0;
+}
+
+.recentMeta {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.recentReason {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.recentSub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Dialog forms */
+.dialogForm {
+  display: grid;
+  gap: 14px;
+}
+
+.dialogBodyText {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.dialogAuditNote {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.segWrap {
+  justify-self: start;
+}
+
+.skeletonList {
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 860px) {
+  .content {
+    max-width: none;
+  }
+
+  .subnav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+
+  .searchInput {
+    width: 100%;
+  }
+
+  .kv {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

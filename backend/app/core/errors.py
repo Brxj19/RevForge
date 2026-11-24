@@ -28,12 +28,16 @@ class ApiError(StarletteHTTPException):
         *,
         code: str,
         detail: str,
+        reason: str | None = None,
+        details: list[dict[str, Any]] | None = None,
         headers: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(
             status_code=status_code, detail=detail, headers=dict(headers) if headers else None
         )
         self.code = code
+        self.reason = reason
+        self.details = details
 
 
 def _request_id(request: Request) -> str | None:
@@ -46,6 +50,7 @@ def _error_response(
     status_code: int,
     code: str,
     message: str,
+    reason: str | None = None,
     details: list[dict[str, Any]] | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
@@ -53,13 +58,14 @@ def _error_response(
         error=ErrorBody(
             code=code,
             message=message,
+            reason=reason,
             details=details,
             request_id=_request_id(request),
         )
     )
     return JSONResponse(
         status_code=status_code,
-        content=payload.model_dump(mode="json"),
+        content=payload.model_dump(mode="json", exclude_none=True),
         headers=dict(headers) if headers else None,
     )
 
@@ -74,6 +80,8 @@ def register_exception_handlers(application: FastAPI) -> None:
             status_code=exc.status_code,
             code=exc.code if isinstance(exc, ApiError) else "http_error",
             message=str(exc.detail),
+            reason=exc.reason if isinstance(exc, ApiError) else None,
+            details=exc.details if isinstance(exc, ApiError) else None,
             headers=exc.headers,
         )
 

@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "@solidjs/router";
 import { createMemo, For, Show } from "solid-js";
 import { copyText } from "~/lib/clipboard";
+import { loaded } from "~/lib/query";
 import { Icon } from "~/ui/icons";
 import { showToast } from "~/ui/Toast";
 import { useRepo } from "./context";
@@ -31,7 +32,7 @@ export function RevisionRail(props: RevisionRailProps) {
   const historyHref = createHistoryHref();
   const current = () => repo.rev() || "default";
   const kind = createMemo(() => {
-    const r = refs.data;
+    const r = loaded(refs);
     const c = current();
     if (!r) return "branch";
     if (r.bookmarks.some((b) => b.name === c)) return "bookmark";
@@ -72,7 +73,7 @@ export function RevisionRail(props: RevisionRailProps) {
   return (
     <div class={styles.rail} role="toolbar" aria-label="Revision and path">
       <RefPicker
-        refs={refs.data}
+        refs={loaded(refs)}
         loading={refs.isPending}
         current={repo.rev()}
         onPick={pick}

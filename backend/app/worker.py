@@ -95,6 +95,9 @@ class RevForgeWorker:
             async with self._session_factory() as session:
                 entries = await self._event_service.claim_events(session, batch_size=1)
                 if not entries:
+                    # Commit only when reclaim_stale_claims flushed dead_letter transitions.
+                    if getattr(self._event_service, "last_reclaimed", 0) > 0:
+                        await session.commit()
                     return
                 entry = entries[0]
                 try:

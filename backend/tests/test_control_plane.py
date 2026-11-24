@@ -23,9 +23,10 @@ def _register(
     display_name: str = "Owner User",
     password: str = "StrongPassword123",
 ):
-    return client.post(
-        "/api/v1/auth/register",
-        json={"email": email, "display_name": display_name, "password": password},
+    from tests.auth_helpers import register_and_login
+
+    return register_and_login(
+        client, email=email, display_name=display_name, password=password
     )
 
 
@@ -73,12 +74,17 @@ def _run_async(session_factory: async_sessionmaker[AsyncSession], callback):
 
 
 def test_registration_stores_password_hash_and_session_cookie(client, session_factory) -> None:
-    response = _register(client)
-
-    assert response.status_code == 201
-    assert response.json()["user"]["email"] == "owner@example.com"
-    assert "revforge_session" in response.cookies
-    assert "revforge_csrf" in response.cookies
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "owner@example.com",
+            "display_name": "Owner User",
+            "password": "StrongPassword123",
+        },
+    )
+    assert reg.status_code == 202
+    assert "revforge_session" not in reg.cookies
+    assert "revforge_csrf" not in reg.cookies
 
     credential = _run_query(
         session_factory,
@@ -88,14 +94,45 @@ def test_registration_stores_password_hash_and_session_cookie(client, session_fa
     assert credential.password_hash != "StrongPassword123"
     assert "StrongPassword123" not in credential.password_hash
 
+    from tests.auth_helpers import in_memory_email_sender
 
-def test_duplicate_email_is_rejected(client) -> None:
-    assert _register(client).status_code == 201
+    message = in_memory_email_sender.latest_for("owner@example.com", kind="email_verification")
+    assert message is not None and message.token is not None
+    verify = client.post("/api/v1/auth/verify-email", json={"token": message.token})
+    assert verify.status_code == 200
 
-    duplicate = _register(client)
+    response = _login(client)
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "owner@example.com"
+    assert "revforge_session" in response.cookies
+    assert "revforge_csrf" in response.cookies
 
-    assert duplicate.status_code == 409
-    assert duplicate.json()["error"]["message"] == "Email is already registered."
+
+def test_duplicate_email_returns_neutral_202_without_enumeration(client, session_factory) -> None:
+    first = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "owner@example.com",
+            "display_name": "Owner User",
+            "password": "StrongPassword123",
+        },
+    )
+    assert first.status_code == 202
+
+    duplicate = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "owner@example.com",
+            "display_name": "Other Owner",
+            "password": "StrongPassword123",
+        },
+    )
+
+    assert duplicate.status_code == 202
+    assert duplicate.json() == first.json()
+    assert "revforge_session" not in duplicate.cookies
+    users = _run_scalars(session_factory, select(User).where(User.email == "owner@example.com"))
+    assert len(users) == 1
 
 
 def test_login_and_logout_flow(client) -> None:
@@ -104,7 +141,7 @@ def test_login_and_logout_flow(client) -> None:
 
     invalid = _login(client, password="wrong-password")
     assert invalid.status_code == 401
-    assert invalid.json()["error"]["message"] == "Invalid email or password."
+    assert invalid.json()["error"]["code"] == "invalid_credentials"
 
     login = _login(client)
     assert login.status_code == 200
@@ -151,7 +188,7 @@ def test_organization_creation_and_last_owner_protection(client, session_factory
         display_name="Admin User",
         password="AdminPassword123",
     )
-    assert other_user.status_code == 201
+    assert other_user.status_code == 200
 
     owner_login = _login(client)
     assert owner_login.status_code == 200
@@ -356,7 +393,7 @@ def test_audit_events_are_recorded_for_control_plane_changes(client, session_fac
 def test_contributions_endpoint_returns_zero_filled_current_user_activity(
     client, session_factory
 ) -> None:
-    assert _register(client).status_code == 201
+    assert _register(client).status_code == 200
     owner = _run_query(
         session_factory,
         select(User).where(User.email == "owner@example.com"),
@@ -370,7 +407,7 @@ def test_contributions_endpoint_returns_zero_filled_current_user_activity(
             display_name="Other User",
             password="OtherPassword123",
         ).status_code
-        == 201
+        == 200
     )
     other_user = _run_query(
         session_factory,

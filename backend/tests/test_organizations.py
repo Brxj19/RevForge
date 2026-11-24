@@ -27,9 +27,10 @@ def _register(
     display_name: str = "Owner User",
     password: str = "StrongSecurePassword123",
 ):
-    return client.post(
-        "/api/v1/auth/register",
-        json={"email": email, "display_name": display_name, "password": password},
+    from tests.auth_helpers import register_and_login
+
+    return register_and_login(
+        client, email=email, display_name=display_name, password=password
     )
 
 

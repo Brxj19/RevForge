@@ -116,6 +116,56 @@ describe("request", () => {
       request("/auth/logout", { method: "POST", csrf: "t" }),
     ).resolves.toBeUndefined();
   });
+
+  it("parses Retry-After seconds and error.reason on ApiError", async () => {
+    server.use(
+      http.post("*/api/v1/auth/login", () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: "login_locked",
+              message: "Too many sign-in attempts.",
+              reason: "account_lockout",
+              request_id: "req-lock-1",
+            },
+          },
+          { status: 429, headers: { "Retry-After": "840" } },
+        ),
+      ),
+    );
+    const err = await request("/auth/login", { method: "POST", json: {} }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({
+      status: 429,
+      code: "login_locked",
+      reason: "account_lockout",
+      retryAfter: 840,
+      requestId: "req-lock-1",
+    });
+  });
+
+  it("ignores non-positive or non-numeric Retry-After headers", async () => {
+    server.use(
+      http.get("*/api/v1/bad-retry-zero", () =>
+        HttpResponse.json(
+          { error: { code: "rate_limited", message: "Slow down." } },
+          { status: 429, headers: { "Retry-After": "0" } },
+        ),
+      ),
+      http.get("*/api/v1/bad-retry-text", () =>
+        HttpResponse.json(
+          { error: { code: "rate_limited", message: "Slow down." } },
+          { status: 429, headers: { "Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT" } },
+        ),
+      ),
+    );
+    const e1 = (await request("/bad-retry-zero").catch((e: unknown) => e)) as ApiError;
+    const e2 = (await request("/bad-retry-text").catch((e: unknown) => e)) as ApiError;
+    expect(e1.retryAfter).toBeUndefined();
+    expect(e2.retryAfter).toBeUndefined();
+  });
 });
 
 describe("isRetryable (F3)", () => {

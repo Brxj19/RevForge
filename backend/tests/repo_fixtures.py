@@ -47,11 +47,14 @@ def commit(repository_path: Path, message: str, *, user: str = "Alice <alice@exa
 
 
 def register(client: Any, email: str, password: str = "StrongPassword123") -> None:
-    response = client.post(
-        "/api/v1/auth/register",
-        json={"email": email, "display_name": email.split("@")[0].title(), "password": password},
+    from tests.auth_helpers import register_and_login
+
+    register_and_login(
+        client,
+        email=email,
+        display_name=email.split("@")[0].title(),
+        password=password,
     )
-    assert response.status_code in (200, 201), response.text
 
 
 def login(client: Any, email: str, password: str = "StrongPassword123") -> None:

@@ -4,19 +4,25 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  For,
+  Match,
   on,
+  onCleanup,
   Show,
+  Switch,
   type Component,
 } from "solid-js";
 import { isRetryable, orgsApi } from "~/lib/api";
 import { qk } from "~/lib/query-keys";
-import { Button } from "~/ui/Button";
+import { Button, ButtonLink } from "~/ui/Button";
 import { Card } from "~/ui/Card";
+import { CopyLine } from "~/ui/CopyButton";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { Field, Input, InputGroup } from "~/ui/Field";
+import { RadioGroup } from "~/ui/Radio";
 import { Select, type SelectOption } from "~/ui/Select";
 import { Skeleton } from "~/ui/Skeleton";
 import { showToast } from "~/ui/Toast";
+import { DocumentPage } from "~/ui/WorkspaceLayout";
 import { useCheckRepoSlug, useCreateRepo, useProvisionRepo } from "./queries";
 import styles from "./new-repo.module.css";
 
@@ -24,23 +30,6 @@ import styles from "./new-repo.module.css";
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,37}[a-z0-9]$/;
 
 type Visibility = "private" | "internal" | "public";
-
-const VISIBILITY_OPTIONS: Array<{
-  value: Visibility;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "private",
-    label: "Private",
-    description: "Only sigma members with access can see it",
-  },
-  {
-    value: "public",
-    label: "Public",
-    description: "Anyone signed in to this forge can browse and clone",
-  },
-];
 
 function deriveRepoSlug(name: string): string {
   return name
@@ -71,6 +60,20 @@ const NewRepoPage: Component = () => {
       slugTimer = setTimeout(() => setDebouncedSlug(s), 300);
     }),
   );
+  onCleanup(() => clearTimeout(slugTimer));
+
+  const visibilityOptions = createMemo(() => [
+    {
+      value: "private",
+      label: "Private",
+      description: `Only ${owner() || "organization"} members with access can see it`,
+    },
+    {
+      value: "public",
+      label: "Public",
+      description: "Anyone signed in to this forge can browse and clone",
+    },
+  ]);
 
   // Load orgs the user can manage
   const orgsQuery = createQuery(() => ({
@@ -202,102 +205,107 @@ const NewRepoPage: Component = () => {
   };
 
   return (
-    <div class={styles.page}>
+    <DocumentPage class={styles.page}>
       <h1 class="h1">New repository</h1>
-      <p class={styles.lead}>
+      <p class="lead">
         It's created empty. Push your first changeset after it's provisioned.
       </p>
       <Card style={{ "margin-top": "20px" }}>
-        <form onSubmit={handleSubmit}>
-          <div class={styles.form}>
-            <Field label="Owner">
-              <Show
-                when={!orgsQuery.isPending}
-                fallback={<Skeleton width="240px" height={36} />}
-              >
-                <Select
-                  label="Owner"
-                  options={ownerOptions()}
-                  value={owner()}
-                  onChange={setOwner}
-                />
-              </Show>
-            </Field>
-            <Field label="Name">
-              <InputGroup
-                prefix={<span class={styles.slugPrefix}>{owner()}/</span>}
-                placeholder="payments-api"
-                value={name()}
-                onInput={(
-                  e: InputEvent & { currentTarget: HTMLInputElement },
-                ) => setName(e.currentTarget.value)}
-                autocomplete="off"
-                spellcheck={false}
-              />
-              <Show when={repoSlug()}>
-                <span
-                  class={styles.slugStatus}
-                  data-status={slugStatus() ?? undefined}
-                >
-                  {slugMessage()}
-                </span>
-              </Show>
-            </Field>
-            <Field
-              label={
-                <>
-                  Description{" "}
-                  <span style={{ color: "var(--subtle)" }}>(optional)</span>
-                </>
+        <Switch>
+          <Match when={orgsQuery.isError}>
+            <ErrorState
+              error={orgsQuery.error}
+              what="organizations"
+              size="card"
+              onRetry={() => void orgsQuery.refetch()}
+            />
+          </Match>
+          <Match
+            when={!orgsQuery.isPending && manageableOrgs().length === 0}
+          >
+            <EmptyState
+              art="no-orgs"
+              size="card"
+              title="No organizations you can create repositories in"
+              body="Create an organization first, or ask an admin to grant you permission."
+              actions={
+                <ButtonLink variant="primary" href="/orgs/new">
+                  Create organization
+                </ButtonLink>
               }
-            >
-              <Input
-                value={description()}
-                onInput={(e) => setDescription(e.currentTarget.value)}
-              />
-            </Field>
-            <Field label="Visibility">
-              <For each={VISIBILITY_OPTIONS}>
-                {(opt) => (
-                  <label class={styles.chk}>
-                    <input
-                      type="radio"
-                      name="visibility"
-                      checked={visibility() === opt.value}
-                      onChange={() => setVisibility(opt.value)}
+            />
+          </Match>
+          <Match when={true}>
+            <form onSubmit={handleSubmit}>
+              <div class={styles.form}>
+                <Field label="Owner">
+                  <Show
+                    when={!orgsQuery.isPending}
+                    fallback={<Skeleton width="240px" height={36} />}
+                  >
+                    <Select
+                      label="Owner"
+                      options={ownerOptions()}
+                      value={owner()}
+                      onChange={setOwner}
                     />
-                    <span>
-                      {opt.label}
-                      <small>{opt.description}</small>
+                  </Show>
+                </Field>
+                <Field label="Name">
+                  <InputGroup
+                    prefix={<span class={styles.slugPrefix}>{owner()}/</span>}
+                    placeholder="payments-api"
+                    value={name()}
+                    onInput={(
+                      e: InputEvent & { currentTarget: HTMLInputElement },
+                    ) => setName(e.currentTarget.value)}
+                    autocomplete="off"
+                    spellcheck={false}
+                  />
+                  <Show when={repoSlug()}>
+                    <span
+                      class={styles.slugStatus}
+                      data-status={slugStatus() ?? undefined}
+                    >
+                      {slugMessage()}
                     </span>
-                  </label>
-                )}
-              </For>
-            </Field>
-            <Field label="You'll clone it with">
-              <div class={styles.clonePreview}>
-                <code>{cloneUrl()}</code>
+                  </Show>
+                </Field>
+                <Field label="Description" optional>
+                  <Input
+                    value={description()}
+                    onInput={(e) => setDescription(e.currentTarget.value)}
+                  />
+                </Field>
+                <RadioGroup
+                  label="Visibility"
+                  name="visibility"
+                  value={visibility()}
+                  onChange={(v) => setVisibility(v as Visibility)}
+                  options={visibilityOptions()}
+                />
+                <Field label="You'll clone it with" kind="group">
+                  <CopyLine text={cloneUrl()} label="Copy clone command" />
+                </Field>
               </div>
-            </Field>
-          </div>
-          <div class={styles.formFoot}>
-            <a href="/">
-              <Button variant="ghost" type="button">
-                Cancel
-              </Button>
-            </a>
-            <Button
-              variant="primary"
-              type="submit"
-              disabled={!canSubmit()}
-              loading={createRepo.isPending || provisionRepo.isPending}
-            >
-              Create repository
-            </Button>
-          </div>
-        </form>
+              <div class={styles.formFoot}>
+                <ButtonLink variant="ghost" href="/">
+                  Cancel
+                </ButtonLink>
+                <Button
+                  variant="primary"
+                  type="submit"
+                  disabled={!canSubmit()}
+                  loading={createRepo.isPending || provisionRepo.isPending}
+                >
+                  Create repository
+                </Button>
+              </div>
+            </form>
+          </Match>
+        </Switch>
       </Card>
-    </div>
+    </DocumentPage>
   );
 };
 

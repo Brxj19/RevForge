@@ -83,33 +83,33 @@ Scaffold (phase-0-setup.md), tokens, every `ui/` primitive + `/dev/ui` kit, icon
 ## Phase 5 — Discovery, access, people, notifications
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Home | `#/` | `home` | ✅ `GET /me/contributions` · ✅ `GET /events` · 🆕 `GET /me/attention` | U4 | todo |
-| Explore / search (signed in + anonymous) | `#/explore?q=graph` | `explore` | 🆕 `GET /search/repositories` · 🆕 `GET /search/organizations` | 🔒 (visibility filtering) | todo |
-| Anonymous repo view | View as anonymous → public repo | `repo` | 🔁 private repo → **404** for anonymous (no existence leak) | 🔒 | todo |
-| No access + request access | `#/r/payments-core` | `repo` | 🆕 `POST R/access-requests` · 🆕 `GET O/access-requests` · 🆕 `POST/DELETE …/{id}` | 🔒 | todo |
-| People picker (invite / access / reviewers) | invite dialog | `people-picker` | 🆕 `GET /users/search?q=&scope=&org=&repo=` (signed-in only, rate-limited) | 🔒 enumeration | todo |
-| Notifications bell | top bar | `notifications` | 🆕 `GET /me/notifications` · 🆕 `POST /me/notifications/read` | I33 | todo |
-| Activity log | `#/activity` | `activity` | ✅ `GET /audit` · ✅ `GET O/activity` · 🔁 filters + CSV export | I30 | todo |
-| Public profile | `#/u/brxj19` | `profile` | 🆕 `GET /users/{handle}` · 🆕 `GET /users/{handle}/contributions` | — | todo |
+| Home | `#/` | `home` | ✅ `GET /me/contributions` · ✅ `GET /events` · 🆕 `GET /me/attention` | U4 | done |
+| Explore / search (signed in + anonymous) | `#/explore?q=graph` | `explore` | 🆕 `GET /search/repositories` · 🆕 `GET /search/organizations` | 🔒 (visibility filtering) | done |
+| Anonymous repo view | View as anonymous → public repo | `repo` | 🔁 private repo → **404** for anonymous (no existence leak) | 🔒 | done |
+| No access + request access | `#/r/payments-core` | `repo` | 🆕 `POST R/access-requests` · 🆕 `GET O/access-requests` · 🆕 `POST/DELETE …/{id}` | 🔒 | done |
+| People picker (invite / access / reviewers) | invite dialog | `people-picker` | 🆕 `GET /users/search?q=&scope=&org=&repo=` (signed-in only, rate-limited) | 🔒 enumeration | done |
+| Notifications bell | top bar | `notifications` | 🆕 `GET /me/notifications` · 🆕 `POST /me/notifications/read` | I33 | done |
+| Activity log | `#/activity` | `activity` | ✅ `GET /audit` · ✅ `GET O/activity` · 🔁 filters + CSV export | I30 | done |
+| Public profile | `#/u/brxj19` | `profile` | 🆕 `GET /users/{handle}` · 🆕 `GET /users/{handle}/contributions` | — | done |
 
 ## Phase 6 — Forge admin
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Admin overview / system health | `#/admin` | `admin` | 🆕 `GET /admin/overview` · 🆕 `GET /admin/health` | I28 🔒, I14 | todo |
-| Users (suspend, revoke sessions) | `#/admin/users` | `admin` | 🆕 `GET /admin/users` · 🆕 `POST /admin/users/{id}/suspend|reactivate|revoke-sessions` | I28 🔒 | todo |
-| Organizations, repositories (retry / reset stuck) | `#/admin/repositories` | `admin` | 🆕 `GET /admin/organizations` · 🆕 `GET /admin/repositories` · 🆕 `POST /admin/repositories/{id}/reset-provisioning` | I36 | todo |
-| Audit (severity filter) | `#/admin/audit` | `admin` | 🔁 `GET /audit?severity=&category=` | I30 | todo |
-| Break-glass | `#/admin/breakglass` | `admin` + shell banner | 🆕 `POST /admin/break-glass` · 🆕 `DELETE /admin/break-glass/{id}` · 🆕 `GET /me/break-glass` | I28 🔒 | todo |
+| Admin overview / system health | `#/admin` | `admin` | ✅ `GET /admin/overview` · ✅ `GET /admin/health` | I28 🔒, I14 | done |
+| Users (suspend, revoke sessions) | `#/admin/users` | `admin` | ✅ `GET /admin/users` · ✅ `POST /admin/users/{id}/suspend\|reactivate\|revoke-sessions` | I28 🔒 | done |
+| Organizations, repositories (retry / reset stuck) | `#/admin/repositories` | `admin` | ✅ `GET /admin/organizations` · ✅ `GET /admin/repositories` · ✅ `POST /admin/repositories/{id}/reset-provisioning\|retry-provisioning` | I36 | done |
+| Audit (severity filter) | `#/admin/audit` | `admin` | ✅ `GET /audit?severity=&category=&scope=all` | I30 | done |
+| Break-glass | `#/admin/breakglass` | `admin` + shell banner | ✅ `POST /admin/break-glass` · ✅ `DELETE /admin/break-glass/{id}` · ✅ `GET /admin/break-glass` · ✅ `GET /me/break-glass` | I28 🔒 | done |
 
 ## Phase 7 — Public pages, docs, errors, cutover
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Sign in (bad password, locked, expired), suspended | `#/login?state=locked` | `auth` | 🔁 `POST /auth/login` 429 + `Retry-After`, neutral errors, `account_suspended` | I3 🔒, I23 🔒, I28 | todo |
-| Register, verify, forgot/reset | `#/register` | `auth` | 🔁 `POST /auth/register` always 202 · 🆕 `POST /auth/verify-email` · 🆕 `POST /auth/password-reset` · 🆕 `POST /auth/password-reset/confirm` · 🆕 `GET /users/check-handle` | I25 🔒 | todo |
-| Session expiry dialog | `#/map` → Session expired | `app/auth` | 🔁 `GET /auth/me` returns `reason: idle_timeout` | I24 🔒 | todo |
-| Landing | `#/welcome` | `landing` | — | — | todo |
-| Developer docs (15 pages) | `#/docs/webhooks` | `docs` | — (static Markdown) | — | todo |
-| 404 / 429 / 500 | `#/error/500` | `errors` | 🔁 envelope with `request_id` | I1 | todo |
+| Sign in (bad password, locked, expired), suspended | `#/login?state=locked` | `auth` | ✅ `POST /auth/login` 429 + `Retry-After`, neutral errors, `account_suspended` | I3 🔒, I23 🔒, I28 | done |
+| Register, verify, forgot/reset | `#/register` | `auth` | ✅ `POST /auth/register` always 202 · ✅ `POST /auth/verify-email` · ✅ `POST /auth/verify-email/resend` · ✅ `POST /auth/password-reset` · ✅ `POST /auth/password-reset/confirm` · ✅ `GET /users/check-handle` | I25 🔒 | done |
+| Session expiry dialog | `#/map` → Session expired | `app/auth` | ✅ `GET /auth/me` returns `reason: idle_timeout` | I24 🔒 | done |
+| Landing | `#/welcome` | `landing` | — | — | done |
+| Developer docs (15 pages) | `#/docs/webhooks` | `docs` | — (static allowlist, 15 pages) | — | done |
+| 404 / 429 / 500 | `#/error/500` | `errors` | ✅ envelope with `request_id` | I1 | done |
 
 ---
 

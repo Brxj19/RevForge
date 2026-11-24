@@ -11,7 +11,7 @@ import { Dialog } from "~/ui/Dialog";
 import { ChangeBadge, DiffBar } from "~/ui/DiffStat";
 import { DiffView } from "~/ui/DiffView";
 import { HoverCard, HoverCardSection } from "~/ui/HoverCard";
-import { EmptyState } from "~/ui/EmptyState";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { Field, Input, InputGroup, Textarea } from "~/ui/Field";
 import { FileTree, type TreeItem } from "~/ui/FileTree";
 import { Hash } from "~/ui/Hash";
@@ -36,7 +36,7 @@ import { showToast } from "~/ui/Toast";
 import { Tooltip } from "~/ui/Tooltip";
 import { Pane, Panes, Workspace, WsBody } from "~/ui/WorkspaceLayout";
 import { FileIcon, Icon } from "~/ui/icons";
-import { Illustration } from "~/ui/illustrations";
+import { ILLUSTRATION_IDS, Illustration } from "~/ui/illustrations";
 import { IconBrowser } from "./IconBrowser";
 import {
   KIT_ICON_NAMES,
@@ -767,18 +767,12 @@ export default function UiKitPage() {
                     />
                   </Card>
                   <Card>
-                    <EmptyState
-                      art="load-error"
+                    <ErrorState
                       compact
                       level={3}
-                      title="Couldn't load history."
+                      what="history"
                       requestId="mock-0042"
-                      actions={
-                        <Button size="sm">
-                          <Icon name="refresh" size={13} />
-                          Try again
-                        </Button>
-                      }
+                      onRetry={() => showToast({ message: "Retrying…" })}
                     />
                   </Card>
                 </div>
@@ -798,14 +792,14 @@ export default function UiKitPage() {
                   >
                     {(id) => (
                       <figure class={styles.fig}>
-                        <Illustration id={id} size={150} />
+                        <Illustration id={id} size="card" />
                         <figcaption>{id}</figcaption>
                       </figure>
                     )}
                   </For>
                 </Row>
                 <ButtonLink href="/dev/illustrations" class={styles.mt}>
-                  All 31 illustrations
+                  All {ILLUSTRATION_IDS.length} illustrations
                 </ButtonLink>
               </Section>
 

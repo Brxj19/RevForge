@@ -8,12 +8,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security import normalize_optional_text, validate_display_name, validate_slug
+from app.core.security import (
+    ensure_utc,
+    normalize_optional_text,
+    utc_now,
+    validate_display_name,
+    validate_slug,
+)
 from app.domain.enums import (
     RepositoryProvisioningState,
     RepositoryRole,
     RepositoryVisibility,
 )
+from app.models.break_glass_session import BreakGlassSession
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
 from app.models.repository import Repository
@@ -151,6 +158,8 @@ async def get_repository_access_for_actor(
     repository_slug: str,
     actor: User | None,
     allow_archived: bool = False,
+    allow_break_glass: bool = True,
+    request_id: str | None = None,
 ) -> tuple[Repository, RepositoryAccess]:
     repository = await get_repository_by_slug(
         session,
@@ -172,6 +181,53 @@ async def get_repository_access_for_actor(
 
     access = repository_access_for_actor(actor, membership, repository, explicit_permission)
     if not access.can_read:
+        if (
+            allow_break_glass
+            and actor is not None
+            and actor.is_active
+            and actor.is_platform_admin
+        ):
+            now = utc_now()
+            candidate_sessions = await session.scalars(
+                select(BreakGlassSession)
+                .where(
+                    BreakGlassSession.actor_user_id == actor.id,
+                    BreakGlassSession.repository_id == repository.id,
+                    BreakGlassSession.revoked_at.is_(None),
+                )
+                .order_by(BreakGlassSession.created_at.desc())
+            )
+            active_bg = next(
+                (bg for bg in candidate_sessions if ensure_utc(bg.expires_at) > now),
+                None,
+            )
+            if active_bg is not None:
+                if repository.archived_at is not None and not allow_archived:
+                    raise NotFoundError("Repository not found.")
+                access = RepositoryAccess(
+                    viewer_role=RepositoryRole.READ,
+                    can_read=True,
+                    can_manage=False,
+                    can_write=False,
+                    inherited_access=False,
+                )
+                await record_audit_event(
+                    session,
+                    event_type="admin.break_glass.used",
+                    actor_user_id=actor.id,
+                    organization_id=organization.id,
+                    repository_id=repository.id,
+                    request_id=request_id,
+                    severity="high",
+                    metadata_json={
+                        "break_glass_session_id": str(active_bg.id),
+                        "organization_slug": organization.slug,
+                        "repository_slug": repository.slug,
+                    },
+                )
+                # Explicit commit so GET routes never drop the high-severity break-glass audit.
+                await session.commit()
+                return repository, access
         raise NotFoundError("Repository not found.")
     if repository.archived_at is not None and not allow_archived:
         raise NotFoundError("Repository not found.")
@@ -186,6 +242,8 @@ async def get_repository_for_actor(
     repository_slug: str,
     actor: User | None,
     allow_archived: bool = False,
+    allow_break_glass: bool = True,
+    request_id: str | None = None,
 ) -> tuple[Repository, RepositoryRole | None, bool, bool]:
     repository, access = await get_repository_access_for_actor(
         session,
@@ -193,6 +251,8 @@ async def get_repository_for_actor(
         repository_slug=repository_slug,
         actor=actor,
         allow_archived=allow_archived,
+        allow_break_glass=allow_break_glass,
+        request_id=request_id,
     )
     return repository, access.viewer_role, access.can_manage, access.inherited_access
 

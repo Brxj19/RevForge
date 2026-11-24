@@ -7,6 +7,8 @@ import type { ApiErrorDetail } from "./types";
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
+  readonly reason?: string;
+  readonly retryAfter?: number;
   readonly requestId?: string;
   readonly details?: ApiErrorDetail[];
 
@@ -15,6 +17,8 @@ export class ApiError extends Error {
     status: number,
     extra: {
       code?: string;
+      reason?: string;
+      retryAfter?: number;
       requestId?: string;
       details?: ApiErrorDetail[];
     } = {},
@@ -23,6 +27,8 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
     this.code = extra.code;
+    this.reason = extra.reason;
+    this.retryAfter = extra.retryAfter;
     this.requestId = extra.requestId;
     this.details = extra.details;
   }
@@ -95,10 +101,19 @@ interface EnvelopeLike {
   error?: {
     code?: string;
     message?: string;
+    reason?: string;
     request_id?: string;
     details?: ApiErrorDetail[];
   };
   detail?: unknown;
+}
+
+function parseRetryAfter(raw: string | null): number | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const secs = Number(trimmed);
+  return Number.isFinite(secs) && secs > 0 ? secs : undefined;
 }
 
 /**
@@ -159,6 +174,8 @@ export async function request<T>(
       response.status,
       {
         code: env?.code,
+        reason: typeof env?.reason === "string" ? env.reason : undefined,
+        retryAfter: parseRetryAfter(response.headers.get("Retry-After")),
         requestId:
           env?.request_id ?? response.headers.get("X-Request-ID") ?? undefined,
         details: env?.details,

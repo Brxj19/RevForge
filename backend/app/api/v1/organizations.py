@@ -19,6 +19,7 @@ from app.models.invitation import Invitation
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
 from app.repositories.organizations import get_organization_by_slug
+from app.schemas.access_requests import AccessRequestListResponse, AccessRequestResponse
 from app.schemas.organizations import (
     InvitationCreateRequest,
     InvitationCreateResponse,
@@ -32,6 +33,11 @@ from app.schemas.organizations import (
     OrganizationUpdateRequest,
     PaginatedMembersResponse,
     SlugCheckResponse,
+)
+from app.services.access_request_service import (
+    approve_request,
+    deny_request,
+    list_pending_requests,
 )
 from app.services.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailure
 from app.services.invitation_service import (
@@ -585,3 +591,147 @@ async def delete_invitation_route(
     except ConflictError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Access requests
+# ---------------------------------------------------------------------------
+
+
+def _serialize_access_request(ar: object) -> AccessRequestResponse:
+    from app.models.access_request import AccessRequest
+
+    assert isinstance(ar, AccessRequest)
+    repo = ar.repository
+    org = repo.organization if repo else None
+    requester = ar.requester
+    return AccessRequestResponse(
+        id=ar.id,
+        user_id=ar.user_id,
+        user_display_name=requester.display_name if requester else "Unknown",
+        user_handle=requester.handle if requester else "unknown",
+        repository_slug=repo.slug if repo else "unknown",
+        organization_slug=org.slug if org else "unknown",
+        role=ar.role,
+        message=ar.message,
+        status=ar.status,
+        created_at=ar.created_at,
+        reviewed_at=ar.reviewed_at,
+    )
+
+
+@router.get(
+    "/{organization_slug}/access-requests",
+    response_model=AccessRequestListResponse,
+)
+async def list_access_requests_route(
+    organization_slug: str,
+    identity: SessionIdentity = Depends(get_current_identity),
+    session: AsyncSession = Depends(get_session),
+) -> AccessRequestListResponse:
+    try:
+        organization, membership = await get_organization_for_user(
+            session, slug=organization_slug, user=identity.user
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    if membership.role not in {OrganizationRole.OWNER, OrganizationRole.ADMIN}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization admin access required.",
+        )
+
+    requests = await list_pending_requests(session, organization_id=organization.id)
+    for ar in requests:
+        await session.refresh(ar, attribute_names=["requester", "repository"])
+        if ar.repository:
+            await session.refresh(ar.repository, attribute_names=["organization"])
+
+    return AccessRequestListResponse(items=[_serialize_access_request(ar) for ar in requests])
+
+
+@router.post(
+    "/{organization_slug}/access-requests/{request_id}/approve",
+    response_model=AccessRequestResponse,
+)
+async def approve_access_request_route(
+    organization_slug: str,
+    request_id: UUID,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    http_request_id: str | None = Depends(get_request_id),
+) -> AccessRequestResponse:
+    try:
+        organization, membership = await get_organization_for_user(
+            session, slug=organization_slug, user=identity.user
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    if membership.role not in {OrganizationRole.OWNER, OrganizationRole.ADMIN}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization admin access required.",
+        )
+
+    try:
+        ar = await approve_request(
+            session,
+            request_id_val=request_id,
+            organization_id=organization.id,
+            reviewer=identity.user,
+            http_request_id=http_request_id,
+        )
+        await session.commit()
+        await session.refresh(ar, attribute_names=["requester", "repository"])
+        if ar.repository:
+            await session.refresh(ar.repository, attribute_names=["organization"])
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return _serialize_access_request(ar)
+
+
+@router.post(
+    "/{organization_slug}/access-requests/{request_id}/deny",
+    response_model=AccessRequestResponse,
+)
+async def deny_access_request_route(
+    organization_slug: str,
+    request_id: UUID,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    http_request_id: str | None = Depends(get_request_id),
+) -> AccessRequestResponse:
+    try:
+        organization, membership = await get_organization_for_user(
+            session, slug=organization_slug, user=identity.user
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    if membership.role not in {OrganizationRole.OWNER, OrganizationRole.ADMIN}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization admin access required.",
+        )
+
+    try:
+        ar = await deny_request(
+            session,
+            request_id_val=request_id,
+            organization_id=organization.id,
+            reviewer=identity.user,
+            http_request_id=http_request_id,
+        )
+        await session.commit()
+        await session.refresh(ar, attribute_names=["requester", "repository"])
+        if ar.repository:
+            await session.refresh(ar.repository, attribute_names=["organization"])
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return _serialize_access_request(ar)

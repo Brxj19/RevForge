@@ -7,19 +7,19 @@ import {
   Switch as SSwitch,
   type Component,
 } from "solid-js";
-import { ApiError } from "~/lib/api/client";
 import { useRepo } from "~/features/repo";
 import { relativeTime } from "~/lib/format";
 import { Button } from "~/ui/Button";
 import { Callout } from "~/ui/Callout";
 import { Card, CardHeader } from "~/ui/Card";
 import { CopyLine } from "~/ui/CopyButton";
-import { EmptyState } from "~/ui/EmptyState";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { Icon } from "~/ui/icons";
 import { Pill } from "~/ui/Pill";
 import { Ref } from "~/ui/Ref";
 import { Skeleton } from "~/ui/Skeleton";
 import { Switch } from "~/ui/Switch";
+import { Table, Td, Th } from "~/ui/Table";
 import { showToast } from "~/ui/Toast";
 import {
   usePingWebhook,
@@ -78,17 +78,14 @@ const WebhookDetailPage: Component = () => {
         </Card>
       </Match>
       <Match when={webhookQuery.isError}>
-        <EmptyState
-          art="load-error"
-          title="Something went wrong"
-          body="Couldn't load webhook details."
-          size="card"
-          requestId={
-            webhookQuery.error instanceof ApiError
-              ? webhookQuery.error.requestId
-              : undefined
-          }
-        />
+        <Card>
+          <ErrorState
+            error={webhookQuery.error}
+            what="webhook details"
+            size="card"
+            onRetry={() => void webhookQuery.refetch()}
+          />
+        </Card>
       </Match>
       <Match when={webhookQuery.data}>
         {(webhook) => (
@@ -189,15 +186,9 @@ const WebhookDetailPage: Component = () => {
 
             {/* Show rotated secret warning */}
             <Show when={rotatedSecret()}>
-              <Callout tone="warn">
-                <Icon name="warn" size={16} />
-                <div>
-                  <strong>Copy the new signing secret now</strong>
-                  <p style={{ margin: "4px 0 0" }}>
-                    It won't be shown again. Update your server's configuration
-                    to use the new secret.
-                  </p>
-                </div>
+              <Callout tone="warn" title="Copy the new signing secret now">
+                It won't be shown again. Update your server's configuration to
+                use the new secret.
               </Callout>
             </Show>
 
@@ -216,13 +207,14 @@ const WebhookDetailPage: Component = () => {
                   </div>
                 </Match>
                 <Match when={deliveriesQuery.isError}>
-                  <div style={{ padding: "16px" }}>
-                    <EmptyState
-                      art="load-error"
-                      title="Couldn't load deliveries"
-                      size="inline"
-                    />
-                  </div>
+                  <ErrorState
+                    error={deliveriesQuery.error}
+                    what="deliveries"
+                    size="inline"
+                    compact
+                    level={3}
+                    onRetry={() => void deliveriesQuery.refetch()}
+                  />
                 </Match>
                 <Match when={deliveriesQuery.data?.length === 0}>
                   <EmptyState
@@ -234,72 +226,68 @@ const WebhookDetailPage: Component = () => {
                 </Match>
                 <Match when={deliveriesQuery.data}>
                   {(deliveries) => (
-                    <div class="scroll-x">
-                      <table class={styles.deliveriesTable}>
-                        <thead>
-                          <tr>
-                            <th>Event</th>
-                            <th>Response</th>
-                            <th style={{ "text-align": "right" }}>Duration</th>
-                            <th style={{ "text-align": "right" }}>When</th>
-                            <th />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <For each={deliveries()}>
-                            {(del) => (
-                              <tr>
-                                <td>
-                                  <Ref kind="tag" name={del.event_type} />
-                                </td>
-                                <td>
-                                  <Pill
-                                    tone={statusTone(del.response_status_code)}
-                                    dot
-                                  >
-                                    {del.response_status_code ?? "---"}{" "}
-                                    {statusLabel(del.response_status_code)}
-                                  </Pill>
-                                </td>
-                                <td class={styles.numCell}>
-                                  <Show
-                                    when={del.completed_at && del.created_at}
-                                    fallback="---"
-                                  >
-                                    {Math.round(
-                                      (new Date(
-                                        del.completed_at ?? del.created_at,
-                                      ).getTime() -
-                                        new Date(del.created_at).getTime()) /
-                                        1,
-                                    )}{" "}
-                                    ms
-                                  </Show>
-                                </td>
-                                <td class={styles.numCell}>
-                                  {relativeTime(del.created_at)}
-                                </td>
-                                <td class={styles.actionsCell}>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    loading={
-                                      redeliverMutation.isPending &&
-                                      redeliverMutation.variables
-                                        ?.deliveryId === del.id
-                                    }
-                                    onClick={() => handleRedeliver(del.id)}
-                                  >
-                                    <Icon name="refresh" size={13} />
-                                    Redeliver
-                                  </Button>
-                                </td>
-                              </tr>
-                            )}
-                          </For>
-                        </tbody>
-                      </table>
-                    </div>
+                    <Table caption="Recent webhook deliveries">
+                      <thead>
+                        <tr>
+                          <Th>Event</Th>
+                          <Th>Response</Th>
+                          <Th numeric>Duration</Th>
+                          <Th numeric>When</Th>
+                          <Th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={deliveries()}>
+                          {(del) => (
+                            <tr>
+                              <Td>
+                                <Ref kind="tag" name={del.event_type} />
+                              </Td>
+                              <Td>
+                                <Pill
+                                  tone={statusTone(del.response_status_code)}
+                                  dot
+                                >
+                                  {del.response_status_code ?? "---"}{" "}
+                                  {statusLabel(del.response_status_code)}
+                                </Pill>
+                              </Td>
+                              <Td numeric>
+                                <Show
+                                  when={del.completed_at && del.created_at}
+                                  fallback="---"
+                                >
+                                  {Math.round(
+                                    (new Date(
+                                      del.completed_at ?? del.created_at,
+                                    ).getTime() -
+                                      new Date(del.created_at).getTime()) /
+                                      1,
+                                  )}{" "}
+                                  ms
+                                </Show>
+                              </Td>
+                              <Td numeric>{relativeTime(del.created_at)}</Td>
+                              <Td class={styles.actionsCell}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  loading={
+                                    redeliverMutation.isPending &&
+                                    redeliverMutation.variables?.deliveryId ===
+                                      del.id
+                                  }
+                                  onClick={() => handleRedeliver(del.id)}
+                                >
+                                  <Icon name="refresh" size={13} />
+                                  Redeliver
+                                </Button>
+                              </Td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                    </Table>
                   )}
                 </Match>
               </SSwitch>

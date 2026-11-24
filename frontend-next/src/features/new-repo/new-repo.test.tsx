@@ -50,15 +50,8 @@ describe("NewRepoPage", () => {
 
   it("defaults to private visibility", async () => {
     renderApp("/new");
-    await waitFor(() => {
-      const radios = document.querySelectorAll<HTMLInputElement>(
-        'input[type="radio"][name="visibility"]',
-      );
-      const privateRadio = Array.from(radios).find((r) =>
-        r.closest("label")?.textContent?.includes("Private"),
-      );
-      expect(privateRadio?.checked).toBe(true);
-    });
+    const privateRadio = await screen.findByRole("radio", { name: /Private/ });
+    expect(privateRadio).toBeChecked();
   });
 
   it("shows the clone preview", async () => {
@@ -148,30 +141,21 @@ describe("NewRepoPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create repository" }));
     await waitFor(() => {
       expect(sentCsrf).toBeTruthy();
+      expect(window.location.pathname).toBe("/sigma/my-new-api");
     });
   });
 
   it("has a cancel link that navigates home", async () => {
     renderApp("/new");
-    const cancelBtn = await screen.findByRole("button", { name: "Cancel" });
-    const link = cancelBtn.closest("a");
+    const link = await screen.findByRole("link", { name: "Cancel" });
     expect(link).toHaveAttribute("href", "/");
   });
 
   it("can select public visibility", async () => {
     renderApp("/new");
-    await waitFor(() => {
-      expect(screen.getByText("Public")).toBeInTheDocument();
-    });
-    const radios = document.querySelectorAll<HTMLInputElement>(
-      'input[type="radio"][name="visibility"]',
-    );
-    const publicRadio = Array.from(radios).find((r) =>
-      r.closest("label")?.textContent?.includes("Public"),
-    );
-    expect(publicRadio).toBeDefined();
-    fireEvent.click(publicRadio!);
-    expect(publicRadio!.checked).toBe(true);
+    const publicRadio = await screen.findByRole("radio", { name: /Public/ });
+    fireEvent.click(publicRadio);
+    expect(publicRadio).toBeChecked();
   });
 
   it("shows the lead paragraph", async () => {

@@ -69,8 +69,12 @@
   font-size: 12px;
 }
 .branchRef {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
   font: 11.5px var(--mono);
-  padding: 2px 6px;
+  padding: 0 6px;
+  background: var(--surface-2);
   border: 1px solid var(--border-2);
   border-radius: var(--r-xs);
   color: var(--text-2);
@@ -89,7 +93,7 @@
   gap: 4px;
 }
 .inboxFilters {
-  align-self: flex-start;
+  margin-bottom: 12px;
   max-width: 100%;
 }
 .approvals {
@@ -97,7 +101,7 @@
 }
 .rvStack {
   display: flex;
-  gap: 5px;
+  gap: 6px;
 }
 .rv {
   position: relative;
@@ -107,11 +111,11 @@
   position: absolute;
   right: -3px;
   bottom: -3px;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border: 2px solid var(--surface);
   border-radius: 50%;
-  background: var(--muted);
+  background: var(--subtle);
 }
 .rvMark[data-dec="approved"] {
   background: var(--green);
@@ -988,17 +992,10 @@
 .pageHeader {
   display: flex;
   justify-content: space-between;
-  align-items: start;
+  align-items: center;
   gap: 16px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
-}
-.pageHeader h1 {
-  margin: 0;
-}
-.pageHeader p {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 13px;
 }
 .inboxRow {
   display: flex;

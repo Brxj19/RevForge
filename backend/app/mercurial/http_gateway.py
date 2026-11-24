@@ -388,6 +388,7 @@ class HgHttpGatewayApplication:
                 repository_slug=repository_slug,
                 actor=actor,
                 allow_archived=False,
+                allow_break_glass=False,
             )
             if not repository_is_browsable(repository):
                 raise NotFoundError("Repository not found.")

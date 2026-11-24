@@ -24,18 +24,15 @@ describe("routes", () => {
       expect(RESERVED_SLUGS.has(seg), seg).toBe(true);
   });
 
-  it("shows a placeholder for screens that aren't built yet", async () => {
-    renderApp("/sigma/sigma-reckitt/settings");
+  it("renders developer docs at /docs", async () => {
+    renderApp("/docs");
     expect(
       await screen.findByRole("heading", {
-        name: "Repository settings",
+        name: "Introduction",
         level: 1,
       }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Not built yet" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/phase 4/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Search docs")).toBeInTheDocument();
   });
 
   it("redirects legacy repository URLs", async () => {
@@ -209,7 +206,9 @@ describe("app shell", () => {
       await screen.findByRole("menuitem", { name: "Sign out" }),
     );
     await waitFor(() => expect(window.location.pathname).toBe("/login"));
-    expect(await screen.findByText("You're signed out")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/You’ve signed out/i),
+    ).toBeInTheDocument();
   });
 });
 

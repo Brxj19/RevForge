@@ -13,6 +13,7 @@ export const USERS = {
     id: "00000000-0000-4000-8000-000000000001",
     email: "brajesh@sigma.dev",
     display_name: "Brxj19",
+    handle: "brxj19",
     is_active: true,
     is_platform_admin: true, // API-GAP: admin — /auth/me doesn't return this yet
     created_at: T0,
@@ -23,12 +24,63 @@ export const USERS = {
     id: "00000000-0000-4000-8000-000000000002",
     email: "tatwa@sigma.dev",
     display_name: "Tatwa Prasad",
+    handle: "tatwa",
     is_active: true,
     created_at: T0,
     updated_at: T0,
     password: "correct horse battery",
   },
-} satisfies Record<string, Viewer & { password: string }>;
+  bhuvnesh: {
+    id: "00000000-0000-4000-8000-000000000003",
+    email: "bhuvnesh@sigma.dev",
+    display_name: "Bhuvnesh Kumar",
+    handle: "bhuvnesh",
+    is_active: true,
+    created_at: T0,
+    updated_at: T0,
+    password: "correct horse battery",
+  },
+  dheeraj: {
+    id: "00000000-0000-4000-8000-000000000004",
+    email: "dheeraj@sigma.dev",
+    display_name: "Kushwah Dheeraj",
+    handle: "dheeraj",
+    is_active: true,
+    created_at: T0,
+    updated_at: T0,
+    password: "correct horse battery",
+  },
+  akhil: {
+    id: "00000000-0000-4000-8000-000000000005",
+    email: "akhil@sigma.dev",
+    display_name: "Akhil Goyal",
+    handle: "akhil",
+    is_active: true,
+    created_at: T0,
+    updated_at: T0,
+    password: "correct horse battery",
+  },
+  rishik: {
+    id: "00000000-0000-4000-8000-000000000006",
+    email: "rishik@acme-labs.dev",
+    display_name: "Rishik Rohan",
+    handle: "rishik",
+    is_active: true,
+    created_at: T0,
+    updated_at: T0,
+    password: "correct horse battery",
+  },
+  meera: {
+    id: "00000000-0000-4000-8000-000000000007",
+    email: "meera@acme-labs.dev",
+    display_name: "Meera Iyer",
+    handle: "meera",
+    is_active: true,
+    created_at: T0,
+    updated_at: T0,
+    password: "correct horse battery",
+  },
+} satisfies Record<string, Viewer & { handle: string; password: string }>;
 
 type OrgFixture = Omit<OrganizationSummary, "viewer_role" | "can_manage"> & {
   members: Record<string, "owner" | "admin" | "member">;
@@ -54,9 +106,14 @@ export const ORGS: OrgFixture[] = [
   org(1, "sigma", "Sigma", "Delivery team forge", {
     brxj19: "owner",
     tatwa: "admin",
+    bhuvnesh: "member",
+    dheeraj: "member",
+    akhil: "member",
   }),
   org(2, "acme-labs", "Acme Labs", "Mercurial tooling and experiments", {
     tatwa: "member",
+    rishik: "owner",
+    meera: "admin",
   }),
   org(3, "brxj19", "Brxj19 (personal)", "Personal repositories", {
     brxj19: "owner",

@@ -20,13 +20,19 @@ def clear_settings_cache() -> None:
 
 @pytest.fixture(autouse=True)
 def reset_read_path_state() -> None:
-    # Process-wide read caches, the hg work limiter and the read rate limiter would
-    # otherwise leak between tests that reuse repository paths or client IPs.
+    # Process-wide read caches, the hg work limiter, auth rate limiter, email sink, and
+    # the read rate limiter would otherwise leak between tests that reuse paths or IPs.
     from app.api.rate_limit import read_rate_limiter
     from app.mercurial.read_service import reset_read_caches
+    from app.services.auth_rate_limit import auth_rate_limiter
+    from app.services.email import set_email_sender
+    from tests.auth_helpers import in_memory_email_sender
 
     reset_read_caches()
     read_rate_limiter.reset()
+    auth_rate_limiter.reset()
+    in_memory_email_sender.clear()
+    set_email_sender(in_memory_email_sender)
 
 
 @pytest.fixture
@@ -43,6 +49,8 @@ def settings_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setenv("REVFORGE_MAX_HISTORY_PAGE_SIZE", "2")
     monkeypatch.setenv("REVFORGE_MAX_DIFF_BYTES", "65536")
     monkeypatch.setenv("REVFORGE_MAX_FILE_CONTENT_BYTES", "32768")
+    monkeypatch.setenv("REVFORGE_AUTH_RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setenv("REVFORGE_AUTH_REGISTER_IP_MAX_REQUESTS", "1000")
 
 
 @pytest_asyncio.fixture

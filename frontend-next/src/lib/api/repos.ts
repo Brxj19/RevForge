@@ -373,4 +373,32 @@ export const reposApi = {
       path`/organizations/${org}/repositories/${repo}/webhooks/${webhookId}${path`/deliveries/${deliveryId}/redeliver`}`,
       { method: "POST", csrf },
     ),
+
+  // Phase 5: Access requests
+
+  requestAccess: (
+    org: string,
+    repo: string,
+    csrf: string | null,
+    body: { role?: "read" | "write"; message?: string } = {},
+  ) =>
+    request<{ id: string }>(`${R(org, repo)}/access-requests`, {
+      method: "POST",
+      json: {
+        role: body.role ?? "read",
+        ...(body.message?.trim() ? { message: body.message.trim() } : {}),
+      },
+      csrf,
+    }),
+
+  withdrawAccessRequest: (
+    org: string,
+    repo: string,
+    requestId: string,
+    csrf: string | null,
+  ) =>
+    request<undefined>(
+      `${R(org, repo)}${path`/access-requests/${requestId}`}`,
+      { method: "DELETE", csrf },
+    ),
 };

@@ -19,6 +19,7 @@ export interface AuditEventRecord {
   organization_id: string | null;
   repository_id: string | null;
   event_type: string;
+  severity?: "normal" | "high";
   request_id: string | null;
   summary: string;
   details: Array<{ label: string; value: string }>;
@@ -33,6 +34,9 @@ export interface AuditEventList {
 export interface ContributionDay {
   date: string;
   count: number;
+  byRepo?: ReadonlyArray<{ name: string; color: string; count: number }>;
+  additions?: number;
+  deletions?: number;
 }
 
 export interface ContributionRange {
@@ -56,9 +60,23 @@ export interface ApiErrorEnvelope {
   error: {
     code: string;
     message: string;
+    reason?: string;
     request_id?: string;
     details?: ApiErrorDetail[];
   };
+}
+
+export interface AcceptedActionResponse {
+  status: "accepted";
+  message: string;
+}
+
+export interface VerifyEmailResponse {
+  verified: boolean;
+}
+
+export interface PasswordResetConfirmResponse {
+  reset: boolean;
 }
 
 export interface CurrentUser {
@@ -691,6 +709,7 @@ export interface PinList {
  */
 export interface Viewer extends CurrentUser {
   is_platform_admin?: boolean;
+  handle?: string;
 }
 
 // Phase 3: Pull Requests
@@ -829,4 +848,258 @@ export interface RepositoryAccessEntry {
   role: "read" | "write" | "admin" | "owner";
   /** "org_role" (inherited) or "direct" (explicit grant). */
   source: "org_role" | "direct";
+}
+
+// Phase 5: Discovery, access, people, notifications
+
+export interface AttentionItem {
+  kind:
+    | "webhook_failing"
+    | "provisioning"
+    | "review_requested"
+    | "changes_requested";
+  title: string;
+  detail: string;
+  href: string;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  icon: string | null;
+  href: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationList {
+  items: Notification[];
+  unread_count: number;
+}
+
+export interface RepoSearchHit {
+  org_slug: string;
+  repo_slug: string;
+  display_name: string;
+  description: string | null;
+  visibility: "public" | "internal" | "private";
+  language: string | null;
+  language_color: string | null;
+  updated_at: string;
+  watchers: number;
+  activity: number[];
+}
+
+export interface SearchFacet {
+  value: string;
+  count: number;
+}
+
+export interface RepoSearchResponse {
+  items: RepoSearchHit[];
+  facets: {
+    language: SearchFacet[];
+    organization: SearchFacet[];
+    visibility: SearchFacet[];
+  };
+  next_cursor: string | null;
+}
+
+export interface OrgSearchHit {
+  slug: string;
+  display_name: string;
+  repo_count: number;
+}
+
+export interface AccessRequest {
+  id: string;
+  user_id: string;
+  user_display_name: string;
+  user_handle: string;
+  repository_slug: string;
+  role: "read" | "write";
+  message: string | null;
+  status: "pending" | "approved" | "denied" | "withdrawn";
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface PublicUserRepo {
+  org_slug: string;
+  repo_slug: string;
+  description: string | null;
+  language: string | null;
+  language_color: string | null;
+  activity: number[];
+}
+
+export interface PublicUserOrg {
+  slug: string;
+  display_name: string;
+}
+
+export interface PublicUser {
+  handle: string;
+  display_name: string;
+  email: string | null;
+  organizations: PublicUserOrg[];
+  public_repos: PublicUserRepo[];
+  is_own_profile: boolean;
+}
+
+export interface UserSearchResult {
+  user_id: string;
+  display_name: string;
+  handle: string;
+  email: string | null;
+  eligible: boolean;
+  status: string;
+  label: string;
+}
+
+/** Alias for readability in users API — same shape as ContributionActivity. */
+export type ContributionActivityResponse = ContributionActivity;
+
+// Phase 6: Forge admin & break-glass
+
+export interface AdminAttentionItem {
+  kind: string;
+  title: string;
+  detail: string;
+  href: string;
+}
+
+export interface AdminOverview {
+  users: number;
+  suspended: number;
+  organizations: number;
+  repositories: number;
+  failed_provisioning: number;
+  stuck_provisioning: number;
+  storage_bytes: number;
+  storage_total_bytes: number;
+  spool_backlog: number;
+  stale_claims: number;
+  failed_logins_24h: number;
+  paused_accounts: number;
+  attention: AdminAttentionItem[];
+}
+
+export interface AdminHealthComponent {
+  name: string;
+  status: "healthy" | "degraded" | "down";
+  detail: string;
+}
+
+export interface AdminHealthResponse {
+  components: AdminHealthComponent[];
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string;
+  handle: string | null;
+  is_active: boolean;
+  is_platform_admin: boolean;
+  suspended_at: string | null;
+  suspended_reason: string | null;
+  organizations: string[];
+  last_active_at: string | null;
+  created_at: string;
+}
+
+export interface AdminUsersResponse {
+  items: AdminUser[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminUserSuspendResponse {
+  id: string;
+  is_active: false;
+  suspended_at: string;
+  suspended_reason: string;
+  sessions_revoked: number;
+}
+
+export interface AdminUserReactivateResponse {
+  id: string;
+  is_active: true;
+  suspended_at: null;
+  suspended_reason: null;
+}
+
+export interface AdminUserRevokeSessionsResponse {
+  id: string;
+  sessions_revoked: number;
+}
+
+export interface AdminOrganization {
+  id: string;
+  slug: string;
+  display_name: string;
+  owners: string[];
+  repository_count: number;
+  member_count: number;
+  created_at: string;
+}
+
+export interface AdminOrganizationsResponse {
+  items: AdminOrganization[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminRepository {
+  id: string;
+  organization_slug: string;
+  slug: string;
+  visibility: "public" | "internal" | "private";
+  provisioning_state: "unprovisioned" | "provisioning" | "ready" | "failed";
+  provisioning_error: string | null;
+  provisioning_started_at: string | null;
+  archived_at: string | null;
+  size_bytes: number;
+  updated_at: string;
+}
+
+export interface AdminRepositoriesResponse {
+  items: AdminRepository[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface BreakGlassSession {
+  id: string;
+  org: string;
+  repo: string;
+  reason: string;
+  expires_at: string;
+}
+
+export interface BreakGlassSessionDetail extends BreakGlassSession {
+  actor_user_id?: string;
+  actor_display_name?: string;
+  actor_email?: string;
+  created_at?: string;
+  ended_at?: string | null;
+  minutes?: number;
+}
+
+export interface AdminBreakGlassResponse {
+  active: BreakGlassSessionDetail | null;
+  recent: BreakGlassSessionDetail[];
+}
+
+export interface StartBreakGlassRequest {
+  org: string;
+  repo: string;
+  reason: string;
+  minutes: 15 | 60 | 240;
 }

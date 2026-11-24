@@ -27,6 +27,9 @@ class AuditEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
     )
     event_type: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    severity: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="normal", server_default="normal", index=True
+    )
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
