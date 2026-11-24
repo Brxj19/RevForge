@@ -206,9 +206,7 @@ describe("app shell", () => {
       await screen.findByRole("menuitem", { name: "Sign out" }),
     );
     await waitFor(() => expect(window.location.pathname).toBe("/login"));
-    expect(
-      await screen.findByText(/You’ve signed out/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/You’ve signed out/i)).toBeInTheDocument();
   });
 });
 

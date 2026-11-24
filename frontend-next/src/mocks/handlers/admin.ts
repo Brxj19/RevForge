@@ -180,7 +180,10 @@ export const adminHandlers = [
       1,
       Math.min(100, Number(url.searchParams.get("limit") ?? 20) || 20),
     );
-    const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0) || 0);
+    const offset = Math.max(
+      0,
+      Number(url.searchParams.get("offset") ?? 0) || 0,
+    );
 
     let items = currentUsers();
     if (q) {
@@ -213,7 +216,11 @@ export const adminHandlers = [
     const target = currentUsers().find((u) => u.id === id);
     if (!target) return notFound();
     if (db.session && USERS[db.session].id === id) {
-      return apiError(400, "You can't suspend your own account.", "self_action");
+      return apiError(
+        400,
+        "You can't suspend your own account.",
+        "self_action",
+      );
     }
 
     const body = (await request.json().catch(() => ({}))) as {
@@ -279,30 +286,27 @@ export const adminHandlers = [
     });
   }),
 
-  http.post(
-    `${API}/admin/users/:id/revoke-sessions`,
-    ({ params, request }) => {
-      const denied = requirePlatformAdmin();
-      if (denied) return denied;
-      const csrf = csrfFailure(request);
-      if (csrf) return csrf;
+  http.post(`${API}/admin/users/:id/revoke-sessions`, ({ params, request }) => {
+    const denied = requirePlatformAdmin();
+    if (denied) return denied;
+    const csrf = csrfFailure(request);
+    if (csrf) return csrf;
 
-      const id = String(params.id);
-      const target = currentUsers().find((u) => u.id === id);
-      if (!target) return notFound();
+    const id = String(params.id);
+    const target = currentUsers().find((u) => u.id === id);
+    if (!target) return notFound();
 
-      recordAudit(
-        "admin.user.sessions_revoked",
-        `revoked all sessions and tokens for ${target.display_name}`,
-        "high",
-      );
+    recordAudit(
+      "admin.user.sessions_revoked",
+      `revoked all sessions and tokens for ${target.display_name}`,
+      "high",
+    );
 
-      return HttpResponse.json({
-        id,
-        sessions_revoked: 2,
-      });
-    },
-  ),
+    return HttpResponse.json({
+      id,
+      sessions_revoked: 2,
+    });
+  }),
 
   http.get(`${API}/admin/organizations`, ({ request }) => {
     const denied = requirePlatformAdmin();
@@ -313,7 +317,10 @@ export const adminHandlers = [
       1,
       Math.min(100, Number(url.searchParams.get("limit") ?? 20) || 20),
     );
-    const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0) || 0);
+    const offset = Math.max(
+      0,
+      Number(url.searchParams.get("offset") ?? 0) || 0,
+    );
 
     let items = currentOrgs();
     if (q) {
@@ -343,7 +350,10 @@ export const adminHandlers = [
       1,
       Math.min(100, Number(url.searchParams.get("limit") ?? 20) || 20),
     );
-    const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0) || 0);
+    const offset = Math.max(
+      0,
+      Number(url.searchParams.get("offset") ?? 0) || 0,
+    );
 
     let items = currentRepos();
     if (q) {
@@ -437,7 +447,10 @@ export const adminHandlers = [
       1,
       Math.min(100, Number(url.searchParams.get("limit") ?? 25) || 25),
     );
-    const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0) || 0);
+    const offset = Math.max(
+      0,
+      Number(url.searchParams.get("offset") ?? 0) || 0,
+    );
 
     let events = [...db.adminAuditExtra, ...ADMIN_AUDIT_EVENTS];
     if (severity === "high" || severity === "normal") {
@@ -478,8 +491,7 @@ export const adminHandlers = [
     const denied = requirePlatformAdmin();
     if (denied) return denied;
     const active =
-      db.breakGlass &&
-      new Date(db.breakGlass.expires_at).getTime() > Date.now()
+      db.breakGlass && new Date(db.breakGlass.expires_at).getTime() > Date.now()
         ? db.breakGlass
         : null;
     return HttpResponse.json({

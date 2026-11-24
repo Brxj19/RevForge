@@ -2,13 +2,15 @@ import { createQuery, keepPreviousData } from "@tanstack/solid-query";
 import { searchApi } from "~/lib/api";
 import { qk } from "~/lib/query-keys";
 
-export function createRepoSearchQuery(opts: () => {
-  q: string;
-  lang: string;
-  org: string;
-  visibility: string;
-  sort: string;
-}) {
+export function createRepoSearchQuery(
+  opts: () => {
+    q: string;
+    lang: string;
+    org: string;
+    visibility: string;
+    sort: string;
+  },
+) {
   return createQuery(() => ({
     queryKey: qk.searchRepos(opts().q, {
       lang: opts().lang,

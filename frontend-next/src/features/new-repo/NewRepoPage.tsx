@@ -220,9 +220,7 @@ const NewRepoPage: Component = () => {
               onRetry={() => void orgsQuery.refetch()}
             />
           </Match>
-          <Match
-            when={!orgsQuery.isPending && manageableOrgs().length === 0}
-          >
+          <Match when={!orgsQuery.isPending && manageableOrgs().length === 0}>
             <EmptyState
               art="no-orgs"
               size="card"

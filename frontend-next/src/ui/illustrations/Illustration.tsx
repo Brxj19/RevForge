@@ -1,5 +1,12 @@
 import { splitProps, type JSX } from "solid-js";
-import { artOf, drawArt, GLY, IL, type Glyph, type IllustrationId } from "./art";
+import {
+  artOf,
+  drawArt,
+  GLY,
+  IL,
+  type Glyph,
+  type IllustrationId,
+} from "./art";
 import "./illustration.css";
 
 /** Canonical illustration widths in px (DESIGN.md §4). Height follows the 200×140 canvas (0.7 ratio). */

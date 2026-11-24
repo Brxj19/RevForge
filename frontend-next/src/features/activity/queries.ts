@@ -22,7 +22,9 @@ interface ActivityResponse {
 
 export type { ActivityEvent };
 
-export function createActivityQuery(filters: () => { category: string; q: string }) {
+export function createActivityQuery(
+  filters: () => { category: string; q: string },
+) {
   return createQuery(() => ({
     queryKey: qk.activity({ category: filters().category, q: filters().q }),
     queryFn: () =>

@@ -22,7 +22,5 @@ export const usersApi = {
   profile: (handle: string) => request<PublicUser>(path`/users/${handle}`),
 
   contributions: (handle: string) =>
-    request<ContributionActivityResponse>(
-      path`/users/${handle}/contributions`,
-    ),
+    request<ContributionActivityResponse>(path`/users/${handle}/contributions`),
 };

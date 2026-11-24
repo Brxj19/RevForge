@@ -33,7 +33,11 @@ export const userHandlers = [
     const url = new URL(request.url);
     const q = (url.searchParams.get("q") ?? "").toLowerCase();
     if (q.length < 2)
-      return apiError(422, "Query must be at least 2 characters.", "validation_error");
+      return apiError(
+        422,
+        "Query must be at least 2 characters.",
+        "validation_error",
+      );
 
     const items = Object.values(USERS)
       .filter(
@@ -88,7 +92,9 @@ export const userHandlers = [
       email: u.email,
       organizations: orgs,
       public_repos: publicRepos,
-      is_own_profile: db.session ? USERS[db.session as UserKey]?.handle === handle : false,
+      is_own_profile: db.session
+        ? USERS[db.session as UserKey]?.handle === handle
+        : false,
     });
   }),
 

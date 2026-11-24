@@ -43,10 +43,7 @@ export function ActivityFeedItem(props: {
   const orgSlug = () => props.org || "sigma";
   return (
     <div class={styles.feedItem}>
-      <span
-        class={styles.feedIcon}
-        data-fail={props.event.fail || undefined}
-      >
+      <span class={styles.feedIcon} data-fail={props.event.fail || undefined}>
         <Icon name={props.event.icon as IconName} size={14} />
       </span>
       <div class={styles.feedBody}>

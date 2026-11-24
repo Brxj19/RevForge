@@ -1,9 +1,7 @@
 import type { CalloutTone } from "~/ui/Callout";
 
 export type InlineSpan =
-  | string
-  | { kind: "code"; text: string }
-  | { kind: "strong"; text: string };
+  string | { kind: "code"; text: string } | { kind: "strong"; text: string };
 
 export type DocBlock =
   | { kind: "p"; content: readonly InlineSpan[] }
@@ -19,7 +17,12 @@ export type DocBlock =
       kind: "table";
       caption: string;
       headers?: readonly string[];
-      rows: readonly (readonly { text: string; mono?: boolean; center?: boolean; muted?: boolean }[])[];
+      rows: readonly (readonly {
+        text: string;
+        mono?: boolean;
+        center?: boolean;
+        muted?: boolean;
+      }[])[];
     }
   | {
       kind: "endpoints";
@@ -152,9 +155,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
           { kind: "h2", id: "over-https", text: "Over HTTPS" },
           {
             kind: "p",
-            content: [
-              "Create an access token and use it as the password.",
-            ],
+            content: ["Create an access token and use it as the password."],
           },
           {
             kind: "code",
@@ -331,7 +332,9 @@ export const DOC_GROUPS: readonly DocGroup[] = [
               ],
               [
                 { text: "Required reviewers approved" },
-                { text: "Each required reviewer’s latest review is an approval" },
+                {
+                  text: "Each required reviewer’s latest review is an approval",
+                },
               ],
               [
                 { text: "Minimum approvals" },
@@ -571,7 +574,11 @@ export const DOC_GROUPS: readonly DocGroup[] = [
               " (default 30 minutes) without activity. When a session times out mid-work, the re-authentication dialog lets you sign back in without losing the page.",
             ],
           },
-          { kind: "h2", id: "login-lockout", text: "Sign-in rate limits and lockout" },
+          {
+            kind: "h2",
+            id: "login-lockout",
+            text: "Sign-in rate limits and lockout",
+          },
           {
             kind: "p",
             content: [
@@ -591,7 +598,11 @@ export const DOC_GROUPS: readonly DocGroup[] = [
               " so platform admins can filter and export them.",
             ],
           },
-          { kind: "h2", id: "break-glass", text: "Read-only break-glass access" },
+          {
+            kind: "h2",
+            id: "break-glass",
+            text: "Read-only break-glass access",
+          },
           {
             kind: "p",
             content: [
@@ -653,7 +664,10 @@ export const DOC_GROUPS: readonly DocGroup[] = [
               [
                 { text: "REVFORGE_TRUSTED_PROXY_CIDRS", mono: true },
                 { text: "—", mono: true },
-                { text: "trusted proxy CIDRs for X-Forwarded-For", muted: true },
+                {
+                  text: "trusted proxy CIDRs for X-Forwarded-For",
+                  muted: true,
+                },
               ],
             ],
           },
@@ -746,13 +760,34 @@ export const DOC_GROUPS: readonly DocGroup[] = [
               { method: "POST", path: "/api/v1/auth/login" },
               { method: "POST", path: "/api/v1/auth/register" },
               { method: "GET", path: "/api/v1/repositories/search" },
-              { method: "GET", path: "/api/v1/organizations/{org}/repositories/{repo}" },
-              { method: "GET", path: "/api/v1/organizations/{org}/repositories/{repo}/changesets" },
-              { method: "GET", path: "/api/v1/organizations/{org}/repositories/{repo}/browse" },
-              { method: "GET", path: "/api/v1/organizations/{org}/repositories/{repo}/refs" },
-              { method: "GET", path: "/api/v1/organizations/{org}/repositories/{repo}/pull-requests" },
-              { method: "POST", path: "/api/v1/organizations/{org}/repositories/{repo}/pull-requests/{id}/reviews" },
-              { method: "POST", path: "/api/v1/organizations/{org}/repositories/{repo}/pull-requests/{id}/merge" },
+              {
+                method: "GET",
+                path: "/api/v1/organizations/{org}/repositories/{repo}",
+              },
+              {
+                method: "GET",
+                path: "/api/v1/organizations/{org}/repositories/{repo}/changesets",
+              },
+              {
+                method: "GET",
+                path: "/api/v1/organizations/{org}/repositories/{repo}/browse",
+              },
+              {
+                method: "GET",
+                path: "/api/v1/organizations/{org}/repositories/{repo}/refs",
+              },
+              {
+                method: "GET",
+                path: "/api/v1/organizations/{org}/repositories/{repo}/pull-requests",
+              },
+              {
+                method: "POST",
+                path: "/api/v1/organizations/{org}/repositories/{repo}/pull-requests/{id}/reviews",
+              },
+              {
+                method: "POST",
+                path: "/api/v1/organizations/{org}/repositories/{repo}/pull-requests/{id}/merge",
+              },
               { method: "GET", path: "/api/v1/me/ssh-keys" },
               { method: "GET", path: "/api/v1/me/tokens" },
             ],

@@ -95,10 +95,10 @@ export default function RegisterPage() {
   const canSubmit = () =>
     Boolean(
       displayName().trim() &&
-        email().trim() &&
-        password().length >= 12 &&
-        !handleInvalid() &&
-        handleState().kind !== "checking",
+      email().trim() &&
+      password().length >= 12 &&
+      !handleInvalid() &&
+      handleState().kind !== "checking",
     );
 
   const submit = async (e: SubmitEvent) => {

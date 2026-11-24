@@ -127,7 +127,9 @@ export const adminApi = {
       }),
     ),
 
-  auditExportUrl: (params: Pick<AdminAuditParams, "severity" | "category"> = {}) =>
+  auditExportUrl: (
+    params: Pick<AdminAuditParams, "severity" | "category"> = {},
+  ) =>
     apiUrl(
       withQuery("/audit", {
         scope: "all",

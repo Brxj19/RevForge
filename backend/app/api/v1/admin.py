@@ -67,13 +67,9 @@ async def admin_overview(
     settings: Settings = Depends(get_settings),
 ) -> AdminOverviewResponse:
     try:
-        return await get_admin_overview(
-            session, actor=identity.user, settings=settings
-        )
+        return await get_admin_overview(session, actor=identity.user, settings=settings)
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get(
@@ -87,13 +83,9 @@ async def admin_health(
     settings: Settings = Depends(get_settings),
 ) -> AdminHealthResponse:
     try:
-        return await get_admin_health(
-            session, actor=identity.user, settings=settings
-        )
+        return await get_admin_health(session, actor=identity.user, settings=settings)
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get("/users", response_model=AdminUserListResponse)
@@ -117,9 +109,7 @@ async def admin_list_users(
             offset=offset,
         )
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.post("/users/{user_id}/suspend", response_model=AdminUserItemResponse)
@@ -147,19 +137,13 @@ async def admin_suspend_user(
         ) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.post("/users/{user_id}/reactivate", response_model=AdminUserItemResponse)
@@ -180,14 +164,10 @@ async def admin_reactivate_user(
         )
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.post("/users/{user_id}/revoke-sessions", response_model=RevokeSessionsResponse)
@@ -206,14 +186,10 @@ async def admin_revoke_user_sessions(
         )
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get("/organizations", response_model=AdminOrganizationListResponse)
@@ -229,9 +205,7 @@ async def admin_list_organizations(
             session, actor=identity.user, q=q, limit=limit, offset=offset
         )
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get("/repositories", response_model=AdminRepositoryListResponse)
@@ -259,9 +233,7 @@ async def admin_list_repositories(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.post(
@@ -286,19 +258,13 @@ async def admin_reset_provisioning(
         )
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.post(
@@ -327,19 +293,13 @@ async def admin_retry_provisioning(
         )
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ProvisioningInProgressError as exc:
         await session.rollback()
         raise ApiError(
@@ -385,19 +345,13 @@ async def admin_start_break_glass(
         ) from exc
     except ConflictError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get("/break-glass", response_model=BreakGlassSessionListResponse)
@@ -417,9 +371,7 @@ async def admin_list_break_glass(
             offset=offset,
         )
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.delete("/break-glass/{session_id}", response_model=BreakGlassSessionResponse)
@@ -438,11 +390,7 @@ async def admin_revoke_break_glass(
         )
     except NotFoundError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ForbiddenError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc

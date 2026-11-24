@@ -106,9 +106,7 @@ describe("NotificationBell", () => {
       (b.getAttribute("aria-label") ?? "").includes("Notifications"),
     );
     fireEvent.click(bellBtn as HTMLElement);
-    expect(
-      await screen.findByText("Mark all read"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Mark all read")).toBeInTheDocument();
   });
 
   it("shows notification settings link in popover", async () => {

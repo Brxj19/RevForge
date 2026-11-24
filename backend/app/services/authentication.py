@@ -76,9 +76,7 @@ async def _verify_password_async(stored_hash: str, password: str) -> bool:
 
 
 async def _hash_password_async(password: str) -> str:
-    return await anyio.to_thread.run_sync(
-        hash_password, password, limiter=_PASSWORD_WORK_LIMITER
-    )
+    return await anyio.to_thread.run_sync(hash_password, password, limiter=_PASSWORD_WORK_LIMITER)
 
 
 @dataclass(slots=True)

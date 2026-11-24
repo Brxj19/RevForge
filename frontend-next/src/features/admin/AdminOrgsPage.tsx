@@ -103,7 +103,11 @@ const AdminOrgsPage: Component = () => {
                             class={styles.orgCell}
                           >
                             <span class={styles.orgDot} aria-hidden="true">
-                              {(o.display_name[0] ?? o.slug[0] ?? "?").toUpperCase()}
+                              {(
+                                o.display_name[0] ??
+                                o.slug[0] ??
+                                "?"
+                              ).toUpperCase()}
                             </span>
                             <span>{o.display_name}</span>
                           </A>

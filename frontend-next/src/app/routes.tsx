@@ -63,10 +63,7 @@ const authed =
 function HomeOrExplore() {
   const auth = useAuth();
   return (
-    <Show
-      when={auth.status() === "authenticated"}
-      fallback={<ExplorePage />}
-    >
+    <Show when={auth.status() === "authenticated"} fallback={<ExplorePage />}>
       <HomePage />
     </Show>
   );

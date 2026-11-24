@@ -1,5 +1,13 @@
 import { A, useParams, useSearchParams } from "@solidjs/router";
-import { createEffect, createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from "solid-js";
 import { NotFoundPage } from "~/features/errors";
 import { Button } from "~/ui/Button";
 import { Callout } from "~/ui/Callout";
@@ -292,10 +300,7 @@ export default function DocsPage() {
       {(doc) => (
         <Workspace>
           <WsBody>
-            <Panes
-              columns="230px minmax(0, 1fr) 190px"
-              class={styles.panes}
-            >
+            <Panes columns="230px minmax(0, 1fr) 190px" class={styles.panes}>
               <Pane as="nav" aria-label="Developer docs" class={styles.nav}>
                 <div class={styles.searchWrap}>
                   <InputGroup
@@ -340,7 +345,10 @@ export default function DocsPage() {
                   <For each={doc().blocks}>
                     {(block) => <DocBlockView block={block} />}
                   </For>
-                  <nav class={styles.prevNext} aria-label="Previous and next page">
+                  <nav
+                    class={styles.prevNext}
+                    aria-label="Previous and next page"
+                  >
                     <Show when={prevPage()} fallback={<span />}>
                       {(prev) => (
                         <A href={docHref(prev().slug)} class={styles.pnCard}>

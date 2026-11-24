@@ -9,9 +9,7 @@ describe("ExplorePage", () => {
       user: fixtureUsers.brxj19,
       route: "/explore",
     });
-    expect(
-      await screen.findByText("Explore repositories"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Explore repositories")).toBeInTheDocument();
   });
 
   it("shows the big search input", async () => {

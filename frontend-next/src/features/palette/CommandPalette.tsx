@@ -304,7 +304,9 @@ export function CommandPalette(props: CommandPaletteProps) {
                 </Show>
                 <Switch>
                   <Match
-                    when={!emptyHome() && visible().length === 0 && props.loading}
+                    when={
+                      !emptyHome() && visible().length === 0 && props.loading
+                    }
                   >
                     <div class={styles.empty}>
                       <SkeletonText

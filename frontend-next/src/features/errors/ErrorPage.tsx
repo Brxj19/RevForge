@@ -1,5 +1,12 @@
 import { useParams, useSearchParams } from "@solidjs/router";
-import { createEffect, createSignal, Match, onCleanup, Show, Switch } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from "solid-js";
 import { formatCountdown } from "~/app/auth";
 import { Button, ButtonLink } from "~/ui/Button";
 import { Card } from "~/ui/Card";
@@ -12,13 +19,17 @@ import styles from "./ErrorPage.module.css";
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,64}$/;
 const INT_RE = /^\d+$/;
 
-function parseRequestId(raw: string | string[] | undefined): string | undefined {
+function parseRequestId(
+  raw: string | string[] | undefined,
+): string | undefined {
   const val = Array.isArray(raw) ? raw[0] : raw;
   if (typeof val !== "string") return undefined;
   return REQUEST_ID_RE.test(val) ? val : undefined;
 }
 
-function parseRetryAfter(raw: string | string[] | undefined): number | undefined {
+function parseRetryAfter(
+  raw: string | string[] | undefined,
+): number | undefined {
   const val = Array.isArray(raw) ? raw[0] : raw;
   if (typeof val !== "string" || !INT_RE.test(val)) return undefined;
   const n = Number(val);

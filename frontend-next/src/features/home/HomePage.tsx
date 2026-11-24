@@ -40,7 +40,10 @@ const VISIBILITY_META: Record<string, { icon: IconName; label: string }> = {
 
 function VisibilityPill(props: { visibility: string }) {
   const meta = () =>
-    VISIBILITY_META[props.visibility] ?? { icon: "lock" as const, label: "Private" };
+    VISIBILITY_META[props.visibility] ?? {
+      icon: "lock" as const,
+      label: "Private",
+    };
   return (
     <Pill>
       <Icon name={meta().icon} size={11} />
@@ -76,8 +79,7 @@ export default function HomePage() {
     queryFn: () => orgsApi.list(),
     staleTime: 60_000,
   }));
-  const orgSlug = () =>
-    (!orgs.isPending && orgs.data?.[0]?.slug) || "sigma";
+  const orgSlug = () => (!orgs.isPending && orgs.data?.[0]?.slug) || "sigma";
 
   const orgMembers = createQuery(() => ({
     queryKey: qk.orgMembers(orgSlug(), 1),

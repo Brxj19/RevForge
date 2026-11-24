@@ -181,12 +181,7 @@ async def get_repository_access_for_actor(
 
     access = repository_access_for_actor(actor, membership, repository, explicit_permission)
     if not access.can_read:
-        if (
-            allow_break_glass
-            and actor is not None
-            and actor.is_active
-            and actor.is_platform_admin
-        ):
+        if allow_break_glass and actor is not None and actor.is_active and actor.is_platform_admin:
             now = utc_now()
             candidate_sessions = await session.scalars(
                 select(BreakGlassSession)

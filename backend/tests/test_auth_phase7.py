@@ -151,9 +151,7 @@ def test_i3_corrupt_password_hash_returns_401_not_500(
 def test_i23_per_account_lockout_and_audit_parity_for_existing_and_unknown_emails(
     client: TestClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    register_and_login(
-        client, email="victim@example.com", display_name="Victim", password=PASSWORD
-    )
+    register_and_login(client, email="victim@example.com", display_name="Victim", password=PASSWORD)
     client.cookies.clear()
 
     for email in ("victim@example.com", "ghost@example.com"):
@@ -275,8 +273,7 @@ def test_i23_trusted_proxy_client_ip_resolution(
     )
     # IPv4-mapped IPv6 peer normalized
     assert (
-        resolve_client_ip(make_req("::ffff:10.0.0.5", "203.0.113.99"), settings)
-        == "203.0.113.99"
+        resolve_client_ip(make_req("::ffff:10.0.0.5", "203.0.113.99"), settings) == "203.0.113.99"
     )
 
 
@@ -322,9 +319,7 @@ def test_i24_idle_session_timeout_revokes_and_returns_machine_readable_401(
 def test_i24_throttled_last_seen_at_persists_on_read_only_get(
     client: TestClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    register_and_login(
-        client, email="active@example.com", display_name="Active", password=PASSWORD
-    )
+    register_and_login(client, email="active@example.com", display_name="Active", password=PASSWORD)
 
     past = utc_now() - timedelta(minutes=5)
 
@@ -788,4 +783,3 @@ def test_m2_already_locked_retries_do_not_flood_audit_log(
         return len(list(res.scalars()))
 
     assert _run_async(session_factory, count_locked) == 1
-

@@ -202,9 +202,7 @@ class AuthRateLimiter:
         for key in stale:
             del self._account_failures[key]
         if len(self._account_failures) >= _MAX_TRACKED_KEYS:
-            oldest = sorted(
-                self._account_failures, key=lambda key: self._account_failures[key][1]
-            )
+            oldest = sorted(self._account_failures, key=lambda key: self._account_failures[key][1])
             for key in oldest[: len(oldest) // 2]:
                 del self._account_failures[key]
 

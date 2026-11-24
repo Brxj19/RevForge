@@ -52,9 +52,7 @@ def _escape_csv_cell(value: str) -> str:
     if not value:
         return value
     stripped = value.lstrip()
-    if value[0] in _CSV_FORMULA_PREFIXES or (
-        stripped and stripped[0] in _CSV_FORMULA_PREFIXES
-    ):
+    if value[0] in _CSV_FORMULA_PREFIXES or (stripped and stripped[0] in _CSV_FORMULA_PREFIXES):
         return "'" + value
     return value
 
@@ -147,9 +145,7 @@ async def list_audit_events(
     )
 
     if format == "csv":
-        enforce_rate_limit(
-            "audit_csv", request=request, identity=identity, settings=settings
-        )
+        enforce_rate_limit("audit_csv", request=request, identity=identity, settings=settings)
         # CSV export: cap at 10,000 rows, rate limited.
         csv_query = query.limit(10_000)
         result = await session.execute(csv_query)

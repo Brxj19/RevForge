@@ -79,9 +79,7 @@ async def get_my_break_glass(
     try:
         return await get_active_break_glass_for_actor(session, actor=identity.user)
     except ForbiddenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get("/contributions", response_model=ContributionActivityResponse)

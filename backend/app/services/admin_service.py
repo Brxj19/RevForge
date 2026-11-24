@@ -71,9 +71,7 @@ def _validate_reason(
         raise ValidationFailure(f"{field_name} cannot contain control characters.")
     cleaned = reason.strip()
     if len(cleaned) < min_len or len(cleaned) > max_len:
-        raise ValidationFailure(
-            f"{field_name} must be between {min_len} and {max_len} characters."
-        )
+        raise ValidationFailure(f"{field_name} must be between {min_len} and {max_len} characters.")
     return cleaned
 
 
@@ -222,10 +220,7 @@ async def get_admin_overview(
 
     users_count = int(await session.scalar(select(func.count(User.id))) or 0)
     suspended_count = int(
-        await session.scalar(
-            select(func.count(User.id)).where(User.is_active.is_(False))
-        )
-        or 0
+        await session.scalar(select(func.count(User.id)).where(User.is_active.is_(False))) or 0
     )
     orgs_count = int(await session.scalar(select(func.count(Organization.id))) or 0)
     repos_count = int(await session.scalar(select(func.count(Repository.id))) or 0)
@@ -372,9 +367,7 @@ async def get_admin_health(
             name="database",
             status="healthy" if db_ok else "down",
             detail=(
-                "Database connection healthy."
-                if db_ok
-                else "Database connectivity check failed."
+                "Database connection healthy." if db_ok else "Database connectivity check failed."
             ),
         )
     )
@@ -423,9 +416,7 @@ async def get_admin_health(
     )
     dead_letter_count = int(
         await session.scalar(
-            select(func.count(EventSpoolEntry.id)).where(
-                EventSpoolEntry.status == "dead_letter"
-            )
+            select(func.count(EventSpoolEntry.id)).where(EventSpoolEntry.status == "dead_letter")
         )
         or 0
     )
@@ -539,9 +530,7 @@ async def list_admin_users(
     elif status_filter == "platform_admin":
         filters.append(User.is_platform_admin.is_(True))
 
-    total = int(
-        await session.scalar(select(func.count(User.id)).where(*filters)) or 0
-    )
+    total = int(await session.scalar(select(func.count(User.id)).where(*filters)) or 0)
     users = list(
         await session.scalars(
             select(User)
@@ -572,9 +561,7 @@ async def suspend_user(
     if target_user_id == verified_actor.id:
         raise ConflictError("You cannot suspend your own account.")
 
-    target = await session.scalar(
-        select(User).where(User.id == target_user_id).with_for_update()
-    )
+    target = await session.scalar(select(User).where(User.id == target_user_id).with_for_update())
     if target is None:
         raise NotFoundError("User not found.")
     if not target.is_active:
@@ -636,15 +623,11 @@ async def suspend_user(
     await session.refresh(target)
 
     try:
-        await sync_authorized_keys(
-            session, output_path=Path(settings.ssh_authorized_keys_path)
-        )
+        await sync_authorized_keys(session, output_path=Path(settings.ssh_authorized_keys_path))
     except OSError:
         logger.warning("admin.authorized_keys_sync_failed", action="suspend_user")
 
-    return await _serialize_admin_user(
-        session, target, sessions_revoked=revoked_sessions
-    )
+    return await _serialize_admin_user(session, target, sessions_revoked=revoked_sessions)
 
 
 async def reactivate_user(
@@ -657,9 +640,7 @@ async def reactivate_user(
 ) -> AdminUserItemResponse:
     verified_actor = require_platform_admin(actor)
 
-    target = await session.scalar(
-        select(User).where(User.id == target_user_id).with_for_update()
-    )
+    target = await session.scalar(select(User).where(User.id == target_user_id).with_for_update())
     if target is None:
         raise NotFoundError("User not found.")
 
@@ -683,9 +664,7 @@ async def reactivate_user(
     await session.refresh(target)
 
     try:
-        await sync_authorized_keys(
-            session, output_path=Path(settings.ssh_authorized_keys_path)
-        )
+        await sync_authorized_keys(session, output_path=Path(settings.ssh_authorized_keys_path))
     except OSError:
         logger.warning("admin.authorized_keys_sync_failed", action="reactivate_user")
 
@@ -780,9 +759,7 @@ async def list_admin_organizations(
             )
         )
 
-    total = int(
-        await session.scalar(select(func.count(Organization.id)).where(*filters)) or 0
-    )
+    total = int(await session.scalar(select(func.count(Organization.id)).where(*filters)) or 0)
     orgs = list(
         await session.scalars(
             select(Organization)
@@ -806,9 +783,7 @@ async def list_admin_organizations(
         owners = [owner.display_name for owner in owner_rows]
         repo_count = int(
             await session.scalar(
-                select(func.count(Repository.id)).where(
-                    Repository.organization_id == org.id
-                )
+                select(func.count(Repository.id)).where(Repository.organization_id == org.id)
             )
             or 0
         )
@@ -832,9 +807,7 @@ async def list_admin_organizations(
             )
         )
 
-    return AdminOrganizationListResponse(
-        items=items, total=total, limit=limit, offset=offset
-    )
+    return AdminOrganizationListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 async def list_admin_repositories(
@@ -861,9 +834,7 @@ async def list_admin_repositories(
         )
     if state and state != "all":
         if state == "stuck":
-            cutoff = utc_now() - timedelta(
-                seconds=settings.provisioning_stale_after_seconds
-            )
+            cutoff = utc_now() - timedelta(seconds=settings.provisioning_stale_after_seconds)
             filters.append(
                 Repository.provisioning_state == RepositoryProvisioningState.PROVISIONING
             )
@@ -900,14 +871,10 @@ async def list_admin_repositories(
     )
     storage_locator = RepositoryStorageLocator(settings)
     items = [
-        _serialize_admin_repository(
-            repo, org_slug=org_slug, storage_locator=storage_locator
-        )
+        _serialize_admin_repository(repo, org_slug=org_slug, storage_locator=storage_locator)
         for repo, org_slug in rows.all()
     ]
-    return AdminRepositoryListResponse(
-        items=items, total=total, limit=limit, offset=offset
-    )
+    return AdminRepositoryListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 async def reset_repository_provisioning(
@@ -936,9 +903,7 @@ async def reset_repository_provisioning(
         RepositoryProvisioningState.PROVISIONING,
         RepositoryProvisioningState.FAILED,
     }:
-        raise ConflictError(
-            "Only provisioning or failed repositories can have provisioning reset."
-        )
+        raise ConflictError("Only provisioning or failed repositories can have provisioning reset.")
 
     previous_state = repo.provisioning_state.value
     previous_attempt_id = (
@@ -970,9 +935,7 @@ async def reset_repository_provisioning(
     await session.refresh(repo)
 
     storage_locator = RepositoryStorageLocator(settings)
-    return _serialize_admin_repository(
-        repo, org_slug=org_slug, storage_locator=storage_locator
-    )
+    return _serialize_admin_repository(repo, org_slug=org_slug, storage_locator=storage_locator)
 
 
 async def retry_repository_provisioning(
@@ -1089,9 +1052,7 @@ async def start_break_glass(
         raise NotFoundError("Repository not found.")
 
     # Serialize concurrent break-glass starts per platform admin.
-    await session.scalar(
-        select(User.id).where(User.id == verified_actor.id).with_for_update()
-    )
+    await session.scalar(select(User.id).where(User.id == verified_actor.id).with_for_update())
 
     now = utc_now()
     existing_candidates = await session.scalars(

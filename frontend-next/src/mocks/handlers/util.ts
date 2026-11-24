@@ -22,7 +22,10 @@ export function apiError(
         ...(details ? { details } : {}),
       },
     },
-    { status, headers: { "X-Request-ID": request_id, ...(extra?.headers ?? {}) } },
+    {
+      status,
+      headers: { "X-Request-ID": request_id, ...(extra?.headers ?? {}) },
+    },
   );
 }
 

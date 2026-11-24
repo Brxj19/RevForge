@@ -260,12 +260,7 @@ const OrgMembersPage: Component = () => {
             </CardBody>
           </Match>
           <Match when={invitationsQuery.data?.items.length === 0}>
-            <EmptyState
-              art="no-invitations"
-              size="inline"
-              compact
-              level={3}
-            />
+            <EmptyState art="no-invitations" size="inline" compact level={3} />
           </Match>
           <Match when={invitationsQuery.data}>
             {(data) => (

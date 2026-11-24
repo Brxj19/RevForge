@@ -92,9 +92,7 @@ def _csrf(client: TestClient) -> dict[str, str]:
     return {"X-CSRF-Token": token, **ORIGIN_HEADERS}
 
 
-def _promote_platform_admin(
-    session_factory: async_sessionmaker[AsyncSession], email: str
-) -> str:
+def _promote_platform_admin(session_factory: async_sessionmaker[AsyncSession], email: str) -> str:
     async def runner() -> str:
         async with session_factory() as session:
             user = await session.scalar(select(User).where(User.email == email))
@@ -351,9 +349,7 @@ async def test_service_layer_direct_platform_admin_enforcement(
             with pytest.raises(ForbiddenError):
                 await list_break_glass_sessions(session, actor=actor)
             with pytest.raises(ForbiddenError):
-                await revoke_break_glass(
-                    session, actor=actor, session_id=uuid4(), request_id=None
-                )
+                await revoke_break_glass(session, actor=actor, session_id=uuid4(), request_id=None)
             with pytest.raises(ForbiddenError):
                 await get_active_break_glass_for_actor(session, actor=actor)
 
@@ -888,7 +884,7 @@ def test_audit_severity_scope_and_csv_escaping(
                         actor_user_id=u.id,
                         event_type="admin.user.suspended",
                         severity="high",
-                        metadata_json={"reason": "  =HYPERLINK(\"http://evil\")"},
+                        metadata_json={"reason": '  =HYPERLINK("http://evil")'},
                     ),
                     AuditEvent(
                         actor_user_id=u.id,

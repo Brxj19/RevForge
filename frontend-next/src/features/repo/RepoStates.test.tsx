@@ -28,9 +28,7 @@ describe("RepoLoadError — 403 request access flow", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "Request access to sigma/secret-repo",
     });
-    expect(
-      within(dialog).getByRole("radio", { name: /Read/ }),
-    ).toBeChecked();
+    expect(within(dialog).getByRole("radio", { name: /Read/ })).toBeChecked();
     expect(
       within(dialog).getByRole("radio", { name: /Write/ }),
     ).toBeInTheDocument();
@@ -64,13 +62,9 @@ describe("RepoLoadError — 403 request access flow", () => {
       () => <RepoLoadError error={error403} onRetry={() => {}} />,
       { user: null, route: "/sigma/secret-repo" },
     );
-    expect(
-      await screen.findByText("Repository not found"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Repository not found")).toBeInTheDocument();
     expect(screen.getByText("Sign in")).toBeInTheDocument();
-    expect(
-      screen.getByText("Explore public repositories"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Explore public repositories")).toBeInTheDocument();
     expect(screen.queryByText("Request access")).not.toBeInTheDocument();
   });
 });

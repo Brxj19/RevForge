@@ -98,10 +98,7 @@ export default function RepoLayout(props: RouteSectionProps) {
         <Match when={query.data}>
           {(detail) => (
             <RepoContext.Provider value={ctx(detail)}>
-              <RepoHeader
-                refCount={refCount()}
-                prOpenCount={loaded(prCount)}
-              />
+              <RepoHeader refCount={refCount()} prOpenCount={loaded(prCount)} />
               <Show when={ready() || onSettings()} fallback={<RepoNotReady />}>
                 <Suspense
                   fallback={

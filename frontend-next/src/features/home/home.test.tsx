@@ -12,9 +12,7 @@ describe("HomePage", () => {
       user: fixtureUsers.brxj19,
       route: "/",
     });
-    expect(
-      await screen.findByText(/Good evening, Brxj19/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Good evening, Brxj19/)).toBeInTheDocument();
   });
 
   it("renders 'New repository' link", async () => {
@@ -22,9 +20,7 @@ describe("HomePage", () => {
       user: fixtureUsers.brxj19,
       route: "/",
     });
-    expect(
-      await screen.findByText("New repository"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("New repository")).toBeInTheDocument();
   });
 
   it("shows 'Jump back in' section", async () => {
@@ -32,9 +28,7 @@ describe("HomePage", () => {
       user: fixtureUsers.brxj19,
       route: "/",
     });
-    expect(
-      await screen.findByText("Jump back in"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Jump back in")).toBeInTheDocument();
   });
 
   it("renders activity feed section", async () => {
@@ -42,9 +36,7 @@ describe("HomePage", () => {
       user: fixtureUsers.brxj19,
       route: "/",
     });
-    expect(
-      await screen.findByText(/Activity across/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Activity across/)).toBeInTheDocument();
   });
 
   it("renders heatmap section with 'Your changesets' header and contribution grid", async () => {
@@ -52,11 +44,11 @@ describe("HomePage", () => {
       user: fixtureUsers.brxj19,
       route: "/",
     });
-    expect(
-      await screen.findByText("Your changesets"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Your changesets")).toBeInTheDocument();
     expect(await screen.findByRole("grid")).toBeInTheDocument();
-    expect(await screen.findByText(/\d+ in the last 30 weeks/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/\d+ in the last 30 weeks/),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText("Couldn't load contribution history."),
     ).not.toBeInTheDocument();
@@ -67,9 +59,7 @@ describe("HomePage", () => {
       user: fixtureUsers.brxj19,
       route: "/",
     });
-    expect(
-      await screen.findByText("Needs attention"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Needs attention")).toBeInTheDocument();
   });
 
   it("shows setup checklist", async () => {
@@ -77,9 +67,7 @@ describe("HomePage", () => {
       user: fixtureUsers.brxj19,
       route: "/",
     });
-    expect(
-      await screen.findByText("Set up this machine"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Set up this machine")).toBeInTheDocument();
     expect(screen.getByText("Account created")).toBeInTheDocument();
     expect(screen.getByText("SSH key added")).toBeInTheDocument();
   });
@@ -89,9 +77,7 @@ describe("HomePage", () => {
       user: fixtureUsers.brxj19,
       route: "/",
     });
-    expect(
-      await screen.findByText(/People in sigma/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/People in sigma/)).toBeInTheDocument();
   });
 
   it("links 'All repositories' to /repos", async () => {

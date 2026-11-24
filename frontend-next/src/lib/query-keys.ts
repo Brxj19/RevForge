@@ -96,8 +96,7 @@ export const qk = {
   userSearch: (q: string, scope?: string) =>
     ["user-search", q, scope ?? ""] as const,
   accessRequests: (o: string) => ["access-requests", o] as const,
-  activity: (filters: Record<string, string>) =>
-    ["activity", filters] as const,
+  activity: (filters: Record<string, string>) => ["activity", filters] as const,
   // Phase 6: Forge admin & break-glass
   adminOverview: ["admin", "overview"] as const,
   adminHealth: ["admin", "health"] as const,

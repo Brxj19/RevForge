@@ -40,9 +40,7 @@ describe("ActivityPage", () => {
       user: fixtureUsers.brxj19,
       route: "/activity",
     });
-    expect(
-      await screen.findByLabelText("Filter activity"),
-    ).toBeInTheDocument();
+    expect(await screen.findByLabelText("Filter activity")).toBeInTheDocument();
   });
 
   it("shows Export CSV button", async () => {
@@ -50,9 +48,7 @@ describe("ActivityPage", () => {
       user: fixtureUsers.brxj19,
       route: "/activity",
     });
-    expect(
-      await screen.findByText("Export CSV"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Export CSV")).toBeInTheDocument();
   });
 
   it("renders date group headers", async () => {
@@ -79,9 +75,7 @@ describe("ActivityPage", () => {
       route: "/activity?q=nonexistent_xyz",
     });
     await waitFor(() => {
-      expect(
-        screen.getByText("No activity matches"),
-      ).toBeInTheDocument();
+      expect(screen.getByText("No activity matches")).toBeInTheDocument();
     });
   });
 });

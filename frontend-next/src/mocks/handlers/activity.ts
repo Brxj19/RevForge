@@ -30,8 +30,7 @@ export const activityHandlers = [
     if (q) {
       items = items.filter(
         (e) =>
-          e.who.toLowerCase().includes(q) ||
-          e.target.toLowerCase().includes(q),
+          e.who.toLowerCase().includes(q) || e.target.toLowerCase().includes(q),
       );
     }
 

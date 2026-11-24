@@ -28,9 +28,7 @@ describe("ProfilePage", () => {
       route: "/u/brxj19",
       path: "/u/:handle",
     });
-    expect(
-      await screen.findByText("brajesh@sigma.dev"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("brajesh@sigma.dev")).toBeInTheDocument();
   });
 
   it("shows Edit profile button on own profile", async () => {
@@ -39,9 +37,7 @@ describe("ProfilePage", () => {
       route: "/u/brxj19",
       path: "/u/:handle",
     });
-    expect(
-      await screen.findByText("Edit profile"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Edit profile")).toBeInTheDocument();
   });
 
   it("shows public repositories section", async () => {
@@ -50,9 +46,7 @@ describe("ProfilePage", () => {
       route: "/u/brxj19",
       path: "/u/:handle",
     });
-    expect(
-      await screen.findByText("Public repositories"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Public repositories")).toBeInTheDocument();
   });
 
   it("shows Changesets section with heatmap", async () => {
@@ -61,9 +55,7 @@ describe("ProfilePage", () => {
       route: "/u/brxj19",
       path: "/u/:handle",
     });
-    expect(
-      await screen.findByText("Changesets"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Changesets")).toBeInTheDocument();
   });
 
   it("renders organizations list", async () => {
@@ -72,9 +64,7 @@ describe("ProfilePage", () => {
       route: "/u/brxj19",
       path: "/u/:handle",
     });
-    expect(
-      await screen.findByText("Organizations"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Organizations")).toBeInTheDocument();
   });
 
   it("shows not-found for unknown handle", async () => {
@@ -83,9 +73,7 @@ describe("ProfilePage", () => {
       route: "/u/nonexistent",
       path: "/u/:handle",
     });
-    expect(
-      await screen.findByText("User not found"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("User not found")).toBeInTheDocument();
   });
 
   it("renders avatar with correct size", async () => {

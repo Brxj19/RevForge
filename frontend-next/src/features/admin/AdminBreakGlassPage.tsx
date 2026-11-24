@@ -271,8 +271,7 @@ const AdminBreakGlassPage: Component = () => {
                   <div>
                     <For each={res().recent}>
                       {(item) => {
-                        const endedTs = () =>
-                          item.ended_at ?? item.expires_at;
+                        const endedTs = () => item.ended_at ?? item.expires_at;
                         return (
                           <div class={styles.recentRow}>
                             <div class={styles.recentMeta}>

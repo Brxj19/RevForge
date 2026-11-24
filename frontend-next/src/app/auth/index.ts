@@ -8,4 +8,8 @@ export {
 } from "./AuthProvider";
 export { RequireAuth, RequirePlatformAdmin } from "./guards";
 export { SessionExpiredDialog } from "./SessionExpiredDialog";
-export { SignInForm, formatCountdown, type SignInFormProps } from "./SignInForm";
+export {
+  SignInForm,
+  formatCountdown,
+  type SignInFormProps,
+} from "./SignInForm";

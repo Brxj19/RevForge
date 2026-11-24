@@ -25,13 +25,16 @@ export const searchHandlers = [
     if (q) {
       const words = q.toLowerCase().split(/\s+/).filter(Boolean);
       results = results.filter((r) => {
-        const hay = `${r.org_slug}/${r.repo_slug} ${r.description ?? ""} ${r.language ?? ""}`.toLowerCase();
+        const hay =
+          `${r.org_slug}/${r.repo_slug} ${r.description ?? ""} ${r.language ?? ""}`.toLowerCase();
         return words.every((w) => hay.includes(w));
       });
     }
 
     // Build facets from filtered results before applying facet filters
-    const facetOf = (key: "language" | "org_slug" | "visibility"): SearchFacet[] => {
+    const facetOf = (
+      key: "language" | "org_slug" | "visibility",
+    ): SearchFacet[] => {
       const m: Record<string, number> = {};
       for (const r of results) {
         const v = r[key] ?? "";

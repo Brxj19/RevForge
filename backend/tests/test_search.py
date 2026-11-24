@@ -14,9 +14,7 @@ def _register(
 ):
     from tests.auth_helpers import register_and_login
 
-    return register_and_login(
-        client, email=email, display_name=display_name, password=password
-    )
+    return register_and_login(client, email=email, display_name=display_name, password=password)
 
 
 def _login(client, *, email="owner@example.com", password="StrongPassword123"):

@@ -47,7 +47,8 @@ export const ADMIN_USERS: AdminUser[] = [
     is_active: false,
     is_platform_admin: false,
     suspended_at: daysAgo(21),
-    suspended_reason: "Left delivery team; access paused pending archive review.",
+    suspended_reason:
+      "Left delivery team; access paused pending archive review.",
     organizations: ["sigma"],
     last_active_at: daysAgo(21),
     created_at: "2026-07-13T20:00:00.000Z",
@@ -69,7 +70,11 @@ export const ADMIN_USERS: AdminUser[] = [
 
 export const ADMIN_HEALTH_COMPONENTS: AdminHealthComponent[] = [
   { name: "API", status: "healthy", detail: "p95 84 ms" },
-  { name: "Database", status: "healthy", detail: "PostgreSQL 16 · 4 connections" },
+  {
+    name: "Database",
+    status: "healthy",
+    detail: "PostgreSQL 16 · 4 connections",
+  },
   { name: "SSH gateway", status: "healthy", detail: "12 sessions" },
   { name: "HTTP gateway", status: "healthy", detail: "0 errors in 1h" },
   { name: "Event worker", status: "healthy", detail: "0 stale claims" },

@@ -112,9 +112,7 @@ export function TopBar(props: TopBarProps) {
   ];
 
   const userHandle = () =>
-    auth.user()?.handle ??
-    auth.user()?.email.split("@")[0] ??
-    "";
+    auth.user()?.handle ?? auth.user()?.email.split("@")[0] ?? "";
 
   const userGroups = (): MenuGroupDef[] => [
     {

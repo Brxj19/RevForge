@@ -105,7 +105,9 @@ const AdminAuditPage: Component = () => {
                   }
                   actions={
                     url.filter === "all" ? undefined : (
-                      <Button onClick={() => setUrl({ filter: "all", page: 1 })}>
+                      <Button
+                        onClick={() => setUrl({ filter: "all", page: 1 })}
+                      >
                         Show all events
                       </Button>
                     )

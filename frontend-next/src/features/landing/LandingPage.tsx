@@ -231,12 +231,7 @@ function MiniGraphPreview() {
             </div>
           )}
         </For>
-        <svg
-          class={styles.miniSvg}
-          width="70"
-          height="264"
-          aria-hidden="true"
-        >
+        <svg class={styles.miniSvg} width="70" height="264" aria-hidden="true">
           <path d="M20 22V242" stroke="var(--accent)" stroke-width="2" />
           <path
             d="M20 22C20 44 38 40 38 66V110C38 128 20 124 20 154"
@@ -515,11 +510,7 @@ export default function LandingPage() {
             Built around how Mercurial works: named branches, bookmarks, phases
             and tags stay what they are.
           </p>
-          <div
-            class={styles.tourTabs}
-            role="tablist"
-            aria-label="Product tour"
-          >
+          <div class={styles.tourTabs} role="tablist" aria-label="Product tour">
             <For each={TOUR_TABS}>
               {(tab, idx) => (
                 <button

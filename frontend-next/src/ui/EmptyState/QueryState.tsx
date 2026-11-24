@@ -68,9 +68,7 @@ export function QueryState<T>(props: QueryStateProps<T>) {
       >
         {props.empty}
       </Match>
-      <Match when={props.data}>
-        {(resolved) => props.children(resolved)}
-      </Match>
+      <Match when={props.data}>{(resolved) => props.children(resolved)}</Match>
     </Switch>
   );
 }

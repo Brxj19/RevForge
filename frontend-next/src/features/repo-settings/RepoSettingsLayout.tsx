@@ -87,67 +87,69 @@ export default function RepoSettingsLayout() {
               }
             >
               <Switch
-              fallback={
-                <EmptyState
-                  art="not-found"
-                  title="Unknown section"
-                  body="This settings page does not exist."
-                  size="card"
-                />
-              }
-            >
-              <Match when={section() === "general"}>
-                <RepoGeneralPage />
-              </Match>
-              <Match when={ADMIN_SECTIONS.has(section()) && !canManage()}>
-                <EmptyState
-                  art="permission-denied"
-                  title="Permission denied"
-                  body="You need to be a repository admin to access this section."
-                  size="card"
-                />
-              </Match>
-              <Match when={section() === "access" && canManage()}>
-                <RepoAccessPage />
-              </Match>
-              <Match when={section() === "transport" && canManage()}>
-                <RepoTransportPage />
-              </Match>
-              <Match
-                when={
-                  section() === "webhooks" && canManage() && showWebhookDetail()
+                fallback={
+                  <EmptyState
+                    art="not-found"
+                    title="Unknown section"
+                    body="This settings page does not exist."
+                    size="card"
+                  />
                 }
               >
-                <WebhookDetailPage />
-              </Match>
-              <Match
-                when={
-                  section() === "webhooks" &&
-                  canManage() &&
-                  !showWebhookDetail()
-                }
-              >
-                <WebhooksListPage />
-              </Match>
-              <Match when={section() === "audit"}>
-                <EmptyState
-                  art="no-activity"
-                  title="Audit log"
-                  body="Audit log for this repository is coming in a later phase."
-                  size="card"
-                />
-              </Match>
-              <Match when={section() === "danger" && canManage()}>
-                <RepoDangerPage />
-              </Match>
-              <Match when={!VALID_SECTIONS.has(section())}>
-                <EmptyState
-                  art="not-found"
-                  title="Unknown section"
-                  body="This settings page does not exist."
-                  size="card"
-                />
-              </Match>
+                <Match when={section() === "general"}>
+                  <RepoGeneralPage />
+                </Match>
+                <Match when={ADMIN_SECTIONS.has(section()) && !canManage()}>
+                  <EmptyState
+                    art="permission-denied"
+                    title="Permission denied"
+                    body="You need to be a repository admin to access this section."
+                    size="card"
+                  />
+                </Match>
+                <Match when={section() === "access" && canManage()}>
+                  <RepoAccessPage />
+                </Match>
+                <Match when={section() === "transport" && canManage()}>
+                  <RepoTransportPage />
+                </Match>
+                <Match
+                  when={
+                    section() === "webhooks" &&
+                    canManage() &&
+                    showWebhookDetail()
+                  }
+                >
+                  <WebhookDetailPage />
+                </Match>
+                <Match
+                  when={
+                    section() === "webhooks" &&
+                    canManage() &&
+                    !showWebhookDetail()
+                  }
+                >
+                  <WebhooksListPage />
+                </Match>
+                <Match when={section() === "audit"}>
+                  <EmptyState
+                    art="no-activity"
+                    title="Audit log"
+                    body="Audit log for this repository is coming in a later phase."
+                    size="card"
+                  />
+                </Match>
+                <Match when={section() === "danger" && canManage()}>
+                  <RepoDangerPage />
+                </Match>
+                <Match when={!VALID_SECTIONS.has(section())}>
+                  <EmptyState
+                    art="not-found"
+                    title="Unknown section"
+                    body="This settings page does not exist."
+                    size="card"
+                  />
+                </Match>
               </Switch>
             </Suspense>
           </div>

@@ -86,11 +86,7 @@ export default function ProfilePage() {
             {(user) => (
               <Panes columns="260px minmax(0,1fr)">
                 <Pane as="aside" class={styles.sidebar}>
-                  <Avatar
-                    name={user().display_name}
-                    size={120}
-                    decorative
-                  />
+                  <Avatar name={user().display_name} size={120} decorative />
                   <div>
                     <h1 class="h1">{user().display_name}</h1>
                     <div class={styles.handle}>@{user().handle}</div>
@@ -180,7 +176,9 @@ export default function ProfilePage() {
                   <Card as="section">
                     <CardHeader>
                       <h2 class="h2">Changesets</h2>
-                      <Show when={!contributions.isPending && contributions.data}>
+                      <Show
+                        when={!contributions.isPending && contributions.data}
+                      >
                         {(c) => (
                           <span class="muted" style={{ "font-size": "12.5px" }}>
                             {c().total} in the last 30 weeks

@@ -34,11 +34,15 @@ describe("Forge admin access & layout", () => {
       "Break-glass",
       "System health",
     ]) {
-      expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
+      expect(
+        within(nav).getByRole("link", { name: label }),
+      ).toBeInTheDocument();
     }
 
     expect(
-      await screen.findByText(/Every action here is recorded as a high-severity/i),
+      await screen.findByText(
+        /Every action here is recorded as a high-severity/i,
+      ),
     ).toBeInTheDocument();
     expect(await screen.findByText("Needs attention")).toBeInTheDocument();
     expect(

@@ -80,7 +80,9 @@ const SuspendUserDialog: Component<SuspendDialogProps> = (props) => {
     <Dialog
       open={Boolean(props.user)}
       onOpenChange={handleOpenChange}
-      title={props.user ? `Suspend ${props.user.display_name}?` : "Suspend account"}
+      title={
+        props.user ? `Suspend ${props.user.display_name}?` : "Suspend account"
+      }
       role="alertdialog"
       footer={
         <>
@@ -310,7 +312,9 @@ const AdminUsersPage: Component = () => {
                                       <Pill tone="purple">platform admin</Pill>
                                     </Show>
                                   </span>
-                                  <span class={styles.userEmail}>{u.email}</span>
+                                  <span class={styles.userEmail}>
+                                    {u.email}
+                                  </span>
                                 </div>
                               </div>
                             </Td>

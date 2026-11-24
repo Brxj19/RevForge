@@ -432,7 +432,10 @@ function RequestAccessView(_props: { error: ApiError }) {
     },
   }));
 
-  const adminNames = () => meta().admins.map((a) => a.name).join(" and ");
+  const adminNames = () =>
+    meta()
+      .admins.map((a) => a.name)
+      .join(" and ");
 
   // Anonymous visitors never learn whether a private repository exists (DESIGN.md §8).
   return (
@@ -512,10 +515,7 @@ function RequestAccessView(_props: { error: ApiError }) {
                   </>
                 }
               >
-                <Button
-                  variant="primary"
-                  onClick={() => setDialogOpen(true)}
-                >
+                <Button variant="primary" onClick={() => setDialogOpen(true)}>
                   Request access
                 </Button>
                 <ButtonLink href="/explore">Back to Explore</ButtonLink>

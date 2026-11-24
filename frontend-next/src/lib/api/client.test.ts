@@ -133,9 +133,10 @@ describe("request", () => {
         ),
       ),
     );
-    const err = await request("/auth/login", { method: "POST", json: {} }).catch(
-      (e: unknown) => e,
-    );
+    const err = await request("/auth/login", {
+      method: "POST",
+      json: {},
+    }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({
       status: 429,
@@ -157,12 +158,19 @@ describe("request", () => {
       http.get("*/api/v1/bad-retry-text", () =>
         HttpResponse.json(
           { error: { code: "rate_limited", message: "Slow down." } },
-          { status: 429, headers: { "Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT" } },
+          {
+            status: 429,
+            headers: { "Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT" },
+          },
         ),
       ),
     );
-    const e1 = (await request("/bad-retry-zero").catch((e: unknown) => e)) as ApiError;
-    const e2 = (await request("/bad-retry-text").catch((e: unknown) => e)) as ApiError;
+    const e1 = (await request("/bad-retry-zero").catch(
+      (e: unknown) => e,
+    )) as ApiError;
+    const e2 = (await request("/bad-retry-text").catch(
+      (e: unknown) => e,
+    )) as ApiError;
     expect(e1.retryAfter).toBeUndefined();
     expect(e2.retryAfter).toBeUndefined();
   });

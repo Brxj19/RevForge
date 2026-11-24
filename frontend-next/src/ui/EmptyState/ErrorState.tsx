@@ -29,10 +29,7 @@ function asErrorLike(error: unknown): ErrorLike | null {
  * Maps an API or network error to its canonical illustration, calm copy, and
  * optional 5xx reference id (DESIGN.md §4 & §10).
  */
-export function classifyError(
-  error: unknown,
-  what?: string,
-): ClassifiedError {
+export function classifyError(error: unknown, what?: string): ClassifiedError {
   const e = asErrorLike(error);
   if (e?.isNetworkError || e?.status === 0) {
     return {

@@ -851,8 +851,8 @@ export const repoHandlers = [
           id: "ar-001",
           user_id: USERS[db.session]?.id ?? "",
           user_display_name: USERS[db.session]?.display_name ?? "",
-          user_handle: (USERS[db.session] as unknown as { handle: string })
-            ?.handle ?? "",
+          user_handle:
+            (USERS[db.session] as unknown as { handle: string })?.handle ?? "",
           repository_slug: params.repo as string,
           role: body.role ?? "read",
           message: body.message ?? null,

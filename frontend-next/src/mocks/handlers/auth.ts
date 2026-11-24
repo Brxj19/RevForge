@@ -175,8 +175,7 @@ export const authHandlers = [
     return HttpResponse.json(
       {
         status: "accepted" as const,
-        message:
-          "If an account uses that address, it has a reset link now.",
+        message: "If an account uses that address, it has a reset link now.",
       },
       { status: 202 },
     );

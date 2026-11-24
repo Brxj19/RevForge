@@ -62,12 +62,11 @@ describe("Phase 7 auth pages", () => {
     await userEvent.type(screen.getByLabelText("Password"), "any password 123");
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-    expect(
-      await screen.findByText(/Verify your email/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /verification/i }),
-    ).toHaveAttribute("href", "/verify");
+    expect(await screen.findByText(/Verify your email/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /verification/i })).toHaveAttribute(
+      "href",
+      "/verify",
+    );
   });
 
   it("shows signedout, expired, verified, and reset banners on /login", async () => {
@@ -88,7 +87,9 @@ describe("Phase 7 auth pages", () => {
 
     // Reserved slug rejected immediately
     await userEvent.type(handleInput, "admin");
-    expect(await screen.findByText("That name is reserved")).toBeInTheDocument();
+    expect(
+      await screen.findByText("That name is reserved"),
+    ).toBeInTheDocument();
 
     // Taken handle detected via GET /users/check-handle
     await userEvent.clear(handleInput);
@@ -169,9 +170,7 @@ describe("Phase 7 auth pages", () => {
     expect(
       await screen.findByRole("heading", { name: /Password updated/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/access tokens and SSH keys/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/access tokens and SSH keys/i)).toBeInTheDocument();
   });
 
   it("mounts password reset confirmation at /reset-password and strips ?token= from URL", async () => {
