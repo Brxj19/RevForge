@@ -38,7 +38,7 @@ logs/
 # Local storage
 tmp/
 data/
-repos/
+/repos/
 repository-storage/
 
 # IDE

@@ -1,0 +1,51 @@
+/* Repositories list page (prototype pageRepos, DESIGN.md §2.2 & §8). */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.filterWrap {
+  flex: 1;
+  min-width: 220px;
+}
+.repoLink {
+  display: grid;
+  gap: 2px;
+  text-decoration: none;
+  color: inherit;
+}
+.repoLink:hover .repoName {
+  color: var(--accent-2);
+}
+.repoName {
+  font-family: var(--display);
+  font-size: 13.5px;
+}
+.repoDesc {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.accessCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.actionsCell {
+  text-align: right;
+  width: 1%;
+}
+@media (max-width: 860px) {
+  .hideM {
+    display: none;
+  }
+}
