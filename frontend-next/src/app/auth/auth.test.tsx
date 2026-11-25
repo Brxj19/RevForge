@@ -166,7 +166,7 @@ describe("F2: a 401 mid-session opens the session dialog", () => {
       );
       if (i === 0)
         expect(
-          await screen.findByText("That email and password don't match."),
+          await screen.findByText(/That email and password don['’]t match\./),
         ).toBeInTheDocument();
     }
     await waitFor(() =>
@@ -174,6 +174,70 @@ describe("F2: a 401 mid-session opens the session dialog", () => {
         "/login?state=expired&next=%2Factivity%3Fq%3Dpush",
       ),
     );
+  });
+
+  it("shows idle timeout copy and passes reason=idle_timeout when abandoning after session_idle_timeout", async () => {
+    server.use(
+      http.get("*/api/v1/needs-session", () =>
+        apiError(
+          401,
+          "Your session expired after 30 minutes without activity.",
+          "session_idle_timeout",
+          undefined,
+          { reason: "idle_timeout" },
+        ),
+      ),
+    );
+    const { history } = renderWithProviders(() => <ExpiringPage />, {
+      user: fixtureUsers.brxj19,
+      route: "/sigma/sigma-reckitt",
+    });
+    await screen.findByRole("dialog", { name: "Your session has expired" });
+    expect(
+      screen.getByText(
+        "Your session expired after 30 minutes without activity. Sign in again to continue.",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Go to sign-in page" }),
+    );
+    await waitFor(() =>
+      expect(history.get()).toBe(
+        "/login?state=expired&reason=idle_timeout&next=%2Fsigma%2Fsigma-reckitt",
+      ),
+    );
+  });
+
+  it("does not establish a session on 202 register", async () => {
+    function RegisterProbe() {
+      const auth = useAuth();
+      return (
+        <div>
+          <span data-testid="status">{auth.status()}</span>
+          <button
+            onClick={() =>
+              void auth.register({
+                email: "newuser@sigma.dev",
+                display_name: "New User",
+                password: "correct horse battery staple",
+                handle: "newuser",
+              })
+            }
+          >
+            register
+          </button>
+        </div>
+      );
+    }
+    const { queryClient } = renderWithProviders(() => <RegisterProbe />, {
+      user: null,
+    });
+    queryClient.setQueryData(["stale"], "old");
+    await userEvent.click(screen.getByRole("button", { name: "register" }));
+    await waitFor(() =>
+      expect(queryClient.getQueryData(["stale"])).toBeUndefined(),
+    );
+    expect(screen.getByTestId("status")).toHaveTextContent("anonymous");
   });
 
   it("does not open the dialog for anonymous visitors", async () => {

@@ -4,8 +4,10 @@ import {
   useSearchParams,
   type RouteSectionProps,
 } from "@solidjs/router";
-import { createMemo, Match, Show, Switch } from "solid-js";
+import { createMemo, Match, Show, Suspense, Switch } from "solid-js";
 import { createPrCountQuery } from "~/features/pulls";
+import { loaded } from "~/lib/query";
+import { Card, CardBody } from "~/ui/Card";
 import { Skeleton, SkeletonText } from "~/ui/Skeleton";
 import { Pane, Panes, Workspace, WsBody } from "~/ui/WorkspaceLayout";
 import {
@@ -32,10 +34,10 @@ export default function RepoLayout(props: RouteSectionProps) {
   const org = () => safeDecode(params.org);
   const repo = () => safeDecode(params.repo);
   const query = createRepoQuery(org, repo);
-  const ready = () => query.data?.provisioning_state === "ready";
+  const ready = () => loaded(query)?.provisioning_state === "ready";
   const refs = createRefsQuery(org, repo, ready);
   const refCount = () => {
-    const r = refs.data;
+    const r = loaded(refs);
     return r
       ? r.branches.length + r.bookmarks.length + r.tags.length
       : undefined;
@@ -96,9 +98,28 @@ export default function RepoLayout(props: RouteSectionProps) {
         <Match when={query.data}>
           {(detail) => (
             <RepoContext.Provider value={ctx(detail)}>
-              <RepoHeader refCount={refCount()} prOpenCount={prCount.data} />
+              <RepoHeader refCount={refCount()} prOpenCount={loaded(prCount)} />
               <Show when={ready() || onSettings()} fallback={<RepoNotReady />}>
-                {props.children}
+                <Suspense
+                  fallback={
+                    <WsBody>
+                      <Panes columns="minmax(0,1fr)">
+                        <Pane>
+                          <Card>
+                            <CardBody>
+                              <SkeletonText
+                                lines={["45%", "85%", "70%", "60%"]}
+                                label="Loading tab"
+                              />
+                            </CardBody>
+                          </Card>
+                        </Pane>
+                      </Panes>
+                    </WsBody>
+                  }
+                >
+                  {props.children}
+                </Suspense>
               </Show>
             </RepoContext.Provider>
           )}

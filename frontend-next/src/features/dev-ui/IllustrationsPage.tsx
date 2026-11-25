@@ -13,11 +13,13 @@ import {
   GlyphBadges,
   IL_CATS,
   ILLUSTRATION_IDS,
+  ILLUSTRATION_SIZES,
   Illustration,
   artOf,
   illustrationStandaloneSvg,
   type IllustrationCategory,
   type IllustrationId,
+  type IllustrationSize,
 } from "~/ui/illustrations";
 import styles from "./dev-ui.module.css";
 
@@ -130,20 +132,27 @@ export default function IllustrationsPage() {
                     <For
                       each={
                         [
-                          [96, "Inline"],
-                          [140, "Card"],
-                          [200, "Page"],
-                        ] as const
+                          ["inline", "Inline"],
+                          ["card", "Card"],
+                          ["page", "Page"],
+                        ] as readonly (readonly [IllustrationSize, string])[]
                       }
                     >
-                      {([w, l]) => (
-                        <figure class={styles.fig}>
-                          <Illustration id="no-repos" size={w * 0.6} label="" />
-                          <figcaption>
-                            {l} {w}px
-                          </figcaption>
-                        </figure>
-                      )}
+                      {([size, label]) => {
+                        const w = ILLUSTRATION_SIZES[size];
+                        return (
+                          <figure class={styles.fig}>
+                            <Illustration
+                              id="no-repos"
+                              size={Math.round(w * 0.6)}
+                              decorative
+                            />
+                            <figcaption>
+                              {label} {w}px
+                            </figcaption>
+                          </figure>
+                        );
+                      }}
                     </For>
                   </div>
                 </div>
@@ -197,11 +206,13 @@ export default function IllustrationsPage() {
               />
             </Card>
             <div class={styles.sizes}>
-              <For each={[96, 140]}>
-                {(w) => (
+              <For each={["inline", "card"] as const}>
+                {(size) => (
                   <figure class={styles.fig}>
-                    <Illustration id={id()} size={w} label="" />
-                    <figcaption>{w}px</figcaption>
+                    <Illustration id={id()} size={size} decorative />
+                    <figcaption>
+                      {size} ({ILLUSTRATION_SIZES[size]}px)
+                    </figcaption>
                   </figure>
                 )}
               </For>

@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit_event import AuditEvent
 
+VALID_AUDIT_SEVERITIES = frozenset({"normal", "high"})
+
 
 async def record_audit_event(
     session: AsyncSession,
@@ -16,12 +18,16 @@ async def record_audit_event(
     repository_id: UUID | None = None,
     request_id: str | None = None,
     metadata_json: dict[str, object] | None = None,
+    severity: str = "normal",
 ) -> AuditEvent:
+    if severity not in VALID_AUDIT_SEVERITIES:
+        raise ValueError(f"Unsupported audit severity: {severity!r}")
     event = AuditEvent(
         actor_user_id=actor_user_id,
         organization_id=organization_id,
         repository_id=repository_id,
         event_type=event_type,
+        severity=severity,
         request_id=request_id,
         metadata_json=metadata_json or {},
     )

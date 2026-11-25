@@ -46,11 +46,14 @@ def _pr_base(organization_slug: str, repository_slug: str) -> str:
 
 
 def _register(client, email: str) -> str:
-    response = client.post(
-        "/api/v1/auth/register",
-        json={"email": email, "display_name": email.split("@")[0], "password": PASSWORD},
+    from tests.auth_helpers import register_and_login
+
+    response = register_and_login(
+        client,
+        email=email,
+        display_name=email.split("@")[0],
+        password=PASSWORD,
     )
-    assert response.status_code == 201
     return str(response.json()["user"]["id"])
 
 

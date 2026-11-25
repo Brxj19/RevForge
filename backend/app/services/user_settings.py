@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import utc_now, validate_display_name, validate_email
@@ -15,7 +14,7 @@ from app.schemas.me import (
     UserUpdateRequest,
 )
 from app.services.audit import record_audit_event
-from app.services.errors import ConflictError, ValidationFailure
+from app.services.errors import ValidationFailure
 
 
 def _user_profile(user: User) -> UserProfileResponse:
@@ -62,14 +61,9 @@ async def update_user_profile(
         except ValueError as exc:
             raise ValidationFailure(str(exc)) from exc
         if normalized_email != user.email:
-            existing = await session.scalar(
-                select(User.id).where(User.email == normalized_email, User.id != user.id)
+            raise ValidationFailure(
+                "Email changes require verification and cannot be updated directly."
             )
-            if existing is not None:
-                raise ConflictError("Email is already in use.")
-            old_email = user.email
-            user.email = normalized_email
-            changed_fields.append("email")
 
     if payload.author_aliases is not None:
         if len(payload.author_aliases) > 20:

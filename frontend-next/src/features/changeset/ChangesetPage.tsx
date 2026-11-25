@@ -358,7 +358,7 @@ function ChangesetError(props: {
     <Switch
       fallback={
         <EmptyState
-          art="load-error"
+          art={e()?.isNetworkError ? "offline" : "load-error"}
           size="page"
           title={`Couldn't load ${props.what ?? "this changeset"}.`}
           body={
@@ -417,7 +417,7 @@ function ChangesetError(props: {
       </Match>
       <Match when={e()?.status === 429}>
         <EmptyState
-          art="session-expired"
+          art="rate-limited"
           size="page"
           title="Slow down a little"
           body="You've made a lot of requests in a short time. Wait a moment, then try again."

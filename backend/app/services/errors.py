@@ -17,6 +17,10 @@ class AuthenticationError(ServiceError):
     pass
 
 
+class SessionIdleTimeoutError(AuthenticationError):
+    pass
+
+
 class ForbiddenError(ServiceError):
     pass
 

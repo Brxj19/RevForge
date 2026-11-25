@@ -9,11 +9,23 @@ export function apiError(
   message: string,
   code = "http_error",
   details?: unknown,
+  extra?: { headers?: Record<string, string>; reason?: string },
 ) {
   const request_id = nextRequestId();
   return HttpResponse.json(
-    { error: { code, message, request_id, ...(details ? { details } : {}) } },
-    { status, headers: { "X-Request-ID": request_id } },
+    {
+      error: {
+        code,
+        message,
+        ...(extra?.reason ? { reason: extra.reason } : {}),
+        request_id,
+        ...(details ? { details } : {}),
+      },
+    },
+    {
+      status,
+      headers: { "X-Request-ID": request_id, ...(extra?.headers ?? {}) },
+    },
   );
 }
 

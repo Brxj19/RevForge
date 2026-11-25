@@ -15,11 +15,11 @@ def _csrf(client) -> dict[str, str]:
 
 
 def _register(client, email: str) -> None:
-    r = client.post(
-        "/api/v1/auth/register",
-        json={"email": email, "display_name": email.split("@")[0], "password": "StrongPassword123"},
+    from tests.auth_helpers import register_and_login
+
+    register_and_login(
+        client, email=email, display_name=email.split("@")[0], password="StrongPassword123"
     )
-    assert r.status_code == 201
 
 
 def _login(client, email: str) -> None:

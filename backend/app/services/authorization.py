@@ -7,6 +7,13 @@ from app.models.organization_member import OrganizationMember
 from app.models.repository import Repository
 from app.models.repository_permission import RepositoryPermission
 from app.models.user import User
+from app.services.errors import ForbiddenError
+
+
+def require_platform_admin(actor: User | None) -> User:
+    if actor is None or not actor.is_active or not actor.is_platform_admin:
+        raise ForbiddenError("Platform admin access required.")
+    return actor
 
 
 @dataclass(slots=True)
@@ -43,6 +50,16 @@ def repository_access_for_actor(
     repository: Repository,
     explicit_permission: RepositoryPermission | None,
 ) -> RepositoryAccess:
+    # Suspended/inactive accounts never receive repository access (fail closed).
+    if actor is not None and not actor.is_active:
+        return RepositoryAccess(
+            viewer_role=None,
+            can_read=False,
+            can_manage=False,
+            can_write=False,
+            inherited_access=False,
+        )
+
     if organization_membership is not None and organization_membership.role in {
         OrganizationRole.OWNER,
         OrganizationRole.ADMIN,

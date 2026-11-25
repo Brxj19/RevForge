@@ -1,0 +1,10 @@
+.copyRef {
+  width: 260px;
+  max-width: 100%;
+}
+
+.countdown {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--amber);
+}

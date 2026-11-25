@@ -46,7 +46,11 @@ async def list_authorized_keys_entries(
         select(SshPublicKey)
         .options(selectinload(SshPublicKey.user))
         .join(User)
-        .where(SshPublicKey.revoked_at.is_(None), User.is_active.is_(True))
+        .where(
+            SshPublicKey.revoked_at.is_(None),
+            User.is_active.is_(True),
+            User.email_verified_at.is_not(None),
+        )
         .order_by(SshPublicKey.created_at.asc(), SshPublicKey.id.asc())
     )
     return [render_authorized_keys_entry(key, settings=settings) for key in result.scalars()]

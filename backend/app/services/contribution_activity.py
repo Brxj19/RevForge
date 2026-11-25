@@ -47,26 +47,34 @@ async def list_user_contribution_activity(
     user_id: UUID,
     end_date: date | None = None,
     range_days: int = LAST_YEAR_RANGE_DAYS,
+    public_only: bool = False,
 ) -> ContributionActivity:
     resolved_end_date = end_date or datetime.now(UTC).date()
     start_date = resolved_end_date - timedelta(days=range_days - 1)
     start_at = datetime.combine(start_date, time.min, tzinfo=UTC)
     end_at = datetime.combine(resolved_end_date + timedelta(days=1), time.min, tzinfo=UTC)
 
-    result = await session.execute(
-        select(
-            func.date(AuditEvent.created_at).label("activity_date"),
-            func.count(AuditEvent.id).label("activity_count"),
-        )
-        .where(
-            AuditEvent.actor_user_id == user_id,
-            AuditEvent.event_type.in_(CONTRIBUTION_EVENT_TYPES),
-            AuditEvent.created_at >= start_at,
-            AuditEvent.created_at < end_at,
-        )
-        .group_by("activity_date")
-        .order_by("activity_date")
+    stmt = select(
+        func.date(AuditEvent.created_at).label("activity_date"),
+        func.count(AuditEvent.id).label("activity_count"),
+    ).where(
+        AuditEvent.actor_user_id == user_id,
+        AuditEvent.event_type.in_(CONTRIBUTION_EVENT_TYPES),
+        AuditEvent.created_at >= start_at,
+        AuditEvent.created_at < end_at,
     )
+
+    if public_only:
+        from app.domain.enums import RepositoryVisibility
+        from app.models.repository import Repository
+
+        stmt = stmt.join(Repository, AuditEvent.repository_id == Repository.id, isouter=True).where(
+            (AuditEvent.repository_id.is_(None))
+            | (Repository.visibility == RepositoryVisibility.PUBLIC)
+        )
+
+    stmt = stmt.group_by("activity_date").order_by("activity_date")
+    result = await session.execute(stmt)
 
     counts_by_date = {
         _normalize_sql_date(activity_date): int(activity_count)

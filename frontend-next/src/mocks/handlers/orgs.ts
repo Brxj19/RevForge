@@ -363,6 +363,11 @@ export const orgHandlers = [
       if (!db.session) return unauthorized();
       const fail = csrfFailure(request);
       if (fail) return fail;
+      db.provisioning[`${String(params.org)}/${String(params.repo)}`] = {
+        state: "provisioning",
+        provisioning_error: undefined,
+        provisioning_started_at: new Date().toISOString(),
+      };
       return HttpResponse.json({
         id: "00000000-0000-4000-a000-00000000ff01",
         slug: params.repo,

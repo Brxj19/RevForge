@@ -344,6 +344,9 @@ describe("Prototype review workspace", () => {
     expect(within(nav).getByText("Your pull requests")).toBeInTheDocument();
     expect(within(nav).getByText("All open")).toBeInTheDocument();
     expect(within(nav).getByText("Recently closed")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /New pull request/ }),
+    ).toBeInTheDocument();
     const link = await screen.findByRole("link", {
       name: /Add Dijkstra shortest path/,
     });

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
@@ -7,6 +8,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.errors import ApiError
 from app.db.session import get_db_session
 from app.mercurial.command_runner import HgCommandRunner
 from app.mercurial.read_service import MercurialReadService
@@ -14,7 +16,7 @@ from app.mercurial.storage_locator import RepositoryStorageLocator
 from app.models.user import User
 from app.models.user_session import UserSession
 from app.services.authentication import get_user_from_session_token
-from app.services.errors import AuthenticationError
+from app.services.errors import AuthenticationError, SessionIdleTimeoutError
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
@@ -61,12 +63,18 @@ async def get_current_identity(
             settings=settings,
             raw_session_token=raw_session_token,
         )
+    except SessionIdleTimeoutError as exc:
+        raise ApiError(
+            status.HTTP_401_UNAUTHORIZED,
+            code="session_idle_timeout",
+            detail="Your session expired after inactivity.",
+            reason="idle_timeout",
+        ) from exc
     except AuthenticationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required."
         ) from exc
 
-    await session.flush()
     return SessionIdentity(user=user, session=user_session)
 
 
@@ -85,11 +93,12 @@ async def get_optional_identity(
             settings=settings,
             raw_session_token=raw_session_token,
         )
+    except SessionIdleTimeoutError:
+        return None
     except AuthenticationError:
         await session.rollback()
         return None
 
-    await session.flush()
     return SessionIdentity(user=user, session=user_session)
 
 
@@ -107,9 +116,31 @@ async def require_csrf(
     if (
         csrf_header is None
         or csrf_cookie is None
-        or csrf_header != csrf_cookie
-        or csrf_header != identity.session.csrf_token
+        or not hmac.compare_digest(csrf_header, csrf_cookie)
+        or not hmac.compare_digest(csrf_header, identity.session.csrf_token)
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF validation failed.")
 
+    return identity
+
+
+async def require_platform_admin(
+    identity: SessionIdentity = Depends(get_current_identity),
+) -> SessionIdentity:
+    if not identity.user.is_active or not identity.user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform admin access required.",
+        )
+    return identity
+
+
+async def require_platform_admin_csrf(
+    identity: SessionIdentity = Depends(require_csrf),
+) -> SessionIdentity:
+    if not identity.user.is_active or not identity.user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform admin access required.",
+        )
     return identity

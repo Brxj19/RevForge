@@ -8,10 +8,16 @@ import {
   useContext,
   type JSX,
 } from "solid-js";
-import { ApiError, authApi, type Viewer } from "~/lib/api";
+import {
+  ApiError,
+  authApi,
+  type AcceptedActionResponse,
+  type Viewer,
+} from "~/lib/api";
 import { onUnauthorized } from "../query-client";
 
 export type AuthStatus = "loading" | "anonymous" | "authenticated";
+export type SessionExpiredReason = "idle_timeout" | "expired" | null;
 
 export interface AuthContextValue {
   status: () => AuthStatus;
@@ -21,14 +27,21 @@ export interface AuthContextValue {
   isPlatformAdmin: () => boolean;
   /** Set when a request returned 401 mid-session; the session dialog re-authenticates in place. */
   sessionExpired: () => boolean;
+  /** Distinguishes idle inactivity timeouts from generic session expiry. */
+  sessionExpiredReason: () => SessionExpiredReason;
   /** Error restoring the session for reasons other than 401 (forge down). */
   restoreError: () => ApiError | null;
-  login: (body: { email: string; password: string }) => Promise<Viewer>;
+  login: (body: {
+    email: string;
+    password: string;
+    remember_me?: boolean;
+  }) => Promise<Viewer>;
   register: (body: {
     email: string;
     display_name: string;
     password: string;
-  }) => Promise<Viewer>;
+    handle?: string;
+  }) => Promise<AcceptedActionResponse>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   /** Give up re-authenticating: drop the session locally (dialog "Sign out"). */
@@ -63,6 +76,8 @@ export function AuthProvider(props: AuthProviderProps) {
     preset ? (props.initialUser ? "authenticated" : "anonymous") : "loading",
   );
   const [expired, setExpired] = createSignal(false);
+  const [expiredReason, setExpiredReason] =
+    createSignal<SessionExpiredReason>(null);
   const [restoreError, setRestoreError] = createSignal<ApiError | null>(null);
 
   /**
@@ -77,6 +92,7 @@ export function AuthProvider(props: AuthProviderProps) {
       setCsrf(token);
       setStatus(next ? "authenticated" : "anonymous");
       setExpired(false);
+      setExpiredReason(null);
       setRestoreError(null);
     });
   };
@@ -111,8 +127,9 @@ export function AuthProvider(props: AuthProviderProps) {
 
   const register: AuthContextValue["register"] = async (body) => {
     const res = await authApi.register(body);
-    adopt(res.user, res.csrf_token);
-    return res.user;
+    // 202 neutral response: registration does not establish a session until email verification.
+    queryClient.clear();
+    return res;
   };
 
   const logout = async () => {
@@ -134,8 +151,17 @@ export function AuthProvider(props: AuthProviderProps) {
   // F2: a 401 while signed in means the session ended server-side. This is an event callback,
   // so reading status() untracked is intended.
   // eslint-disable-next-line solid/reactivity
-  const stopListening = onUnauthorized(queryClient, () => {
-    if (status() === "authenticated") setExpired(true);
+  const stopListening = onUnauthorized(queryClient, (err) => {
+    if (status() === "authenticated") {
+      batch(() => {
+        setExpired(true);
+        setExpiredReason(
+          err.code === "session_idle_timeout" || err.reason === "idle_timeout"
+            ? "idle_timeout"
+            : "expired",
+        );
+      });
+    }
   });
   onCleanup(stopListening);
 
@@ -146,6 +172,7 @@ export function AuthProvider(props: AuthProviderProps) {
     isAnonymous: () => status() !== "authenticated",
     isPlatformAdmin: () => user()?.is_platform_admin === true,
     sessionExpired: expired,
+    sessionExpiredReason: expiredReason,
     restoreError,
     login,
     register,

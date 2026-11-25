@@ -24,7 +24,11 @@ async def resolve_active_user_by_identifier(
 
     if normalized_email is not None:
         user = await session.scalar(
-            select(User).where(User.email == normalized_email, User.is_active.is_(True))
+            select(User).where(
+                User.email == normalized_email,
+                User.is_active.is_(True),
+                User.email_verified_at.is_not(None),
+            )
         )
         if user is None:
             raise NotFoundError("User not found.")
@@ -32,7 +36,11 @@ async def resolve_active_user_by_identifier(
 
     result = await session.execute(
         select(User)
-        .where(User.display_name == candidate, User.is_active.is_(True))
+        .where(
+            User.display_name == candidate,
+            User.is_active.is_(True),
+            User.email_verified_at.is_not(None),
+        )
         .order_by(User.created_at.asc())
     )
     users = list(result.scalars())

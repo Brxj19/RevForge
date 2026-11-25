@@ -1,0 +1,244 @@
+.panes {
+  --panes-columns: 230px minmax(0, 1fr) 190px;
+}
+
+.nav {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+}
+
+.searchWrap {
+  margin-bottom: 8px;
+}
+
+.groupTitle {
+  font: 500 12px var(--sans);
+  color: var(--subtle);
+  margin: 14px 10px 4px;
+}
+
+.navLink {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 5px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.navLink:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.navLink[aria-current="page"] {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.emptyFilter {
+  font-size: 12.5px;
+  color: var(--muted);
+  padding: 8px 10px;
+  margin: 0;
+}
+
+.prose {
+  max-width: 72ch;
+  line-height: 1.7;
+}
+
+.eyebrow {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.title {
+  font: 26px/1.25 var(--display);
+  margin: 0 0 14px;
+}
+
+.h2 {
+  font: 600 16px/1.35 var(--sans);
+  margin: 28px 0 8px;
+  scroll-margin-top: 12px;
+}
+
+.p {
+  margin: 10px 0;
+  color: var(--text-2);
+}
+
+.p strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.p code {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--text);
+}
+
+.codeBlock {
+  position: relative;
+  margin: 12px 0;
+}
+
+.codeBlock pre {
+  margin: 0;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px 42px 12px 14px;
+  font: 12.5px/1.7 var(--mono);
+  overflow-x: auto;
+  color: var(--text);
+}
+
+.codeCopy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin: 12px 0 -1px;
+}
+
+.tabBtn {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12.5px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tabBtn:hover {
+  color: var(--text);
+}
+
+.tabBtn[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tabCode {
+  margin-top: 0;
+}
+
+.tabCode pre {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.blockGap {
+  margin: 14px 0;
+}
+
+.tableCellCenter {
+  text-align: center;
+}
+
+.endpoints {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+}
+
+.endpoint {
+  font: 12px var(--mono);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.method {
+  font-weight: 600;
+  width: 52px;
+  color: var(--green);
+}
+
+.prevNext {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 40px;
+}
+
+.pnCard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 12px 14px;
+  display: grid;
+  gap: 2px;
+  color: var(--text);
+}
+
+.pnCard:hover {
+  border-color: var(--accent);
+}
+
+.pnCard small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pnNext {
+  text-align: right;
+}
+
+.feedback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 24px;
+}
+
+.toc {
+  align-content: start;
+}
+
+.tocTitle {
+  font-size: 12px;
+  color: var(--subtle);
+  margin-bottom: 6px;
+}
+
+.tocLink {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  padding: 3px 0;
+}
+
+.tocLink:hover {
+  color: var(--text);
+}
+
+@media (max-width: 1024px) {
+  .panes {
+    grid-template-columns: 230px minmax(0, 1fr) !important;
+  }
+  .toc {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .prevNext {
+    grid-template-columns: 1fr;
+  }
+}

@@ -15,6 +15,7 @@ import { Button } from "~/ui/Button";
 import { Illustration } from "~/ui/illustrations";
 import { Kbd, Shortcut } from "~/ui/Kbd";
 import { Highlight } from "~/ui/Menu";
+import { SkeletonText } from "~/ui/Skeleton";
 import { FileIcon, Icon } from "~/ui/icons";
 import { MODES, cycleMode, parsePrefix, type PaletteModeId } from "./modes";
 import { ActionPreview } from "./previews";
@@ -302,12 +303,24 @@ export function CommandPalette(props: CommandPaletteProps) {
                   </div>
                 </Show>
                 <Switch>
+                  <Match
+                    when={
+                      !emptyHome() && visible().length === 0 && props.loading
+                    }
+                  >
+                    <div class={styles.empty}>
+                      <SkeletonText
+                        lines={["75%", "60%", "80%"]}
+                        label="Searching"
+                      />
+                    </div>
+                  </Match>
                   <Match when={unavailable() && visible().length === 0}>
                     <div class={styles.empty}>
                       <Illustration
                         id={unavailable()?.art ?? "no-results"}
-                        size={110}
-                        label=""
+                        size="inline"
+                        decorative
                       />
                       <p>{unavailable()?.text}</p>
                       <Button size="sm" onClick={() => changeMode("default")}>
@@ -325,8 +338,8 @@ export function CommandPalette(props: CommandPaletteProps) {
                         id={
                           mode() === "files" ? "no-files-match" : "no-results"
                         }
-                        size={110}
-                        label=""
+                        size="inline"
+                        decorative
                       />
                       <p>
                         Nothing matches “{term()}”

@@ -6,9 +6,10 @@ import { useUrlState } from "~/lib/url";
 import { Avatar } from "~/ui/Avatar";
 import { Button, ButtonLink } from "~/ui/Button";
 import { Card } from "~/ui/Card";
-import { EmptyState } from "~/ui/EmptyState";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { InputGroup } from "~/ui/Field";
 import { Icon } from "~/ui/icons";
+import { Pill } from "~/ui/Pill";
 import { Skeleton } from "~/ui/Skeleton";
 import { Segmented } from "~/ui/Segmented";
 import { Pane, WsBody } from "~/ui/WorkspaceLayout";
@@ -126,37 +127,47 @@ export default function PullsListPage() {
           </Match>
           <Match when={query.isError}>
             <Card>
-              <EmptyState
-                art="load-error"
+              <ErrorState
+                error={query.error}
+                what="pull requests"
                 size="page"
-                title="Couldn't load pull requests"
-                body="Try again in a moment."
-                actions={
-                  <Button
-                    variant="primary"
-                    onClick={() => void query.refetch()}
-                  >
-                    Try again
-                  </Button>
-                }
+                onRetry={() => void query.refetch()}
               />
             </Card>
           </Match>
           <Match when={prs().length === 0}>
             <Card>
               <EmptyState
-                art="no-results"
-                size="page"
-                title="No pull requests"
+                art={!url.q && url.state === "open" ? "no-pulls" : "no-results"}
+                size="card"
+                title={
+                  url.q
+                    ? `No pull requests match “${url.q}”`
+                    : url.state === "open"
+                      ? "No open pull requests"
+                      : `No ${url.state} pull requests`
+                }
                 body={
                   url.q
                     ? "Nothing matches your search. Try different keywords."
                     : url.state === "open"
-                      ? "There are no open pull requests. Create one to start a review."
-                      : `No ${url.state} pull requests.`
+                      ? "Push a branch, then open a pull request to get it reviewed before it lands on default."
+                      : "They'll appear here."
                 }
                 actions={
-                  <Show when={url.q}>
+                  <Show
+                    when={url.q}
+                    fallback={
+                      <Show when={url.state === "open" && mayCreate()}>
+                        <ButtonLink
+                          href={repo.href("pulls/new")}
+                          variant="primary"
+                        >
+                          New pull request
+                        </ButtonLink>
+                      </Show>
+                    }
+                  >
                     <Button onClick={() => setUrl({ q: "" })}>
                       Clear search
                     </Button>
@@ -188,10 +199,16 @@ export function PrRow(props: {
   const state = () => props.pr.state as PrState;
   const href = () =>
     props.base ? `${props.base}/pulls/${props.pr.number}` : undefined;
+  const readyToMerge = () =>
+    state() === "open" &&
+    props.pr.changes_requested_count === 0 &&
+    props.pr.reviewer_count > 0 &&
+    props.pr.approval_count >= props.pr.reviewer_count;
+
   return (
     <div class={styles.row} role="listitem">
       <span class={styles.rowIcon} data-state={state()}>
-        <Icon name={prStateIcon(state())} size={18} />
+        <Icon name={prStateIcon(state())} size={16} />
       </span>
       <div class={styles.rowMain}>
         <div class={styles.rowTitle}>
@@ -199,7 +216,9 @@ export function PrRow(props: {
             {(link) => (
               <a href={link()}>
                 <Show when={props.showRepo && props.pr.repository_slug}>
-                  <span class="muted">{props.pr.repository_slug} </span>
+                  <span class="muted" style={{ "font-weight": "400" }}>
+                    {props.pr.repository_slug}{" "}
+                  </span>
                 </Show>
                 {props.pr.title}
               </a>
@@ -230,9 +249,10 @@ export function PrRow(props: {
             </>
           </Show>
           <Show when={props.pr.changes_requested_count > 0}>
-            <span class={styles.statusPill} data-tone="red">
-              Changes requested
-            </span>
+            <Pill tone="red">changes requested</Pill>
+          </Show>
+          <Show when={readyToMerge()}>
+            <Pill tone="green">ready to merge</Pill>
           </Show>
           <Show when={props.pr.merged_at}>
             {(mergedAt) => (
@@ -262,7 +282,7 @@ export function PrRow(props: {
               name={
                 props.pr.author_display_name ?? props.pr.author_id.slice(0, 8)
               }
-              size={20}
+              size={22}
               decorative
             />
           }
@@ -274,7 +294,7 @@ export function PrRow(props: {
                   class={styles.rv}
                   title={`${reviewer.display_name}: ${reviewer.decision.replace("_", " ")}${reviewer.required ? " (required)" : ""}`}
                 >
-                  <Avatar name={reviewer.display_name} size={20} decorative />
+                  <Avatar name={reviewer.display_name} size={22} decorative />
                   <i
                     class={styles.rvMark}
                     data-dec={reviewer.decision}

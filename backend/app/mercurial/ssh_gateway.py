@@ -28,7 +28,7 @@ from app.models.repository import Repository
 from app.models.user import User
 from app.repositories.organizations import get_membership
 from app.services.audit import record_audit_event
-from app.services.errors import ForbiddenError, NotFoundError
+from app.services.errors import AuthenticationError, ForbiddenError, NotFoundError
 from app.services.repository_service import (
     get_organization_by_slug_for_repo_routes,
     get_repository_for_actor,
@@ -145,6 +145,7 @@ class MercurialSshGateway:
                 repository_slug=request.repository_slug,
                 actor=actor,
                 allow_archived=False,
+                allow_break_glass=False,
             )
             if not repository_is_browsable(repository):
                 raise NotFoundError("Repository not found.")
@@ -262,6 +263,9 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
     try:
         asyncio.run(gateway.run())
+    except AuthenticationError:
+        print("Authentication required.", file=sys.stderr)
+        return 1
     except (ValueError, ForbiddenError, NotFoundError, RepositoryStorageError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

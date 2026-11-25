@@ -9,12 +9,17 @@ import { lazy, Show, type Component, type JSX } from "solid-js";
 import { isReservedSlug } from "~/lib/reserved";
 import { RequireAuth, RequirePlatformAdmin, useAuth } from "./auth";
 
-const Placeholder = lazy(
-  () => import("~/features/placeholder/PlaceholderPage"),
-);
 const NotFoundPage = lazy(() => import("~/features/errors/NotFoundPage"));
 const ErrorPage = lazy(() => import("~/features/errors/ErrorPage"));
 const LoginPage = lazy(() => import("~/features/auth/LoginPage"));
+const RegisterPage = lazy(() => import("~/features/auth/RegisterPage"));
+const VerifyEmailPage = lazy(() => import("~/features/auth/VerifyEmailPage"));
+const ForgotPasswordPage = lazy(
+  () => import("~/features/auth/ForgotPasswordPage"),
+);
+const SuspendedPage = lazy(() => import("~/features/auth/SuspendedPage"));
+const LandingPage = lazy(() => import("~/features/landing/LandingPage"));
+const DocsPage = lazy(() => import("~/features/docs/DocsPage"));
 const RepoLayout = lazy(() => import("~/features/repo/RepoLayout"));
 const RepoOverview = lazy(() => import("~/features/repo/OverviewPage"));
 const CodePage = lazy(() => import("~/features/code/CodePage"));
@@ -36,16 +41,16 @@ const NewRepoPage = lazy(() => import("~/features/new-repo/NewRepoPage"));
 const RepoSettingsLayout = lazy(
   () => import("~/features/repo-settings/RepoSettingsLayout"),
 );
+const HomePage = lazy(() => import("~/features/home/HomePage"));
+const ExplorePage = lazy(() => import("~/features/explore/ExplorePage"));
+const ActivityPage = lazy(() => import("~/features/activity/ActivityPage"));
+const ProfilePage = lazy(() => import("~/features/profile/ProfilePage"));
+const ReposPage = lazy(() => import("~/features/repos/ReposPage"));
+const AdminLayout = lazy(() => import("~/features/admin/AdminLayout"));
 const UiKitPage = lazy(() => import("~/features/dev-ui/UiKitPage"));
 const IllustrationsPage = lazy(
   () => import("~/features/dev-ui/IllustrationsPage"),
 );
-
-/** Not-yet-built screen (phase from screen-map.md). */
-const soon = (screen: string, phase: number, prototype?: string): Component =>
-  function NotBuiltYet() {
-    return <Placeholder screen={screen} phase={phase} prototype={prototype} />;
-  };
 
 const authed =
   (C: Component): Component =>
@@ -58,13 +63,8 @@ const authed =
 function HomeOrExplore() {
   const auth = useAuth();
   return (
-    <Show
-      when={auth.status() === "authenticated"}
-      fallback={
-        <Placeholder screen="Explore" phase={5} prototype="#/explore" />
-      }
-    >
-      <Placeholder screen="Home" phase={5} prototype="#/" />
+    <Show when={auth.status() === "authenticated"} fallback={<ExplorePage />}>
+      <HomePage />
     </Show>
   );
 }
@@ -119,6 +119,7 @@ export const TOP_LEVEL_SEGMENTS = [
   "register",
   "verify",
   "forgot",
+  "reset-password",
   "suspended",
   "error",
   "org",
@@ -133,38 +134,21 @@ export function AppRoutes(): JSX.Element {
   return (
     <>
       <Route path="/" component={HomeOrExplore} />
-      <Route path="/explore" component={soon("Explore", 5, "#/explore")} />
-      <Route
-        path="/repos"
-        component={authed(soon("Repositories", 5, "#/repos"))}
-      />
+      <Route path="/explore" component={ExplorePage} />
+      <Route path="/repos" component={authed(ReposPage)} />
       <Route path="/new" component={authed(NewRepoPage)} />
       <Route path="/reviews" component={authed(ReviewsInboxPage)} />
-      <Route
-        path="/activity"
-        component={authed(soon("Activity", 5, "#/activity"))}
-      />
-      <Route
-        path="/docs/:slug?"
-        component={soon("Developer docs", 7, "#/docs")}
-      />
-      <Route path="/welcome" component={soon("Landing", 7, "#/welcome")} />
-      <Route
-        path="/u/:handle"
-        component={soon("Public profile", 5, "#/u/brxj19")}
-      />
+      <Route path="/activity" component={authed(ActivityPage)} />
+      <Route path="/docs/:slug?" component={DocsPage} />
+      <Route path="/welcome" component={LandingPage} />
+      <Route path="/u/:handle" component={ProfilePage} />
 
       <Route path="/login" component={LoginPage} />
-      <Route
-        path="/register"
-        component={soon("Create account", 7, "#/register")}
-      />
-      <Route path="/verify" component={soon("Verify email", 7, "#/verify")} />
-      <Route path="/forgot" component={soon("Reset password", 7, "#/forgot")} />
-      <Route
-        path="/suspended"
-        component={soon("Account suspended", 7, "#/suspended")}
-      />
+      <Route path="/register" component={RegisterPage} />
+      <Route path="/verify" component={VerifyEmailPage} />
+      <Route path="/forgot" component={ForgotPasswordPage} />
+      <Route path="/reset-password" component={ForgotPasswordPage} />
+      <Route path="/suspended" component={SuspendedPage} />
       <Route path="/error/:code" component={ErrorPage} />
 
       <Route path="/org/:org/:section?" component={authed(OrgLayout)} />
@@ -174,7 +158,7 @@ export function AppRoutes(): JSX.Element {
         path="/admin/:section?"
         component={() => (
           <RequirePlatformAdmin>
-            <Placeholder screen="Forge admin" phase={6} prototype="#/admin" />
+            <AdminLayout />
           </RequirePlatformAdmin>
         )}
       />

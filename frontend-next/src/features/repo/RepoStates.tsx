@@ -1,17 +1,23 @@
 import { useLocation } from "@solidjs/router";
-import { Match, Show, Switch, type JSX } from "solid-js";
+import { createMutation } from "@tanstack/solid-query";
+import { createSignal, For, Match, Show, Switch, type JSX } from "solid-js";
 import { useAuth } from "~/app/auth";
-import { ApiError, type ProvisioningErrorCode } from "~/lib/api";
+import { ApiError, reposApi, type ProvisioningErrorCode } from "~/lib/api";
 import { copyText } from "~/lib/clipboard";
 import { absoluteTime } from "~/lib/format";
+import { Avatar } from "~/ui/Avatar";
 import { Button, ButtonLink } from "~/ui/Button";
+import { Callout } from "~/ui/Callout";
 import { Card } from "~/ui/Card";
 import { CopyLine } from "~/ui/CopyButton";
+import { Dialog } from "~/ui/Dialog";
 import { EmptyState } from "~/ui/EmptyState";
+import { Field, Textarea } from "~/ui/Field";
 import { Icon } from "~/ui/icons";
 import { Progress } from "~/ui/Progress";
+import { RadioGroup } from "~/ui/Radio";
 import { showToast } from "~/ui/Toast";
-import { Pane, Panes, WsBody } from "~/ui/WorkspaceLayout";
+import { DocumentPage, Pane, Panes, WsBody } from "~/ui/WorkspaceLayout";
 import { useRepo } from "./context";
 import { createProvisionMutation } from "./queries";
 import styles from "./repo.module.css";
@@ -211,9 +217,13 @@ export function DataError(props: {
     <Switch
       fallback={
         <EmptyState
-          art="load-error"
+          art={e()?.isNetworkError ? "offline" : "load-error"}
           size={props.size}
-          title={`Couldn't load ${props.what}.`}
+          title={
+            e()?.isNetworkError
+              ? "Can't reach the forge"
+              : `Couldn't load ${props.what}.`
+          }
           body={
             e()?.isNetworkError
               ? "Can't reach the forge. Check your connection and try again."
@@ -269,7 +279,7 @@ export function DataError(props: {
       </Match>
       <Match when={e()?.status === 429}>
         <EmptyState
-          art="session-expired"
+          art="rate-limited"
           size={props.size}
           title="Slow down a little"
           body="You've made a lot of requests in a short time. Wait a moment, then try again."
@@ -298,74 +308,316 @@ export function RepoLoadError(props: { error: unknown; onRetry: () => void }) {
   const location = useLocation();
   const e = () => (props.error instanceof ApiError ? props.error : null);
   return (
-    <WsBody>
-      <Pane>
-        <Card>
-          <Switch
-            fallback={
-              <EmptyState
-                art="load-error"
-                size="page"
-                title="Couldn't load this repository."
-                body={
-                  e()?.isNetworkError
-                    ? "Can't reach the forge. Check your connection and try again."
-                    : "Try again in a moment. If it keeps happening, send the reference below to your admin."
+    <Show
+      when={e()?.status === 403}
+      fallback={
+        <WsBody>
+          <Pane>
+            <Card>
+              <Switch
+                fallback={
+                  <EmptyState
+                    art={e()?.isNetworkError ? "offline" : "load-error"}
+                    size="page"
+                    title="Couldn't load this repository."
+                    body={
+                      e()?.isNetworkError
+                        ? "Can't reach the forge. Check your connection and try again."
+                        : "Try again in a moment. If it keeps happening, send the reference below to your admin."
+                    }
+                    requestId={e()?.requestId}
+                    actions={
+                      <Button variant="primary" onClick={() => props.onRetry()}>
+                        Try again
+                      </Button>
+                    }
+                  />
                 }
-                requestId={e()?.requestId}
-                actions={
-                  <Button variant="primary" onClick={() => props.onRetry()}>
-                    Try again
-                  </Button>
-                }
-              />
-            }
-          >
-            <Match when={e()?.status === 404}>
-              <EmptyState
-                art="not-found"
-                size="page"
-                title="Repository not found"
-                body="Check the address. Private repositories only show to people who have access."
-                actions={
+              >
+                <Match when={e()?.status === 404}>
+                  <EmptyState
+                    art="not-found"
+                    size="page"
+                    title="Repository not found"
+                    body="Check the address. Private repositories only show to people who have access."
+                    actions={
+                      <>
+                        <ButtonLink
+                          href={
+                            auth.status() === "authenticated" ? "/" : "/explore"
+                          }
+                          variant="primary"
+                        >
+                          {auth.status() === "authenticated"
+                            ? "Go home"
+                            : "Explore public repositories"}
+                        </ButtonLink>
+                        <Show when={auth.status() !== "authenticated"}>
+                          <ButtonLink
+                            href={`/login?next=${encodeURIComponent(location.pathname + location.search)}`}
+                          >
+                            Sign in
+                          </ButtonLink>
+                        </Show>
+                      </>
+                    }
+                  />
+                </Match>
+              </Switch>
+            </Card>
+          </Pane>
+        </WsBody>
+      }
+    >
+      <RequestAccessView error={e() as ApiError} />
+    </Show>
+  );
+}
+
+/**
+ * 403 view: shows admins, request-access dialog, withdraw state, not-found for anonymous.
+ * Prototype: pageNoAccess + dialogs.requestAccess.
+ */
+function RequestAccessView(_props: { error: ApiError }) {
+  const auth = useAuth();
+  const location = useLocation();
+  const isAnon = () => auth.status() !== "authenticated";
+
+  const meta = () => {
+    const parts = location.pathname.split("/").filter(Boolean);
+    return {
+      org: parts[0] ?? "",
+      repo: parts[1] ?? "",
+      admins: [] as { name: string; email: string }[],
+    };
+  };
+
+  const [dialogOpen, setDialogOpen] = createSignal(false);
+  const [role, setRole] = createSignal<"read" | "write">("read");
+  const [reason, setReason] = createSignal("");
+  const [requestId, setRequestId] = createSignal<string | null>(null);
+
+  const requestAccess = createMutation(() => ({
+    mutationFn: async () => {
+      const m = meta();
+      return reposApi.requestAccess(m.org, m.repo, auth.csrf(), {
+        role: role(),
+        message: reason(),
+      });
+    },
+    onSuccess: (res) => {
+      setRequestId(res?.id ?? "current");
+      setDialogOpen(false);
+      setReason("");
+      showToast({ message: "Access request sent" });
+    },
+    onError: () => {
+      showToast({ message: "Failed to send request", tone: "err" });
+    },
+  }));
+
+  const withdraw = createMutation(() => ({
+    mutationFn: async () => {
+      const m = meta();
+      await reposApi.withdrawAccessRequest(
+        m.org,
+        m.repo,
+        requestId() ?? "current",
+        auth.csrf(),
+      );
+    },
+    onSuccess: () => {
+      setRequestId(null);
+      showToast({ message: "Request withdrawn", tone: "info" });
+    },
+  }));
+
+  const adminNames = () =>
+    meta()
+      .admins.map((a) => a.name)
+      .join(" and ");
+
+  // Anonymous visitors never learn whether a private repository exists (DESIGN.md §8).
+  return (
+    <Show
+      when={!isAnon()}
+      fallback={
+        <DocumentPage>
+          <Card>
+            <EmptyState
+              art="not-found"
+              size="page"
+              title="Repository not found"
+              body={
+                meta().org && meta().repo ? (
                   <>
-                    <ButtonLink
-                      href={
-                        auth.status() === "authenticated" ? "/" : "/explore"
-                      }
-                      variant="primary"
+                    There's no public repository at{" "}
+                    <code>
+                      {meta().org}/{meta().repo}
+                    </code>
+                    . If it's private, sign in with an account that has access.
+                  </>
+                ) : (
+                  "If it's private, sign in with an account that has access."
+                )
+              }
+              actions={
+                <>
+                  <ButtonLink
+                    variant="primary"
+                    href={`/login?next=${encodeURIComponent(location.pathname + location.search)}`}
+                  >
+                    Sign in
+                  </ButtonLink>
+                  <ButtonLink href="/explore">
+                    Explore public repositories
+                  </ButtonLink>
+                </>
+              }
+            />
+          </Card>
+        </DocumentPage>
+      }
+    >
+      <DocumentPage style={{ "max-width": "760px" }}>
+        <Card>
+          <EmptyState
+            art="permission-denied"
+            size="page"
+            title={
+              meta().org
+                ? `You don't have access to ${meta().org}/${meta().repo}`
+                : "You don't have access to this repository"
+            }
+            body={
+              meta().org
+                ? `It's a private repository in ${meta().org}. You're signed in as ${auth.user()?.display_name ?? "yourself"}, who isn't a member.`
+                : "Ask an organization admin to give you access."
+            }
+            actions={
+              <Show
+                when={requestId() === null}
+                fallback={
+                  <>
+                    <div style={{ "text-align": "left" }}>
+                      <Callout tone="ok" title="Request sent">
+                        {adminNames() || "The admins"} were notified just now.
+                        You'll get a notification when they respond.
+                      </Callout>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      loading={withdraw.isPending}
+                      onClick={() => withdraw.mutate()}
                     >
-                      {auth.status() === "authenticated"
-                        ? "Go home"
-                        : "Explore public repositories"}
-                    </ButtonLink>
-                    <Show when={auth.status() !== "authenticated"}>
-                      <ButtonLink
-                        href={`/login?next=${encodeURIComponent(location.pathname + location.search)}`}
-                      >
-                        Sign in
-                      </ButtonLink>
-                    </Show>
+                      Withdraw request
+                    </Button>
                   </>
                 }
-              />
-            </Match>
-            <Match when={e()?.status === 403}>
-              <EmptyState
-                art="permission-denied"
-                size="page"
-                title="You don't have access to this repository"
-                body="Ask an organization admin to give you access."
-                actions={
-                  <ButtonLink href="/" variant="primary">
-                    Go home
-                  </ButtonLink>
-                }
-              />
-            </Match>
-          </Switch>
+              >
+                <Button variant="primary" onClick={() => setDialogOpen(true)}>
+                  Request access
+                </Button>
+                <ButtonLink href="/explore">Back to Explore</ButtonLink>
+              </Show>
+            }
+          />
+          <Show when={meta().admins.length > 0}>
+            <div
+              style={{
+                "border-top": "1px solid var(--border)",
+                padding: "14px 18px",
+              }}
+            >
+              <div
+                class="muted"
+                style={{ "font-size": "12.5px", "margin-bottom": "8px" }}
+              >
+                Admins of {meta().org}
+              </div>
+              <For each={meta().admins}>
+                {(admin) => (
+                  <div
+                    style={{
+                      display: "flex",
+                      "align-items": "center",
+                      gap: "8px",
+                      padding: "4px 0",
+                    }}
+                  >
+                    <Avatar name={admin.name} size={26} decorative />
+                    <span>{admin.name}</span>
+                    <span class="muted" style={{ "font-size": "12px" }}>
+                      {admin.email}
+                    </span>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
         </Card>
-      </Pane>
-    </WsBody>
+        <p
+          class="muted"
+          style={{
+            "font-size": "12.5px",
+            "text-align": "center",
+            "margin-top": "12px",
+          }}
+        >
+          Wrong account?{" "}
+          <a class="link" href="/login">
+            Switch accounts
+          </a>
+        </p>
+
+        <Dialog
+          open={dialogOpen()}
+          onOpenChange={setDialogOpen}
+          title={`Request access to ${meta().org}/${meta().repo}`}
+          description={`Admins of ${meta().org || "this organization"} are notified and can approve in one click.`}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                loading={requestAccess.isPending}
+                onClick={() => requestAccess.mutate()}
+              >
+                Send request
+              </Button>
+            </>
+          }
+        >
+          <RadioGroup
+            label="Access you need"
+            name="request-access-role"
+            value={role()}
+            onChange={(v) => setRole(v as "read" | "write")}
+            options={[
+              {
+                value: "read",
+                label: "Read",
+                description: "Browse and clone",
+              },
+              {
+                value: "write",
+                label: "Write",
+                description: "Also push changesets",
+              },
+            ]}
+          />
+          <Field label="Why do you need it?" optional>
+            <Textarea
+              rows={3}
+              value={reason()}
+              onInput={(e) => setReason(e.currentTarget.value)}
+              placeholder="I'm on the payments migration and need to read the ledger code."
+            />
+          </Field>
+        </Dialog>
+      </DocumentPage>
+    </Show>
   );
 }

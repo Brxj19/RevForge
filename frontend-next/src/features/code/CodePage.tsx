@@ -8,7 +8,9 @@ import {
   RevisionRail,
   useRepo,
 } from "~/features/repo";
+import { ButtonLink } from "~/ui/Button";
 import { Card } from "~/ui/Card";
+import { EmptyState } from "~/ui/EmptyState";
 import { SkeletonText } from "~/ui/Skeleton";
 import { Pane, Panes, WsBody } from "~/ui/WorkspaceLayout";
 import { Explorer } from "./Explorer";
@@ -47,13 +49,19 @@ export default function CodePage() {
   );
   const parentDir = () => path().split("/").slice(0, -1).join("/");
   const browse = createBrowseQuery(repo.org, repo.repo, repo.rev, path);
-  const file = () => (browse.data?.kind === "file" ? browse.data : undefined);
-  const dir = () =>
-    browse.data?.kind === "directory" ? browse.data : undefined;
+  const browseData = () => loaded(browse);
+  const file = () => {
+    const d = browseData();
+    return d?.kind === "file" ? d : undefined;
+  };
+  const dir = () => {
+    const d = browseData();
+    return d?.kind === "directory" ? d : undefined;
+  };
   const isFile = () => !!file();
   // The parent listing carries this file's last changeset (shared with the explorer's cache).
   const parent = createBrowseQuery(repo.org, repo.repo, repo.rev, parentDir);
-  const node = () => browse.data?.revision || undefined;
+  const node = () => browseData()?.revision || undefined;
   const changeset = createChangesetQuery(repo.org, repo.repo, node);
   const changes = createMemo<Record<string, string>>(() =>
     Object.fromEntries(
@@ -63,14 +71,16 @@ export default function CodePage() {
       ]),
     ),
   );
-  const entryOf = () =>
-    parent.data?.kind === "directory"
-      ? parent.data.entries.find((e) => e.path === path())
+  const entryOf = () => {
+    const p = loaded(parent);
+    return p?.kind === "directory"
+      ? p.entries.find((e) => e.path === path())
       : undefined;
-  const emptyRepo = () =>
-    browse.data?.kind === "directory" &&
-    !browse.data.revision &&
-    browse.data.entries.length === 0;
+  };
+  const emptyRepo = () => {
+    const d = browseData();
+    return d?.kind === "directory" && !d.revision && d.entries.length === 0;
+  };
   const transport = createTransportQuery(repo.org, repo.repo, emptyRepo);
 
   return (
@@ -103,7 +113,7 @@ export default function CodePage() {
             </Match>
             <Match when={emptyRepo()}>
               <Card>
-                <EmptyRepo pushUrl={transport.data?.https.clone_url} />
+                <EmptyRepo pushUrl={loaded(transport)?.https.clone_url} />
               </Card>
             </Match>
             <Match when={file()}>
@@ -116,19 +126,33 @@ export default function CodePage() {
               )}
             </Match>
             <Match when={dir()}>
-              {(d) => (
-                <Card class={styles.filesCard}>
-                  <FileTable
-                    entries={d().entries}
-                    caption={path() ? `Files in ${path()}` : "Files"}
-                    hrefFor={(p) => repo.codeHref(p)}
-                    changesetHref={(n) =>
-                      repo.href(`changesets/${encodeURIComponent(n)}`)
-                    }
-                    parent={path() ? parentDir() : undefined}
-                  />
-                </Card>
-              )}
+              {(d) =>
+                d().entries.length === 0 && path() ? (
+                  <Card>
+                    <EmptyState
+                      art="empty-folder"
+                      size="card"
+                      actions={
+                        <ButtonLink href={repo.codeHref(parentDir())}>
+                          Go up a level
+                        </ButtonLink>
+                      }
+                    />
+                  </Card>
+                ) : (
+                  <Card class={styles.filesCard}>
+                    <FileTable
+                      entries={d().entries}
+                      caption={path() ? `Files in ${path()}` : "Files"}
+                      hrefFor={(p) => repo.codeHref(p)}
+                      changesetHref={(n) =>
+                        repo.href(`changesets/${encodeURIComponent(n)}`)
+                      }
+                      parent={path() ? parentDir() : undefined}
+                    />
+                  </Card>
+                )
+              }
             </Match>
           </Switch>
         </Pane>

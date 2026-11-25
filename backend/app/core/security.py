@@ -6,9 +6,10 @@ import hmac
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -66,7 +67,19 @@ def hash_password(password: str) -> str:
 def verify_password(password_hash: str, password: str) -> bool:
     try:
         return password_hasher.verify(password_hash, password)
-    except VerifyMismatchError:
+    except (VerifyMismatchError, InvalidHashError, VerificationError):
+        return False
+
+
+@lru_cache(maxsize=1)
+def get_dummy_password_hash() -> str:
+    return password_hasher.hash("revforge-dummy-password-for-timing-parity")
+
+
+def check_password_needs_rehash(password_hash: str) -> bool:
+    try:
+        return password_hasher.check_needs_rehash(password_hash)
+    except (InvalidHashError, VerificationError):
         return False
 
 
@@ -78,8 +91,16 @@ def create_csrf_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def create_one_time_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
 def digest_token(secret_key: str, token: str) -> str:
     return hmac.new(secret_key.encode("utf-8"), token.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def digest_scoped_token(secret: str, purpose: str, token: str) -> str:
+    return digest_token(secret, f"{purpose}:{token}")
 
 
 SUPPORTED_SSH_KEY_TYPES = {

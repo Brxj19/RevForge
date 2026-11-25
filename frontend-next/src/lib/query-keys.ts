@@ -84,4 +84,29 @@ export const qk = {
     ["repo", o, r, "webhooks", id] as const,
   webhookDeliveries: (o: string, r: string, id: string) =>
     ["repo", o, r, "webhooks", id, "deliveries"] as const,
+  // Phase 5: Discovery, access, people, notifications
+  notifications: ["me", "notifications"] as const,
+  attention: ["me", "attention"] as const,
+  searchRepos: (q: string, filters: Record<string, string>) =>
+    ["search", "repos", q, filters] as const,
+  searchOrgs: (q: string) => ["search", "orgs", q] as const,
+  userProfile: (handle: string) => ["user", handle] as const,
+  userContributions: (handle: string) =>
+    ["user", handle, "contributions"] as const,
+  userSearch: (q: string, scope?: string) =>
+    ["user-search", q, scope ?? ""] as const,
+  accessRequests: (o: string) => ["access-requests", o] as const,
+  activity: (filters: Record<string, string>) => ["activity", filters] as const,
+  // Phase 6: Forge admin & break-glass
+  adminOverview: ["admin", "overview"] as const,
+  adminHealth: ["admin", "health"] as const,
+  adminUsers: (params: Record<string, string | number | undefined>) =>
+    ["admin", "users", params] as const,
+  adminOrgs: (params: Record<string, string | number | undefined>) =>
+    ["admin", "organizations", params] as const,
+  adminRepos: (params: Record<string, string | number | undefined>) =>
+    ["admin", "repositories", params] as const,
+  adminAudit: (params: Record<string, string | number | undefined>) =>
+    ["admin", "audit", params] as const,
+  adminBreakGlass: ["admin", "break-glass"] as const,
 };

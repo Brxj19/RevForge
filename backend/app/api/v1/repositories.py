@@ -69,6 +69,7 @@ from app.models.repository_permission import RepositoryPermission
 from app.models.user import User
 from app.repositories.organizations import get_membership
 from app.repositories.repositories import get_permission, get_repository_by_slug
+from app.schemas.access_requests import AccessRequestCreate
 from app.schemas.organizations import SlugCheckResponse
 from app.schemas.repositories import (
     ChangesetChangedFileResponse,
@@ -1666,3 +1667,107 @@ async def delete_permission(
     except ForbiddenError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Access requests
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{repository_slug}/access-requests",
+    response_model=dict[str, str],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_access_request_route(
+    organization_slug: str,
+    repository_slug: str,
+    payload: AccessRequestCreate,
+    _rate_limit: None = Depends(rate_limited("access_request")),
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> dict[str, str]:
+    """Create an access request. Only authenticated org members without access."""
+    from app.repositories.organizations import get_membership
+    from app.repositories.repositories import get_permission, get_repository_by_slug
+    from app.services.access_request_service import create_access_request
+    from app.services.authorization import repository_access_for_actor
+
+    try:
+        organization = await get_organization_by_slug_for_repo_routes(
+            session, organization_slug=organization_slug
+        )
+        membership = await get_membership(
+            session, organization_id=organization.id, user_id=identity.user.id
+        )
+        if membership is None:
+            raise NotFoundError("Repository not found.")
+
+        repository = await get_repository_by_slug(
+            session, organization_id=organization.id, slug=repository_slug
+        )
+        if repository is None:
+            raise NotFoundError("Repository not found.")
+
+        permission = await get_permission(
+            session, repository_id=repository.id, user_id=identity.user.id
+        )
+
+        access = repository_access_for_actor(identity.user, membership, repository, permission)
+        if access.can_read:
+            raise ForbiddenError("You already have access to this repository.")
+
+        ar = await create_access_request(
+            session,
+            user=identity.user,
+            repository=repository,
+            role=payload.role,
+            message=payload.message,
+            request_id=request_id,
+        )
+        await session.commit()
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ForbiddenError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ConflictError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    return {"id": str(ar.id), "status": ar.status}
+
+
+@router.delete(
+    "/{repository_slug}/access-requests/{access_request_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
+async def withdraw_access_request_route(
+    organization_slug: str,
+    repository_slug: str,
+    access_request_id: UUID,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> None:
+    """Withdraw own pending access request."""
+    from app.services.access_request_service import withdraw_request
+
+    try:
+        organization = await get_organization_by_slug_for_repo_routes(
+            session, organization_slug=organization_slug
+        )
+        await withdraw_request(
+            session,
+            request_id_val=access_request_id,
+            user=identity.user,
+            organization_id=organization.id,
+            request_id=request_id,
+        )
+        await session.commit()
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

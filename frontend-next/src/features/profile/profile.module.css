@@ -1,0 +1,77 @@
+/* Public profile page (prototype pageProfile, DESIGN.md §2.2 & §8). */
+.sidebar {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.stack {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.handle {
+  color: var(--muted);
+  font-size: 14px;
+}
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.sectionLabel {
+  font-size: 12px;
+  color: var(--subtle);
+  margin: 4px 0 8px;
+}
+.orgRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.orgDot {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-xs);
+  display: grid;
+  place-items: center;
+  font: 12px var(--display);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.orgDot:hover {
+  border: 1px solid var(--accent-line);
+}
+/* Repository result row (prototype .res). */
+.res {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 14px;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+}
+.res:last-child {
+  border-bottom: 0;
+}
+.res:hover {
+  background: var(--raised);
+}
+.resBody {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.resTitle {
+  font: 15px var(--display);
+}
+.resDesc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-2);
+}

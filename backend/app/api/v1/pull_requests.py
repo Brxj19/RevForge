@@ -166,6 +166,7 @@ async def _get_repo_for_read(
     repository_slug: str,
     identity: SessionIdentity | None,
     allow_archived: bool = False,
+    allow_break_glass: bool = True,
 ) -> Repository:
     organization = await get_organization_by_slug_for_repo_routes(
         session, organization_slug=organization_slug
@@ -176,6 +177,7 @@ async def _get_repo_for_read(
         repository_slug=repository_slug,
         actor=identity.user if identity else None,
         allow_archived=allow_archived,
+        allow_break_glass=allow_break_glass,
     )
     return repository
 
@@ -999,6 +1001,7 @@ async def set_viewed_file_route(
             organization_slug=organization_slug,
             repository_slug=repository_slug,
             identity=identity,
+            allow_break_glass=False,
         )
         await set_viewed_file(
             session,

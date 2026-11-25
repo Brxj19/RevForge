@@ -12,6 +12,7 @@ from app.api.deps import (
     get_session,
     require_csrf,
 )
+from app.core.config import Settings, get_settings
 from app.models.user_session import UserSession
 from app.schemas.sessions import UserSessionResponse
 from app.services.authentication import list_user_sessions, revoke_user_session
@@ -38,8 +39,9 @@ def _serialize_session(
 async def list_sessions(
     identity: SessionIdentity = Depends(get_current_identity),
     session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
 ) -> list[UserSessionResponse]:
-    sessions = await list_user_sessions(session, user=identity.user)
+    sessions = await list_user_sessions(session, user=identity.user, settings=settings)
     return [
         _serialize_session(user_session, current_session_id=identity.session.id)
         for user_session in sessions

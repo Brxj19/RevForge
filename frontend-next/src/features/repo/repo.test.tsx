@@ -146,7 +146,7 @@ describe("repository overview", () => {
     renderApp("/sigma/sigma-reckitt");
     expect(
       await screen.findByRole("heading", {
-        name: "You don't have access to this repository",
+        name: /don't have access/,
       }),
     ).toBeInTheDocument();
   });

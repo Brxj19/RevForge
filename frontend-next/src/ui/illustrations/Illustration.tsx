@@ -1,22 +1,54 @@
 import { splitProps, type JSX } from "solid-js";
-import { artOf, GLY, IL, type Glyph, type IllustrationId } from "./art";
+import {
+  artOf,
+  drawArt,
+  GLY,
+  IL,
+  type Glyph,
+  type IllustrationId,
+} from "./art";
 import "./illustration.css";
+
+/** Canonical illustration widths in px (DESIGN.md §4). Height follows the 200×140 canvas (0.7 ratio). */
+export const ILLUSTRATION_SIZES = {
+  inline: 96,
+  card: 140,
+  page: 200,
+} as const;
+
+export type IllustrationSize = keyof typeof ILLUSTRATION_SIZES;
+
+export function resolveIllustrationSize(
+  size?: IllustrationSize | number,
+): number {
+  if (typeof size === "number") return size;
+  return ILLUSTRATION_SIZES[size ?? "card"];
+}
 
 export interface IllustrationProps extends Omit<
   JSX.SvgSVGAttributes<SVGSVGElement>,
   "width" | "height"
 > {
   id: IllustrationId;
-  /** Width in px; height follows the 200×140 canvas. Inline 96 · card 140 · page 200 (DESIGN.md §4). */
-  size?: number;
-  /** Accessible label; defaults to the illustration's title. Pass "" when the title is visible nearby. */
+  /** Semantic size token ("inline" 96px · "card" 140px · "page" 200px) or explicit width in px. Defaults to "card". */
+  size?: IllustrationSize | number;
+  /** Accessible label; defaults to the illustration's title. Pass "" or `decorative` when the title is visible nearby. */
   label?: string;
+  /** Marks the SVG as purely decorative (`aria-hidden="true"`), ignoring any title fallback. */
+  decorative?: boolean;
 }
 
 export function Illustration(props: IllustrationProps) {
-  const [local, rest] = splitProps(props, ["id", "size", "label", "class"]);
-  const width = () => local.size ?? 160;
-  const label = () => local.label ?? artOf(local.id).title;
+  const [local, rest] = splitProps(props, [
+    "id",
+    "size",
+    "label",
+    "decorative",
+    "class",
+  ]);
+  const width = () => resolveIllustrationSize(local.size);
+  const label = () =>
+    local.decorative ? "" : (local.label ?? artOf(local.id).title);
   return (
     <svg
       class={local.class ? `il ${local.class}` : "il"}
@@ -28,7 +60,7 @@ export function Illustration(props: IllustrationProps) {
       aria-hidden={label() ? undefined : "true"}
       data-illustration={local.id}
       {...rest}
-      innerHTML={artOf(local.id).draw()}
+      innerHTML={drawArt(local.id)}
     />
   );
 }

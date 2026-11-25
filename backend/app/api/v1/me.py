@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,8 +12,11 @@ from app.api.deps import (
     get_request_id,
     get_session,
     require_csrf,
+    require_platform_admin,
 )
 from app.domain.enums import ReviewDecision
+from app.models.user import User
+from app.schemas.admin import BreakGlassSessionResponse
 from app.schemas.contributions import (
     ContributionActivityResponse,
     ContributionDayResponse,
@@ -24,13 +28,25 @@ from app.schemas.me import (
     UserProfileResponse,
     UserUpdateRequest,
 )
+from app.schemas.notifications import (
+    MarkReadRequest,
+    MarkReadResponse,
+    NotificationListResponse,
+    NotificationResponse,
+)
 from app.schemas.pull_requests import (
     MyPullRequestsResponse,
     PullRequestSummaryResponse,
     RepositoryContextResponse,
 )
+from app.services.admin_service import get_active_break_glass_for_actor
 from app.services.contribution_activity import list_user_contribution_activity
-from app.services.errors import ConflictError, NotFoundError, ValidationFailure
+from app.services.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailure
+from app.services.notification_service import (
+    get_unread_count,
+    list_notifications,
+    mark_notifications_read,
+)
 from app.services.pull_request_service import MyPullRequestFilter, list_my_pull_requests
 from app.services.repository_service import get_repository_access_for_actor
 from app.services.user_settings import (
@@ -42,7 +58,28 @@ from app.services.user_settings import (
     update_user_profile,
 )
 
+
+@dataclass(slots=True)
+class AttentionItem:
+    type: str
+    title: str
+    description: str
+    href: str
+    severity: str
+
+
 router = APIRouter(prefix="/me", tags=["me"])
+
+
+@router.get("/break-glass", response_model=BreakGlassSessionResponse | None)
+async def get_my_break_glass(
+    identity: SessionIdentity = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_session),
+) -> BreakGlassSessionResponse | None:
+    try:
+        return await get_active_break_glass_for_actor(session, actor=identity.user)
+    except ForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get("/contributions", response_model=ContributionActivityResponse)
@@ -86,6 +123,7 @@ async def list_my_pull_requests_route(
                 repository_slug=repo.slug,
                 actor=identity.user,
                 allow_archived=True,
+                allow_break_glass=False,
             )
         except NotFoundError:
             # A review request or prior authorship never grants repository access.
@@ -202,3 +240,170 @@ async def put_notification_settings(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+
+@router.get("/notifications", response_model=NotificationListResponse)
+async def list_notifications_route(
+    unread: bool = Query(default=False),
+    cursor: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=30, ge=1, le=100),
+    identity: SessionIdentity = Depends(get_current_identity),
+    session: AsyncSession = Depends(get_session),
+) -> NotificationListResponse:
+    notifications = await list_notifications(
+        session, user_id=identity.user.id, unread_only=unread, cursor=cursor, limit=limit
+    )
+    unread_count = await get_unread_count(session, user_id=identity.user.id)
+    return NotificationListResponse(
+        items=[
+            NotificationResponse(
+                id=n.id,
+                type=n.type,
+                title=n.title,
+                body=n.body,
+                icon=n.icon,
+                href=n.href,
+                is_read=n.is_read,
+                created_at=n.created_at,
+            )
+            for n in notifications
+        ],
+        unread_count=unread_count,
+    )
+
+
+@router.post("/notifications/read", response_model=MarkReadResponse)
+async def mark_notifications_read_route(
+    payload: MarkReadRequest,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+) -> MarkReadResponse:
+    marked = await mark_notifications_read(session, user_id=identity.user.id, ids=payload.ids)
+    await session.commit()
+    return MarkReadResponse(marked=marked)
+
+
+# ---------------------------------------------------------------------------
+# Attention
+# ---------------------------------------------------------------------------
+
+
+@router.get("/attention")
+async def get_attention(
+    identity: SessionIdentity = Depends(get_current_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, list[AttentionItem]]:
+    items = await _build_attention_items(session, user=identity.user)
+    return {"items": items}
+
+
+async def _build_attention_items(session: AsyncSession, *, user: User) -> list[AttentionItem]:
+    """Gather attention items: failing webhooks, stuck provisioning, pending reviews."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.core.security import utc_now
+    from app.domain.enums import RepositoryProvisioningState
+    from app.models.organization import Organization
+    from app.models.organization_member import OrganizationMember
+    from app.models.pull_request import PullRequest, PullRequestReviewer
+    from app.models.repository import Repository
+    from app.models.webhook import Webhook, WebhookDelivery
+
+    items: list[AttentionItem] = []
+
+    # Get orgs where user is admin/owner.
+    admin_orgs = await session.execute(
+        select(OrganizationMember.organization_id).where(
+            OrganizationMember.user_id == user.id,
+            OrganizationMember.role.in_(["owner", "admin"]),
+        )
+    )
+    admin_org_ids = set(admin_orgs.scalars())
+
+    if admin_org_ids:
+        # Failing webhooks: repos in user's admin orgs with recent delivery failures.
+        failing_webhooks = await session.execute(
+            select(Webhook, Repository, Organization)
+            .join(Repository, Webhook.repository_id == Repository.id)
+            .join(Organization, Repository.organization_id == Organization.id)
+            .where(
+                Repository.organization_id.in_(admin_org_ids),
+                Webhook.is_active == True,  # noqa: E712
+            )
+        )
+        for webhook, repo, org in failing_webhooks.all():
+            # Check last 3 deliveries for this webhook.
+            recent_deliveries = await session.execute(
+                select(WebhookDelivery)
+                .where(WebhookDelivery.webhook_id == webhook.id)
+                .order_by(WebhookDelivery.created_at.desc())
+                .limit(3)
+            )
+            deliveries = list(recent_deliveries.scalars())
+            if len(deliveries) >= 3 and all(d.status == "failed" for d in deliveries):
+                items.append(
+                    AttentionItem(
+                        type="webhook_failing",
+                        title=f"Webhook failing: {webhook.url}",
+                        description=f"Last 3 deliveries failed for {org.slug}/{repo.slug}",
+                        href=f"/{org.slug}/{repo.slug}/settings/webhooks",
+                        severity="warning",
+                    )
+                )
+
+        # Stuck provisioning: repos stuck in PROVISIONING for >10 min.
+        from datetime import timedelta
+
+        stale_cutoff = utc_now() - timedelta(minutes=10)
+        stuck_repos = await session.execute(
+            select(Repository, Organization)
+            .join(Organization, Repository.organization_id == Organization.id)
+            .where(
+                Repository.organization_id.in_(admin_org_ids),
+                Repository.provisioning_state == RepositoryProvisioningState.PROVISIONING,
+                Repository.provisioning_started_at < stale_cutoff,
+            )
+        )
+        for repo, org in stuck_repos.all():
+            items.append(
+                AttentionItem(
+                    type="stuck_provisioning",
+                    title=f"Repository provisioning stuck: {repo.slug}",
+                    description=(
+                        f"{org.slug}/{repo.slug} has been provisioning for over 10 minutes"
+                    ),
+                    href=f"/{org.slug}/{repo.slug}",
+                    severity="warning",
+                )
+            )
+
+    # Pending review requests on user's PRs.
+    pending_reviews = await session.execute(
+        select(PullRequestReviewer)
+        .join(PullRequest, PullRequestReviewer.pull_request_id == PullRequest.id)
+        .options(selectinload(PullRequestReviewer.pull_request))
+        .where(
+            PullRequestReviewer.reviewer_id == user.id,
+            PullRequest.state == "open",
+        )
+        .limit(10)
+    )
+    for reviewer in pending_reviews.scalars():
+        pr = reviewer.pull_request
+        items.append(
+            AttentionItem(
+                type="review_requested",
+                title=f"Review requested: {pr.title}",
+                description=f"PR #{pr.number}",
+                href=f"/pr/{pr.id}",
+                severity="info",
+            )
+        )
+
+    return items

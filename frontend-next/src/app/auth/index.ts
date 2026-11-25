@@ -4,7 +4,12 @@ export {
   type AuthContextValue,
   type AuthProviderProps,
   type AuthStatus,
+  type SessionExpiredReason,
 } from "./AuthProvider";
 export { RequireAuth, RequirePlatformAdmin } from "./guards";
 export { SessionExpiredDialog } from "./SessionExpiredDialog";
-export { SignInForm } from "./SignInForm";
+export {
+  SignInForm,
+  formatCountdown,
+  type SignInFormProps,
+} from "./SignInForm";

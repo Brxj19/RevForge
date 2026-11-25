@@ -6,13 +6,12 @@ import {
   Switch as SSwitch,
   type Component,
 } from "solid-js";
-import { ApiError } from "~/lib/api/client";
 import { useRepo } from "~/features/repo";
 import { Button } from "~/ui/Button";
 import { Card, CardHeader } from "~/ui/Card";
 import { Checkbox } from "~/ui/Checkbox";
 import { Dialog } from "~/ui/Dialog";
-import { EmptyState } from "~/ui/EmptyState";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { Field, Input } from "~/ui/Field";
 import { Icon } from "~/ui/icons";
 import { Pill } from "~/ui/Pill";
@@ -76,17 +75,14 @@ const WebhooksListPage: Component = () => {
           </Card>
         </Match>
         <Match when={webhooksQuery.isError}>
-          <EmptyState
-            art="load-error"
-            title="Something went wrong"
-            body="Couldn't load webhooks."
-            size="card"
-            requestId={
-              webhooksQuery.error instanceof ApiError
-                ? webhooksQuery.error.requestId
-                : undefined
-            }
-          />
+          <Card>
+            <ErrorState
+              error={webhooksQuery.error}
+              what="webhooks"
+              size="card"
+              onRetry={() => void webhooksQuery.refetch()}
+            />
+          </Card>
         </Match>
         <Match when={webhooksQuery.data}>
           {(webhooks) => (

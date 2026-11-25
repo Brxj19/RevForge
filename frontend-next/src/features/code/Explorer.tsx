@@ -9,8 +9,9 @@ import {
 } from "solid-js";
 import { useRepo } from "~/features/repo";
 import type { RepositoryTreeEntry } from "~/lib/api";
+import { loaded } from "~/lib/query";
 import { Button } from "~/ui/Button";
-import { EmptyState } from "~/ui/EmptyState";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { InputGroup } from "~/ui/Field";
 import { FileTree, type TreeItem } from "~/ui/FileTree";
 import { IconButton } from "~/ui/IconButton";
@@ -84,9 +85,10 @@ export function Explorer(props: {
   const listings = createMemo(() => {
     const map = new Map<string, TreeItem[]>();
     dirs().forEach((dir, i) => {
-      const data = dirQueries[i]?.data;
+      const q = dirQueries[i];
+      const data = q ? loaded(q) : undefined;
       if (data?.kind === "directory") map.set(dir, data.entries.map(toItem));
-      else if (dirQueries[i]?.isError) map.set(dir, []);
+      else if (q?.isError) map.set(dir, []);
     });
     return map;
   });
@@ -95,7 +97,7 @@ export function Explorer(props: {
   /** Filter results as a tree: every ancestor folder of a match, all expanded. */
   const filtered = createMemo(() => {
     const map = new Map<string, TreeItem[]>();
-    const results = search.data?.results ?? [];
+    const results = loaded(search)?.results ?? [];
     const add = (dir: string, item: TreeItem) => {
       const list = map.get(dir) ?? [];
       if (!list.some((x) => x.path === item.path)) list.push(item);
@@ -191,15 +193,20 @@ export function Explorer(props: {
         />
       </div>
       <Show
-        when={!(filtering() && search.isError)}
+        when={
+          !(filtering() && search.isError) &&
+          !(!filtering() && dirQueries[0]?.isError)
+        }
         fallback={
-          <EmptyState
-            art="load-error"
+          <ErrorState
+            error={filtering() ? search.error : dirQueries[0]?.error}
+            what="files"
             size="inline"
             compact
             level={3}
-            title="Couldn't filter files"
-            body="Try again in a moment."
+            onRetry={() =>
+              void (filtering() ? search.refetch() : dirQueries[0]?.refetch())
+            }
           />
         }
       >

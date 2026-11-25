@@ -19,6 +19,7 @@ class AuditEventResponse(BaseModel):
     organization_id: UUID | None
     repository_id: UUID | None
     event_type: str
+    severity: str = "normal"
     request_id: str | None
     summary: str
     details: list[AuditEventDetailResponse]

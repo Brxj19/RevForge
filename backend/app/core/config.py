@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -132,6 +133,37 @@ class Settings(BaseSettings):
     )
     session_cookie_domain: str | None = Field(default=None, alias="REVFORGE_SESSION_COOKIE_DOMAIN")
     session_ttl_minutes: int = Field(default=1440, alias="REVFORGE_SESSION_TTL_MINUTES")
+    session_idle_minutes: int = Field(default=30, alias="REVFORGE_SESSION_IDLE_MINUTES")
+    session_touch_interval_seconds: int = Field(
+        default=60, alias="REVFORGE_SESSION_TOUCH_INTERVAL_SECONDS"
+    )
+    session_remember_ttl_days: int = Field(default=30, alias="REVFORGE_SESSION_REMEMBER_TTL_DAYS")
+    email_verify_token_ttl_minutes: int = Field(
+        default=60, alias="REVFORGE_EMAIL_VERIFY_TOKEN_TTL_MINUTES"
+    )
+    password_reset_token_ttl_minutes: int = Field(
+        default=30, alias="REVFORGE_PASSWORD_RESET_TOKEN_TTL_MINUTES"
+    )
+    trusted_proxy_cidrs: str = Field(default="", alias="REVFORGE_TRUSTED_PROXY_CIDRS")
+    auth_login_ip_max_failures: int = Field(default=20, alias="REVFORGE_AUTH_LOGIN_IP_MAX_FAILURES")
+    auth_login_ip_window_seconds: int = Field(
+        default=900, alias="REVFORGE_AUTH_LOGIN_IP_WINDOW_SECONDS"
+    )
+    auth_register_ip_max_requests: int = Field(
+        default=5, alias="REVFORGE_AUTH_REGISTER_IP_MAX_REQUESTS"
+    )
+    auth_register_ip_window_seconds: int = Field(
+        default=900, alias="REVFORGE_AUTH_REGISTER_IP_WINDOW_SECONDS"
+    )
+    auth_check_handle_ip_max_requests: int = Field(
+        default=30, alias="REVFORGE_AUTH_CHECK_HANDLE_IP_MAX_REQUESTS"
+    )
+    auth_check_handle_ip_window_seconds: int = Field(
+        default=60, alias="REVFORGE_AUTH_CHECK_HANDLE_IP_WINDOW_SECONDS"
+    )
+    auth_rate_limit_backend: Literal["auto", "redis", "memory"] = Field(
+        default="auto", alias="REVFORGE_AUTH_RATE_LIMIT_BACKEND"
+    )
     password_min_length: int = Field(default=12, alias="REVFORGE_PASSWORD_MIN_LENGTH")
 
     model_config = SettingsConfigDict(
@@ -228,12 +260,58 @@ class Settings(BaseSettings):
         "provisioning_stale_after_seconds",
         "transport_rate_limit_window_seconds",
         "transport_rate_limit_max_attempts",
+        "session_ttl_minutes",
+        "session_idle_minutes",
+        "session_touch_interval_seconds",
+        "email_verify_token_ttl_minutes",
+        "password_reset_token_ttl_minutes",
+        "auth_login_ip_max_failures",
+        "auth_login_ip_window_seconds",
+        "auth_register_ip_max_requests",
+        "auth_register_ip_window_seconds",
+        "auth_check_handle_ip_max_requests",
+        "auth_check_handle_ip_window_seconds",
     )
     @classmethod
     def validate_positive_limits(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError("Mercurial limits must be positive integers.")
+            raise ValueError("Configured limits must be positive integers.")
         return value
+
+    @field_validator("session_remember_ttl_days")
+    @classmethod
+    def validate_remember_ttl_days(cls, value: int) -> int:
+        if value < 1 or value > 90:
+            raise ValueError("session_remember_ttl_days must be between 1 and 90.")
+        return value
+
+    @field_validator("trusted_proxy_cidrs")
+    @classmethod
+    def validate_trusted_proxy_cidrs(cls, value: str) -> str:
+        for entry in value.split(","):
+            cleaned = entry.strip()
+            if not cleaned:
+                continue
+            ipaddress.ip_network(cleaned, strict=False)
+        return value
+
+    @model_validator(mode="after")
+    def validate_session_idle_within_ttl(self) -> Settings:
+        if self.session_idle_minutes > self.session_ttl_minutes:
+            raise ValueError("session_idle_minutes must not exceed session_ttl_minutes.")
+        return self
+
+    @property
+    def parsed_trusted_proxy_networks(
+        self,
+    ) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+        networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        for entry in self.trusted_proxy_cidrs.split(","):
+            cleaned = entry.strip()
+            if not cleaned:
+                continue
+            networks.append(ipaddress.ip_network(cleaned, strict=False))
+        return tuple(networks)
 
     @field_validator(
         "code_search_timeout_seconds", "history_scan_timeout_seconds", "diff_timeout_seconds"

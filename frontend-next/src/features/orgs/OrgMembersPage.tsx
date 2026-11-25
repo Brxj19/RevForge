@@ -8,12 +8,13 @@ import {
   type Component,
 } from "solid-js";
 import { relativeTime } from "~/lib/format";
+import { loaded } from "~/lib/query";
 import type { Invitation, OrganizationMember } from "~/lib/api/types";
 import { Avatar } from "~/ui/Avatar";
 import { Button } from "~/ui/Button";
 import { Card, CardBody, CardHeader } from "~/ui/Card";
 import { Dialog } from "~/ui/Dialog";
-import { EmptyState } from "~/ui/EmptyState";
+import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { Field, Input } from "~/ui/Field";
 import { Icon } from "~/ui/icons";
 import { Pager } from "~/ui/Pager";
@@ -58,7 +59,7 @@ const OrgMembersPage: Component = () => {
   const revokeInvitation = useRevokeInvitation(() => params.org);
 
   const ownerCount = () =>
-    membersQuery.data?.items.filter((m) => m.role === "owner").length ?? 0;
+    loaded(membersQuery)?.items.filter((m) => m.role === "owner").length ?? 0;
 
   const isLastOwner = (member: OrganizationMember) =>
     member.role === "owner" && ownerCount() <= 1;
@@ -94,8 +95,8 @@ const OrgMembersPage: Component = () => {
     revokeInvitation.mutate(invitation.id);
   };
 
-  const perPage = () => membersQuery.data?.per_page ?? 20;
-  const total = () => membersQuery.data?.total ?? 0;
+  const perPage = () => loaded(membersQuery)?.per_page ?? 20;
+  const total = () => loaded(membersQuery)?.total ?? 0;
 
   return (
     <div class={styles.overviewStack}>
@@ -104,7 +105,7 @@ const OrgMembersPage: Component = () => {
         <CardHeader>
           <h2 class="h2">
             <Switch>
-              <Match when={membersQuery.data}>
+              <Match when={loaded(membersQuery)}>
                 {(data) => <>{data().total} members</>}
               </Match>
               <Match when={true}>Members</Match>
@@ -127,10 +128,13 @@ const OrgMembersPage: Component = () => {
           </Match>
           <Match when={membersQuery.isError}>
             <CardBody>
-              <EmptyState
-                art="load-error"
-                title="Couldn't load members"
+              <ErrorState
+                error={membersQuery.error}
+                what="members"
                 size="inline"
+                compact
+                level={3}
+                onRetry={() => void membersQuery.refetch()}
               />
             </CardBody>
           </Match>
@@ -231,7 +235,7 @@ const OrgMembersPage: Component = () => {
       <Card>
         <CardHeader>
           <h2 class="h2">Pending invitations</h2>
-          <Show when={invitationsQuery.data}>
+          <Show when={loaded(invitationsQuery)}>
             {(data) => (
               <span class={styles.countBadge}>{data().items.length}</span>
             )}
@@ -243,12 +247,20 @@ const OrgMembersPage: Component = () => {
               <Skeleton width="100%" height={60} />
             </CardBody>
           </Match>
-          <Match when={invitationsQuery.data?.items.length === 0}>
+          <Match when={invitationsQuery.isError}>
             <CardBody>
-              <p style={{ color: "var(--muted)", "font-size": "13px" }}>
-                No pending invitations.
-              </p>
+              <ErrorState
+                error={invitationsQuery.error}
+                what="pending invitations"
+                size="inline"
+                compact
+                level={3}
+                onRetry={() => void invitationsQuery.refetch()}
+              />
             </CardBody>
+          </Match>
+          <Match when={invitationsQuery.data?.items.length === 0}>
+            <EmptyState art="no-invitations" size="inline" compact level={3} />
           </Match>
           <Match when={invitationsQuery.data}>
             {(data) => (

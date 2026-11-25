@@ -221,6 +221,7 @@ async def current_review_positions(
                 repository_slug=repository.slug,
                 actor=user,
                 allow_archived=True,
+                allow_break_glass=False,
             )
         except NotFoundError:
             continue
@@ -505,6 +506,7 @@ async def add_reviewer(
             organization=repository.organization,
             repository_slug=repository.slug,
             actor=user,
+            allow_break_glass=False,
         )
     except NotFoundError as exc:
         raise NotFoundError("Eligible reviewer not found.") from exc
@@ -560,6 +562,7 @@ async def remove_reviewer(
             organization=repository.organization,
             repository_slug=repository.slug,
             actor=actor,
+            allow_break_glass=False,
         )
         if not access.can_manage:
             raise ForbiddenError(

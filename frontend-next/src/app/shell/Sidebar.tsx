@@ -1,6 +1,9 @@
 import { useLocation } from "@solidjs/router";
+import { createQuery } from "@tanstack/solid-query";
 import { createMemo, For, Show } from "solid-js";
+import { pullsApi } from "~/lib/api";
 import { stableColor } from "~/lib/colors";
+import { qk } from "~/lib/query-keys";
 import { isReservedSlug } from "~/lib/reserved";
 import { IconButton } from "~/ui/IconButton";
 import { Menu } from "~/ui/Menu";
@@ -46,6 +49,13 @@ export function Sidebar(props: { open: boolean }) {
   const repos = createAllReposQuery();
   const pins = createPins();
   const health = createHealthQuery();
+  const reviews = createQuery(() => ({
+    queryKey: qk.myPulls("review_requested"),
+    queryFn: () => pullsApi.myPullRequests("review_requested"),
+    enabled: auth.status() === "authenticated",
+    staleTime: 60_000,
+  }));
+  const reviewCount = () => reviews.data?.pull_requests.length ?? 0;
 
   const seg = createMemo(() => location.pathname.split("/").filter(Boolean));
   const top = () => seg()[0] ?? "";
@@ -100,6 +110,8 @@ export function Sidebar(props: { open: boolean }) {
         icon="review"
         label="Reviews"
         active={top() === "reviews"}
+        count={reviewCount() > 0 ? reviewCount() : undefined}
+        countTone="accent"
       />
       <NavLink
         href="/explore"

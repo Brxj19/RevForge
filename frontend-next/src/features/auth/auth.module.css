@@ -1,0 +1,183 @@
+.auth {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  padding: 24px;
+}
+
+.inner {
+  width: 380px;
+  max-width: 100%;
+  display: grid;
+  gap: 18px;
+}
+
+.innerWide {
+  width: 420px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font: 15px var(--display);
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.mark {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-2);
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+}
+
+.body {
+  display: grid;
+  gap: 16px;
+}
+
+.head {
+  display: grid;
+  gap: 4px;
+}
+
+.title {
+  font: 19px/1.25 var(--display);
+  margin: 0;
+}
+
+.lead {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.center {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 10px;
+}
+
+.centerLead {
+  margin: 0 auto;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 44ch;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.foot {
+  margin: 0;
+  font-size: 12.5px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.subtleNote {
+  margin: 0;
+  font-size: 12px;
+  text-align: center;
+  color: var(--subtle);
+}
+
+.centerLink {
+  text-align: center;
+  font-size: 12.5px;
+}
+
+.actions {
+  display: grid;
+  gap: 10px;
+}
+
+.handleStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.handleOk {
+  color: var(--green);
+}
+
+.handleErr {
+  color: var(--red);
+}
+
+.handleMuted {
+  color: var(--muted);
+}
+
+.strengthWrap {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.strength {
+  display: flex;
+  gap: 4px;
+}
+
+.strengthSeg {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-2);
+  transition: background var(--t-fast) var(--ease-out);
+}
+
+.strengthSeg[data-level="1"] {
+  background: var(--red);
+}
+
+.strengthSeg[data-level="2"] {
+  background: var(--amber);
+}
+
+.strengthSeg[data-level="3"],
+.strengthSeg[data-level="4"] {
+  background: var(--green);
+}
+
+.strengthMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.strengthLabel[data-level="1"] {
+  color: var(--red);
+  font-weight: 500;
+}
+
+.strengthLabel[data-level="2"] {
+  color: var(--amber);
+  font-weight: 500;
+}
+
+.strengthLabel[data-level="3"],
+.strengthLabel[data-level="4"] {
+  color: var(--green);
+  font-weight: 500;
+}
+
+@media (max-width: 480px) {
+  .auth {
+    padding: 16px;
+  }
+}

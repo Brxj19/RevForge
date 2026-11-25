@@ -20,10 +20,9 @@ def _register(
     display_name: str = "Owner User",
     password: str = "StrongPassword123",
 ):
-    return client.post(
-        "/api/v1/auth/register",
-        json={"email": email, "display_name": display_name, "password": password},
-    )
+    from tests.auth_helpers import register_and_login
+
+    return register_and_login(client, email=email, display_name=display_name, password=password)
 
 
 def _login(
@@ -94,39 +93,40 @@ def test_patch_profile_update_display_name(client) -> None:
     assert get_resp.json()["display_name"] == "New Name"
 
 
-def test_patch_profile_update_email_unique_check(client) -> None:
+def test_patch_profile_rejects_unverified_email_change_without_enumeration(client) -> None:
     _register(client)
     # Register a second user
     client.post("/api/v1/auth/logout", headers=_csrf_headers(client))
     _register(client, email="other@example.com", display_name="Other")
 
-    # Try to change email to the first user's email
-    resp = client.patch(
+    # Attempting to change email to either an existing OR a brand-new email returns the same 422
+    # so PATCH /me/profile cannot bypass email verification or enumerate registered addresses.
+    existing_resp = client.patch(
         "/api/v1/me/profile",
         json={"email": "owner@example.com"},
         headers=_csrf_headers(client),
     )
-    assert resp.status_code == 409
+    novel_resp = client.patch(
+        "/api/v1/me/profile",
+        json={"email": "brandnew@example.com"},
+        headers=_csrf_headers(client),
+    )
+    assert existing_resp.status_code == 422
+    assert novel_resp.status_code == 422
+    assert existing_resp.json()["error"]["message"] == novel_resp.json()["error"]["message"]
 
 
-def test_patch_profile_update_email_success(client, session_factory) -> None:
+def test_patch_profile_keeps_unchanged_email_noop(client) -> None:
     _register(client)
 
     resp = client.patch(
         "/api/v1/me/profile",
-        json={"email": "newemail@example.com"},
+        json={"display_name": "Updated Owner", "email": "owner@example.com"},
         headers=_csrf_headers(client),
     )
     assert resp.status_code == 200
-    assert resp.json()["email"] == "newemail@example.com"
-
-    # Verify audit event
-    events = _run_scalars(
-        session_factory,
-        select(AuditEvent).where(AuditEvent.event_type == "user.profile.updated"),
-    )
-    assert len(events) == 1
-    assert events[0].metadata_json["old_email"] == "owner@example.com"
+    assert resp.json()["email"] == "owner@example.com"
+    assert resp.json()["display_name"] == "Updated Owner"
 
 
 def test_patch_profile_update_aliases(client) -> None:
