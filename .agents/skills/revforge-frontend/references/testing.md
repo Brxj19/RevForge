@@ -1,4 +1,4 @@
-# Testing frontend-next
+# Testing frontend
 
 ## Stack
 Vitest + jsdom + `@solidjs/testing-library` + `@testing-library/user-event` + `@testing-library/jest-dom` + MSW (`src/mocks/server.ts`). Playwright for e2e smoke (`e2e/`).
@@ -19,10 +19,10 @@ Vitest + jsdom + `@solidjs/testing-library` + `@testing-library/user-event` + `@
 
 ## Commands
 ```bash
-cd frontend-next
+cd frontend
 npm run test                      # all
 npx vitest run src/features/history   # one area
-npm run test:e2e                  # Playwright smoke (needs `make next-dev` or `npm run dev:mock`)
+npm run test:e2e                  # Playwright smoke (needs `make frontend-dev` or `npm run dev:mock`)
 ```
 
 ## E2E smoke (cutover gate)

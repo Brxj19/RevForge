@@ -1,4 +1,6 @@
-# Phase 0 — scaffold frontend-next
+# Phase 0 — scaffold frontend-next (historical)
+
+> **Note:** This phase is complete. The app was originally scaffolded as `frontend-next/` and has since been renamed to `frontend/` at cutover. These instructions are preserved for reference only.
 
 Do these in order, in one PR ("frontend-next: scaffold"). Check current versions with `npm view <pkg> version` before pinning; keep **solid-js on 1.9.x** (never let a 2.x install slip in).
 

@@ -9,19 +9,17 @@ PYTHON_BIN=$(VENV_BIN)/python
 BACKEND_BOOTSTRAP_STAMP=$(VENV_DIR)/.bootstrap-stamp
 BACKEND_DEPS_STAMP=$(VENV_DIR)/.deps-stamp
 FRONTEND_DEPS_STAMP=$(CURDIR)/frontend/node_modules/.install-stamp
-NEXT_DEPS_STAMP=$(CURDIR)/frontend-next/node_modules/.install-stamp
 BACKEND_PORT=8000
-FRONTEND_PORT=5173
-NEXT_PORT=5174
+FRONTEND_PORT=5174
 FRONTEND_NODE_BIN=$(if $(wildcard /opt/homebrew/opt/node@22/bin/node),/opt/homebrew/opt/node@22/bin:,$(if $(wildcard /opt/homebrew/opt/node@23/bin/node),/opt/homebrew/opt/node@23/bin:,$(if $(wildcard /opt/homebrew/opt/node@20/bin/node),/opt/homebrew/opt/node@20/bin:,)))
 
-.PHONY: help clean up down logs ps ssh-sync ssh-sync-host backend-venv prepare backend-sync backend-dev frontend-install frontend-dev next-install next-dev next-dev-mock test lint format typecheck migrate migration
+.PHONY: help clean up down logs ps ssh-sync ssh-sync-host backend-venv prepare backend-sync backend-dev frontend-install frontend-dev frontend-dev-mock test lint format typecheck migrate migration seed resetdb
 
 help: ## Show available Make targets
 	@awk 'BEGIN {FS = ":.*## "; printf "\nAvailable targets:\n\n"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-18s %s\n", $$1, $$2} END {printf "\n"}' $(MAKEFILE_LIST)
 
 clean: ## Remove local dependency installs and caches
-	rm -rf $(VENV_DIR) frontend/node_modules frontend-next/node_modules $(CURDIR)/.cache
+	rm -rf $(VENV_DIR) frontend/node_modules $(CURDIR)/.cache
 
 up: ## Build and start the full Docker stack
 	docker compose -f $(COMPOSE_FILE) up -d --build --remove-orphans
@@ -67,50 +65,46 @@ ssh-sync-host: backend-sync ## Render SSH authorized_keys from the host backend 
 backend-dev: backend-sync ## Run the backend locally with reload
 	cd backend && .venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port $(BACKEND_PORT)
 
+# Frontend: SolidJS 1.9 app (ADR-007). Same-origin /api proxy to the backend on :8000.
 $(FRONTEND_DEPS_STAMP): frontend/package.json frontend/package-lock.json | prepare
-	cd frontend && PATH=$(FRONTEND_NODE_BIN)$$PATH NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm install
+	cd frontend && PATH=$(FRONTEND_NODE_BIN)$$PATH NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm ci
 	touch $(FRONTEND_DEPS_STAMP)
 
 frontend-install: $(FRONTEND_DEPS_STAMP) ## Install frontend dependencies
 
-frontend-dev: frontend-install ## Run the frontend locally
+frontend-dev: frontend-install ## Run frontend against the real API (port 5174)
 	cd frontend && PATH=$(FRONTEND_NODE_BIN)$$PATH NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run dev -- --host 0.0.0.0 --port $(FRONTEND_PORT)
 
-# frontend-next: the SolidJS app (ADR-007). Same-origin /api proxy to the backend on :8000.
-$(NEXT_DEPS_STAMP): frontend-next/package.json frontend-next/package-lock.json | prepare
-	cd frontend-next && PATH=$(FRONTEND_NODE_BIN)$$PATH NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm ci
-	touch $(NEXT_DEPS_STAMP)
+frontend-dev-mock: frontend-install ## Run frontend on MSW mocks, no backend needed (port 5174)
+	cd frontend && PATH=$(FRONTEND_NODE_BIN)$$PATH NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run dev:mock -- --host 0.0.0.0
 
-next-install: $(NEXT_DEPS_STAMP) ## Install frontend-next (SolidJS) dependencies
-
-next-dev: next-install ## Run frontend-next against the real API (port 5174)
-	cd frontend-next && PATH=$(FRONTEND_NODE_BIN)$$PATH NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run dev -- --host 0.0.0.0 --port $(NEXT_PORT)
-
-next-dev-mock: next-install ## Run frontend-next on MSW mocks, no backend needed (port 5174)
-	cd frontend-next && PATH=$(FRONTEND_NODE_BIN)$$PATH NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run dev:mock -- --host 0.0.0.0
-
-test: backend-sync frontend-install next-install ## Run backend and frontend tests
+test: backend-sync frontend-install ## Run backend and frontend tests
 	cd backend && .venv/bin/python -m pytest
 	cd frontend && NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run test
-	cd frontend-next && NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run test
 
-lint: backend-sync frontend-install next-install ## Run backend and frontend linters
+lint: backend-sync frontend-install ## Run backend and frontend linters
 	cd backend && .venv/bin/python -m ruff check .
 	cd frontend && NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run lint
-	cd frontend-next && NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run lint
 
-format: backend-sync frontend-install next-install ## Format backend and frontend code
+format: backend-sync frontend-install ## Format backend and frontend code
 	cd backend && .venv/bin/python -m ruff format .
 	cd frontend && NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run format
-	cd frontend-next && NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run format
 
-typecheck: backend-sync frontend-install next-install ## Run backend and frontend type checks
+typecheck: backend-sync frontend-install ## Run backend and frontend type checks
 	cd backend && .venv/bin/python -m mypy app
 	cd frontend && NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run typecheck
-	cd frontend-next && NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE) npm run typecheck
 
 migrate: backend-sync ## Apply backend database migrations
 	cd backend && .venv/bin/python -m alembic upgrade head
 
 migration: backend-sync ## Create a new Alembic migration with name="<message>"
 	cd backend && .venv/bin/python -m alembic revision --autogenerate -m "$(name)"
+
+seed: backend-sync migrate ## Seed the database with a platform admin user
+	cd backend && .venv/bin/python -m scripts.seed
+
+resetdb: backend-sync ## Drop and recreate the database, re-migrate, and seed (requires running Postgres)
+	@echo "Dropping and recreating the revforge database..."
+	docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U revforge -d postgres -c "DROP DATABASE IF EXISTS revforge WITH (FORCE);" -c "CREATE DATABASE revforge OWNER revforge;"
+	cd backend && .venv/bin/python -m alembic upgrade head
+	cd backend && .venv/bin/python -m scripts.seed

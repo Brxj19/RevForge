@@ -17,7 +17,7 @@ Mission:
 Repo map (verify, don't assume):
 - backend/app/api/v1/ routes · backend/app/services/ use cases · backend/app/models/ ORM · backend/alembic/versions/ migrations
 - backend/app/mercurial/ hg adapter, HTTP gateway, SSH gateway, hooks · backend/app/worker.py jobs
-- frontend/src/routes/ pages · frontend/src/components/ UI · frontend/src/lib/api.ts API client · frontend/src/test/ tests
+- frontend/src/app/routes.tsx routing · frontend/src/features/ pages · frontend/src/ui/ primitives · frontend/src/lib/api/ API client · frontend/src/mocks/ MSW handlers
 - infra/ Docker Compose and sshd
 
 Investigation priorities:

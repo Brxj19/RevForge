@@ -1,4 +1,4 @@
-# frontend-next architecture
+# frontend architecture
 
 ## Contents
 1. Folder layout
@@ -14,7 +14,7 @@
 ## 1. Folder layout
 
 ```
-frontend-next/
+frontend/
 ├── index.html
 ├── package.json            vite.config.ts   tsconfig.json   eslint.config.js   .prettierrc
 ├── public/

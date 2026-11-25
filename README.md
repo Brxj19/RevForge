@@ -69,8 +69,8 @@ It brings together:
 
 For local setup, platform-specific commands, Docker workflows, and troubleshooting, see [LOCAL_STACK_SETUP.md](LOCAL_STACK_SETUP.md).
 
-The redesigned web app (SolidJS) lives in [`frontend-next/`](frontend-next/README.md) and runs on port 5174
-beside the current app (`make next-dev`, or `make next-dev-mock` with no backend). The design contract is
+The web app (SolidJS) lives in [`frontend/`](frontend/README.md) and runs on port 5174
+(`make frontend-dev`, or `make frontend-dev-mock` with no backend). The design contract is
 [DESIGN.md](DESIGN.md) with the clickable prototype in `docs/design/revforge-prototype.html`.
 
 ## Design Direction
