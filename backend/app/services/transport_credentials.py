@@ -330,6 +330,37 @@ async def revoke_ssh_public_key(
     return key
 
 
+async def restore_ssh_public_key(
+    session: AsyncSession,
+    *,
+    user: User,
+    key_id: UUID,
+    request_id: str | None,
+    authorized_keys_output_path: Path | None = None,
+) -> SshPublicKey:
+    key = await session.scalar(
+        select(SshPublicKey).where(SshPublicKey.id == key_id, SshPublicKey.user_id == user.id)
+    )
+    if key is None:
+        raise NotFoundError("SSH key not found.")
+    if key.revoked_at is None:
+        raise ValidationFailure("SSH key is not revoked.")
+
+    key.revoked_at = None
+    await record_audit_event(
+        session,
+        event_type="ssh_key.added",
+        actor_user_id=user.id,
+        request_id=request_id,
+        metadata_json={"key_label": key.label},
+    )
+    await session.commit()
+    if authorized_keys_output_path is not None:
+        await sync_authorized_keys(session, output_path=authorized_keys_output_path)
+    await session.refresh(key)
+    return key
+
+
 async def authenticate_ssh_public_key(
     session: AsyncSession,
     *,

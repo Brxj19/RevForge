@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from app.api.v1.activity import router as activity_router
 from app.api.v1.admin import router as admin_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.auth import router as auth_router
@@ -23,6 +24,7 @@ settings = get_settings()
 
 router = APIRouter(prefix=settings.api_v1_prefix)
 router.include_router(health_router)
+router.include_router(activity_router)
 router.include_router(admin_router)
 router.include_router(auth_router)
 router.include_router(audit_router)

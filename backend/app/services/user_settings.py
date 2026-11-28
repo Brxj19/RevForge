@@ -109,12 +109,47 @@ async def update_user_preferences(
     user: User,
     preferences: UserPreferences,
 ) -> UserPreferences:
-    user.preferences = preferences.model_dump()
+    existing = dict(user.preferences or {})
+    existing.update(preferences.model_dump())
+    user.preferences = existing
     user.updated_at = utc_now()
     await session.flush()
     await session.commit()
     await session.refresh(user)
     return preferences
+
+
+MAX_PINS = 8
+
+
+def get_user_pins(user: User) -> list[dict[str, str]]:
+    stored = user.preferences or {}
+    pins = stored.get("pins")
+    if not isinstance(pins, list):
+        return []
+    return [
+        {"org": p["org"], "repo": p["repo"]}
+        for p in pins
+        if isinstance(p, dict) and "org" in p and "repo" in p
+    ]
+
+
+async def update_user_pins(
+    session: AsyncSession,
+    *,
+    user: User,
+    pins: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    if len(pins) > MAX_PINS:
+        raise ValidationFailure(f"You can pin up to {MAX_PINS} repositories.")
+    existing = dict(user.preferences or {})
+    existing["pins"] = pins
+    user.preferences = existing
+    user.updated_at = utc_now()
+    await session.flush()
+    await session.commit()
+    await session.refresh(user)
+    return get_user_pins(user)
 
 
 def get_notification_settings(user: User) -> NotificationSettingsResponse:

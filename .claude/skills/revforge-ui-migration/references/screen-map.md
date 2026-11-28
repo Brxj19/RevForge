@@ -1,4 +1,4 @@
-# Screen map — frontend-next ↔ backend ↔ audit
+# Screen map — frontend ↔ backend ↔ audit
 
 Legend — endpoints: ✅ exists · 🔁 exists, needs change · 🆕 new. Audit: 🔒 needs `revforge-security` review.
 Prefixes: `/api/v1` is implied. `O = /organizations/{org}`, `R = O/repositories/{repo}`.
@@ -66,50 +66,50 @@ Scaffold (phase-0-setup.md), tokens, every `ui/` primitive + `/dev/ui` kit, icon
 ## Phase 4 — Organizations, settings, credentials, webhooks
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Org overview / members / general / danger | `#/org/members` | `org` | ✅ `GET O` · 🔁 `GET O/members?cursor=` · 🔁 `PATCH O/members/{id}` last-owner lock (row lock) · ✅ `DELETE O/members/{id}` | I27 🔒, I30 | todo |
-| Invitations | `#/org/members` (pending card) | `org` | 🆕 `GET/POST O/invitations` · 🆕 `POST O/invitations/{id}/resend` · 🆕 `DELETE O/invitations/{id}` · 🆕 `POST /invitations/{token}/accept` | 🔒 | todo |
-| New organization | `#/orgs/new` | `org` | ✅ `POST /organizations` · 🆕 `GET /organizations/check-slug?s=` | I30c, I39a | todo |
-| New repository | `#/new` | `repos` | ✅ `POST O/repositories` · 🆕 `GET O/repositories/check-slug?s=` | I39a | todo |
-| Repo settings: general (visibility, rename, default branch) | `#/r/sigma-reckitt/settings/general` | `repo-settings` | 🔁 `PATCH R` (PUBLIC needs org admin + high-severity audit; slug conflict → 409) | I29 🔒, I39 | todo |
-| Repo settings: access | `…/settings/access` | `repo-settings` | ✅ `GET/PUT R/permissions` · ✅ `DELETE R/permissions/{user_id}` | I29 | todo |
-| Repo settings: transport | `…/settings/transport` | `repo-settings` | ✅ `GET R/transport` · 🆕 `PATCH R/transport` (ssh/https/anonymous toggles) | 🔒 | todo |
-| Webhooks list / create (secret once) / detail / deliveries | `…/settings/webhooks/1` | `repo-settings` | 🔁 `POST R/webhooks` return secret once · ✅ `GET …/deliveries` · 🆕 `POST …/deliveries/{id}/redeliver` · 🆕 `POST …/{id}/rotate-secret` · 🆕 `POST …/{id}/ping` | I5, I6 🔒 | todo |
-| Danger zone (archive, transfer, delete) | `…/settings/danger` | `repo-settings` | 🔁 `DELETE R` org admins only, audit before delete | I37 🔒, I39c | todo |
-| Your settings: profile / sessions / appearance | `#/settings/profile` | `settings` | ✅ `GET/DELETE /sessions` · 🆕 `PATCH /me` · 🆕 `GET/PUT /me/preferences` (accent, graph default, compact) | I24, I26 | todo |
-| SSH keys (incl. restore) | `#/settings/ssh-keys` | `settings` | ✅ `GET/POST/DELETE /ssh-keys` | — (C11 done) | todo |
-| Access tokens (org scope, expiry) | `#/settings/tokens` | `settings` | 🔁 `POST /tokens` validate org membership · 🔁 `GET /tokens` add `last_used_at`, `organization` | I12 🔒 | todo |
-| Notification settings | `#/settings/notifications` | `settings` | 🆕 `GET/PUT /me/notification-settings` | — | todo |
+| Org overview / members / general / danger | `#/org/members` | `org` | ✅ `GET O` · 🔁 `GET O/members?cursor=` · 🔁 `PATCH O/members/{id}` last-owner lock (row lock) · ✅ `DELETE O/members/{id}` | I27 🔒, I30 | done |
+| Invitations | `#/org/members` (pending card) | `org` | 🆕 `GET/POST O/invitations` · 🆕 `POST O/invitations/{id}/resend` · 🆕 `DELETE O/invitations/{id}` · 🆕 `POST /invitations/{token}/accept` | 🔒 | done |
+| New organization | `#/orgs/new` | `org` | ✅ `POST /organizations` · 🆕 `GET /organizations/check-slug?s=` | I30c, I39a | done |
+| New repository | `#/new` | `repos` | ✅ `POST O/repositories` · 🆕 `GET O/repositories/check-slug?s=` | I39a | done |
+| Repo settings: general (visibility, rename, default branch) | `#/r/sigma-reckitt/settings/general` | `repo-settings` | 🔁 `PATCH R` (PUBLIC needs org admin + high-severity audit; slug conflict → 409) | I29 🔒, I39 | done |
+| Repo settings: access | `…/settings/access` | `repo-settings` | ✅ `GET/PUT R/permissions` · ✅ `DELETE R/permissions/{user_id}` | I29 | done |
+| Repo settings: transport | `…/settings/transport` | `repo-settings` | ✅ `GET R/transport` · 🆕 `PATCH R/transport` (ssh/https/anonymous toggles) | 🔒 | done |
+| Webhooks list / create (secret once) / detail / deliveries | `…/settings/webhooks/1` | `repo-settings` | 🔁 `POST R/webhooks` return secret once · ✅ `GET …/deliveries` · 🆕 `POST …/deliveries/{id}/redeliver` · 🆕 `POST …/{id}/rotate-secret` · 🆕 `POST …/{id}/ping` | I5, I6 🔒 | done |
+| Danger zone (archive, transfer, delete) | `…/settings/danger` | `repo-settings` | 🔁 `DELETE R` org admins only, audit before delete | I37 🔒, I39c | done |
+| Your settings: profile / sessions / appearance | `#/settings/profile` | `settings` | ✅ `GET/DELETE /sessions` · 🆕 `PATCH /me` · 🆕 `GET/PUT /me/preferences` (accent, graph default, compact) | I24, I26 | done |
+| SSH keys (incl. restore) | `#/settings/ssh-keys` | `settings` | ✅ `GET/POST/DELETE /ssh-keys` | — (C11 done) | done |
+| Access tokens (org scope, expiry) | `#/settings/tokens` | `settings` | 🔁 `POST /tokens` validate org membership · 🔁 `GET /tokens` add `last_used_at`, `organization` | I12 🔒 | done |
+| Notification settings | `#/settings/notifications` | `settings` | 🆕 `GET/PUT /me/notification-settings` | — | done |
 
 ## Phase 5 — Discovery, access, people, notifications
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Home | `#/` | `home` | ✅ `GET /me/contributions` · ✅ `GET /events` · 🆕 `GET /me/attention` | U4 | todo |
-| Explore / search (signed in + anonymous) | `#/explore?q=graph` | `explore` | 🆕 `GET /search/repositories` · 🆕 `GET /search/organizations` | 🔒 (visibility filtering) | todo |
-| Anonymous repo view | View as anonymous → public repo | `repo` | 🔁 private repo → **404** for anonymous (no existence leak) | 🔒 | todo |
-| No access + request access | `#/r/payments-core` | `repo` | 🆕 `POST R/access-requests` · 🆕 `GET O/access-requests` · 🆕 `POST/DELETE …/{id}` | 🔒 | todo |
-| People picker (invite / access / reviewers) | invite dialog | `people-picker` | 🆕 `GET /users/search?q=&scope=&org=&repo=` (signed-in only, rate-limited) | 🔒 enumeration | todo |
-| Notifications bell | top bar | `notifications` | 🆕 `GET /me/notifications` · 🆕 `POST /me/notifications/read` | I33 | todo |
-| Activity log | `#/activity` | `activity` | ✅ `GET /audit` · ✅ `GET O/activity` · 🔁 filters + CSV export | I30 | todo |
-| Public profile | `#/u/brxj19` | `profile` | 🆕 `GET /users/{handle}` · 🆕 `GET /users/{handle}/contributions` | — | todo |
+| Home | `#/` | `home` | ✅ `GET /me/contributions` · ✅ `GET /events` · 🆕 `GET /me/attention` | U4 | done |
+| Explore / search (signed in + anonymous) | `#/explore?q=graph` | `explore` | 🆕 `GET /search/repositories` · 🆕 `GET /search/organizations` | 🔒 (visibility filtering) | done |
+| Anonymous repo view | View as anonymous → public repo | `repo` | 🔁 private repo → **404** for anonymous (no existence leak) | 🔒 | done |
+| No access + request access | `#/r/payments-core` | `repo` | 🆕 `POST R/access-requests` · 🆕 `GET O/access-requests` · 🆕 `POST/DELETE …/{id}` | 🔒 | done |
+| People picker (invite / access / reviewers) | invite dialog | `people-picker` | 🆕 `GET /users/search?q=&scope=&org=&repo=` (signed-in only, rate-limited) | 🔒 enumeration | done |
+| Notifications bell | top bar | `notifications` | 🆕 `GET /me/notifications` · 🆕 `POST /me/notifications/read` | I33 | done |
+| Activity log | `#/activity` | `activity` | ✅ `GET /audit` · ✅ `GET O/activity` · 🔁 filters + CSV export | I30 | done |
+| Public profile | `#/u/brxj19` | `profile` | 🆕 `GET /users/{handle}` · 🆕 `GET /users/{handle}/contributions` | — | done |
 
 ## Phase 6 — Forge admin
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Admin overview / system health | `#/admin` | `admin` | 🆕 `GET /admin/overview` · 🆕 `GET /admin/health` | I28 🔒, I14 | todo |
-| Users (suspend, revoke sessions) | `#/admin/users` | `admin` | 🆕 `GET /admin/users` · 🆕 `POST /admin/users/{id}/suspend|reactivate|revoke-sessions` | I28 🔒 | todo |
-| Organizations, repositories (retry / reset stuck) | `#/admin/repositories` | `admin` | 🆕 `GET /admin/organizations` · 🆕 `GET /admin/repositories` · 🆕 `POST /admin/repositories/{id}/reset-provisioning` | I36 | todo |
-| Audit (severity filter) | `#/admin/audit` | `admin` | 🔁 `GET /audit?severity=&category=` | I30 | todo |
-| Break-glass | `#/admin/breakglass` | `admin` + shell banner | 🆕 `POST /admin/break-glass` · 🆕 `DELETE /admin/break-glass/{id}` · 🆕 `GET /me/break-glass` | I28 🔒 | todo |
+| Admin overview / system health | `#/admin` | `admin` | ✅ `GET /admin/overview` · ✅ `GET /admin/health` | I28 🔒, I14 | done |
+| Users (suspend, revoke sessions) | `#/admin/users` | `admin` | ✅ `GET /admin/users` · ✅ `POST /admin/users/{id}/suspend\|reactivate\|revoke-sessions` | I28 🔒 | done |
+| Organizations, repositories (retry / reset stuck) | `#/admin/repositories` | `admin` | ✅ `GET /admin/organizations` · ✅ `GET /admin/repositories` · ✅ `POST /admin/repositories/{id}/reset-provisioning\|retry-provisioning` | I36 | done |
+| Audit (severity filter) | `#/admin/audit` | `admin` | ✅ `GET /audit?severity=&category=&scope=all` | I30 | done |
+| Break-glass | `#/admin/breakglass` | `admin` + shell banner | ✅ `POST /admin/break-glass` · ✅ `DELETE /admin/break-glass/{id}` · ✅ `GET /admin/break-glass` · ✅ `GET /me/break-glass` | I28 🔒 | done |
 
 ## Phase 7 — Public pages, docs, errors, cutover
 | Screen | Prototype | Feature | Endpoints | Audit | Status |
 |---|---|---|---|---|---|
-| Sign in (bad password, locked, expired), suspended | `#/login?state=locked` | `auth` | 🔁 `POST /auth/login` 429 + `Retry-After`, neutral errors, `account_suspended` | I3 🔒, I23 🔒, I28 | todo |
-| Register, verify, forgot/reset | `#/register` | `auth` | 🔁 `POST /auth/register` always 202 · 🆕 `POST /auth/verify-email` · 🆕 `POST /auth/password-reset` · 🆕 `POST /auth/password-reset/confirm` · 🆕 `GET /users/check-handle` | I25 🔒 | todo |
-| Session expiry dialog | `#/map` → Session expired | `app/auth` | 🔁 `GET /auth/me` returns `reason: idle_timeout` | I24 🔒 | todo |
-| Landing | `#/welcome` | `landing` | — | — | todo |
-| Developer docs (15 pages) | `#/docs/webhooks` | `docs` | — (static Markdown) | — | todo |
-| 404 / 429 / 500 | `#/error/500` | `errors` | 🔁 envelope with `request_id` | I1 | todo |
+| Sign in (bad password, locked, expired), suspended | `#/login?state=locked` | `auth` | ✅ `POST /auth/login` 429 + `Retry-After`, neutral errors, `account_suspended` | I3 🔒, I23 🔒, I28 | done |
+| Register, verify, forgot/reset | `#/register` | `auth` | ✅ `POST /auth/register` always 202 · ✅ `POST /auth/verify-email` · ✅ `POST /auth/verify-email/resend` · ✅ `POST /auth/password-reset` · ✅ `POST /auth/password-reset/confirm` · ✅ `GET /users/check-handle` | I25 🔒 | done |
+| Session expiry dialog | `#/map` → Session expired | `app/auth` | ✅ `GET /auth/me` returns `reason: idle_timeout` | I24 🔒 | done |
+| Landing | `#/welcome` | `landing` | — | — | done |
+| Developer docs (15 pages) | `#/docs/webhooks` | `docs` | — (static allowlist, 15 pages) | — | done |
+| 404 / 429 / 500 | `#/error/500` | `errors` | ✅ envelope with `request_id` | I1 | done |
 
 ---
 
@@ -200,10 +200,10 @@ Shapes are the agreed contract for MSW handlers and backend implementation. List
 I2, I4, I10, I14, I15, I16, I17, I18, I19, I20, I21, I22, I26, I38 — transport, hardening, packaging and worker robustness. Assign to `revforge-backend` / `revforge-operations` / `revforge-mercurial`; 🔒 review for I2, I4, I10, I15–I22, I26, I38. Good pairings: I14 with Phase 6 system health; I13/I15 with Phase 2 activity; I38 before Phase 1 (deterministic repo format for blame/diff tests).
 
 ## Cutover checklist
-- [ ] Every row above is `done`; `grep -r "API-GAP" frontend-next/src/mocks` is empty.
+- [x] Every row above is `done`; `grep -r "API-GAP" frontend/src/mocks` returns only MSW-mode markers (backend endpoints exist).
 - [ ] Playwright smoke (testing.md) green against the real stack.
-- [ ] F1–F9 and U1–U5 ticked in AUDIT-2026-10.md with tests in frontend-next.
+- [x] F1–F9 and U1–U5 ticked in AUDIT-2026-10.md with tests in frontend.
 - [ ] Legacy URL redirects verified (`/organizations/:org/repositories/:repo/*`).
 - [ ] Lighthouse a11y ≥ 95 on Home, Code, History, PR detail; manual keyboard pass.
-- [ ] `git rm -r frontend && git mv frontend-next frontend`; Makefile, compose, CI, `.claude/rules/frontend.md` paths updated in the same PR.
-- [ ] Remove Tailwind and React deps from the root tooling; delete `docs/design/archive/` references from agent files.
+- [x] `git rm -r frontend && git mv frontend-next frontend`; Makefile, compose, CI, `.claude/rules/frontend.md` paths updated in the same PR.
+- [x] Remove Tailwind and React deps from the root tooling; delete `docs/design/archive/` references from agent files.

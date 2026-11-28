@@ -30,6 +30,19 @@ class UserPreferences(BaseModel):
     reduce_motion: bool = False
 
 
+class PinRef(BaseModel):
+    org: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+
+
+class PinListResponse(BaseModel):
+    items: list[PinRef]
+
+
+class PinListRequest(BaseModel):
+    items: list[PinRef] = Field(max_length=8)
+
+
 class NotificationSetting(BaseModel):
     in_app: bool = True
     email: bool = True

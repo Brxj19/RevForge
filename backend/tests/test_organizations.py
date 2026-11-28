@@ -559,13 +559,48 @@ def test_owner_invite_by_non_owner_forbidden(client) -> None:
         json={"user": "adm@example.com", "role": "admin"},
         headers=_csrf_headers(client),
     )
-    _login(client, email="adm@example.com", password="SecurePassword123")
-    resp = client.post(
+    # Create one pending invitation as owner so admin resend/revoke can also be checked.
+    owner_inv = client.post(
         "/api/v1/organizations/acme/invitations",
-        json={"email": "new@example.com", "role": "owner"},
+        json={"email": "pending@example.com", "role": "member"},
         headers=_csrf_headers(client),
     )
-    assert resp.status_code == 403
+    assert owner_inv.status_code == 201
+    inv_id = owner_inv.json()["id"]
+
+    _login(client, email="adm@example.com", password="SecurePassword123")
+    # Non-owners (including admins) cannot invite or manage invitations.
+    assert (
+        client.post(
+            "/api/v1/organizations/acme/invitations",
+            json={"email": "new@example.com", "role": "member"},
+            headers=_csrf_headers(client),
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            "/api/v1/organizations/acme/invitations",
+            json={"email": "new-owner@example.com", "role": "owner"},
+            headers=_csrf_headers(client),
+        ).status_code
+        == 403
+    )
+    assert client.get("/api/v1/organizations/acme/invitations").status_code == 403
+    assert (
+        client.post(
+            f"/api/v1/organizations/acme/invitations/{inv_id}/resend",
+            headers=_csrf_headers(client),
+        ).status_code
+        == 403
+    )
+    assert (
+        client.delete(
+            f"/api/v1/organizations/acme/invitations/{inv_id}",
+            headers=_csrf_headers(client),
+        ).status_code
+        == 403
+    )
 
 
 def test_wrong_org_invitation_access_404(client) -> None:
@@ -634,3 +669,113 @@ def test_invitation_created_audit_event(client, session_factory) -> None:
 async def _fetch_audit_events(session: AsyncSession, event_type: str) -> list[AuditEvent]:
     result = await session.execute(select(AuditEvent).where(AuditEvent.event_type == event_type))
     return list(result.scalars())
+
+
+def test_invitation_dispatches_email_and_supports_preview_decline_and_email_binding(client) -> None:
+    from tests.auth_helpers import in_memory_email_sender
+
+    in_memory_email_sender.clear()
+    _register(client, email="alice@example.com", display_name="Alice", password="SecurePassword123")
+    _create_org(client, slug="impact", display_name="Impact Analytics")
+
+    create_resp = client.post(
+        "/api/v1/organizations/impact/invitations",
+        json={"email": "bob@example.com", "role": "member"},
+        headers=_csrf_headers(client),
+    )
+    assert create_resp.status_code == 201
+    token = create_resp.json()["token"]
+
+    # Email was sent with a clickable /invitations/{token} link.
+    email_msg = in_memory_email_sender.latest_for("bob@example.com", kind="organization_invitation")
+    assert email_msg is not None
+    assert f"/invitations/{token}" in email_msg.body_text
+    assert email_msg.body_html is not None
+    assert f"/invitations/{token}" in email_msg.body_html
+
+    # Signed-in as Alice (mismatched email): preview shows email_matches=False and accept is 403.
+    preview_alice = client.get(f"/api/v1/invitations/{token}")
+    assert preview_alice.status_code == 200
+    assert preview_alice.json()["organization_slug"] == "impact"
+    assert preview_alice.json()["email_matches"] is False
+    assert preview_alice.json()["email_hint"] == "b***@example.com"
+
+    wrong_accept = client.post(
+        f"/api/v1/invitations/{token}/accept",
+        headers=_csrf_headers(client),
+    )
+    assert wrong_accept.status_code == 403
+
+    # Anonymous preview works without leaking full email.
+    client.cookies.clear()
+    preview_anon = client.get(f"/api/v1/invitations/{token}")
+    assert preview_anon.status_code == 200
+    assert preview_anon.json()["email_matches"] is None
+    assert preview_anon.json()["email_hint"] == "b***@example.com"
+
+    # Bob registers, sees matching preview, and declines.
+    _register(client, email="bob@example.com", display_name="Bob", password="SecurePassword123")
+    preview_bob = client.get(f"/api/v1/invitations/{token}")
+    assert preview_bob.status_code == 200
+    assert preview_bob.json()["email_matches"] is True
+    assert preview_bob.json()["email_hint"] == "bob@example.com"
+
+    decline_resp = client.post(
+        f"/api/v1/invitations/{token}/decline",
+        headers=_csrf_headers(client),
+    )
+    assert decline_resp.status_code == 204
+
+    # Cannot accept after decline.
+    after_decline = client.post(
+        f"/api/v1/invitations/{token}/accept",
+        headers=_csrf_headers(client),
+    )
+    assert after_decline.status_code == 409
+
+
+def test_my_pending_invitations_list_accept_decline_and_idor(client) -> None:
+    # Bob registers first so he also gets an in-app notification when invited.
+    _register(client, email="bob@example.com", display_name="Bob", password="SecurePassword123")
+    _register(client, email="carol@example.com", display_name="Carol", password="SecurePassword123")
+    _register(client, email="alice@example.com", display_name="Alice", password="SecurePassword123")
+    _create_org(client, slug="impact", display_name="Impact Analytics")
+
+    inv_resp = client.post(
+        "/api/v1/organizations/impact/invitations",
+        json={"email": "bob@example.com", "role": "member"},
+        headers=_csrf_headers(client),
+    )
+    assert inv_resp.status_code == 201
+    inv_id = inv_resp.json()["id"]
+
+    # Carol cannot see or accept Bob's invitation (IDOR -> 404).
+    _login(client, email="carol@example.com", password="SecurePassword123")
+    assert client.get("/api/v1/me/invitations").json() == []
+    assert (
+        client.post(
+            f"/api/v1/me/invitations/{inv_id}/accept",
+            headers=_csrf_headers(client),
+        ).status_code
+        == 404
+    )
+
+    # Bob sees the invitation in /me/invitations and in /me/notifications.
+    _login(client, email="bob@example.com", password="SecurePassword123")
+    my_invs = client.get("/api/v1/me/invitations")
+    assert my_invs.status_code == 200
+    assert len(my_invs.json()) == 1
+    assert my_invs.json()[0]["organization_slug"] == "impact"
+    assert my_invs.json()[0]["invited_by_name"] == "Alice"
+
+    notifs = client.get("/api/v1/me/notifications").json()["items"]
+    assert any(n["type"] == "organization_invitation" for n in notifs)
+
+    # Bob accepts via /me/invitations/{id}/accept.
+    accept = client.post(
+        f"/api/v1/me/invitations/{inv_id}/accept",
+        headers=_csrf_headers(client),
+    )
+    assert accept.status_code == 200
+    assert accept.json()["organization"]["slug"] == "impact"
+    assert client.get("/api/v1/me/invitations").json() == []

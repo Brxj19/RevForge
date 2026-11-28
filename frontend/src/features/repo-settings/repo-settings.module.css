@@ -1,0 +1,423 @@
+/* Repository settings — mirrors org layout (orgs.module.css) for the settings pattern */
+
+.subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r);
+  font-size: 13.5px;
+  color: var(--text-2);
+  text-decoration: none;
+  transition: background-color 120ms ease-out;
+}
+
+.navLink:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.navLink[data-active] {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.navLinkDanger {
+  color: var(--red);
+}
+
+.navLinkDanger:hover {
+  color: var(--red);
+}
+
+.content {
+  max-width: 860px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* General page form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+.formFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--raised);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+}
+
+/* Default branch selector (matches prototype max-width: 320px dropdown) */
+.branchSelectWrap {
+  max-width: 320px;
+}
+
+.branchSelect {
+  width: 100%;
+}
+
+.branchDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Visibility radio cards (prototype .vis-opt) */
+.visOpt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: var(--raised);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.visOpt:hover {
+  border-color: var(--border-2);
+}
+
+.visOpt[data-active] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.visHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.visHint > svg {
+  flex-shrink: 0;
+}
+
+.visOptIcon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.visOptLabel {
+  font-weight: 500;
+  font-size: 13.5px;
+}
+
+.visOptDesc {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 2px 0 0;
+}
+
+.visOptCurrent {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Set rows (transport toggles, webhook signing, etc) */
+.setRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.setRow:last-child {
+  border-bottom: none;
+}
+
+.setRowTitle {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.setRowDesc {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 2px 0 0;
+}
+
+.setRowEnd {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Clone URL cards */
+.cloneHelp {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Mono text for webhook URLs */
+.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.webhookRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 120ms ease-out;
+}
+
+.webhookRow:hover {
+  background: var(--raised);
+}
+
+.webhookRow:last-child {
+  border-bottom: none;
+}
+
+.webhookInfo {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.webhookMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.webhookEnd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+/* Webhook detail back link */
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--text);
+}
+
+.backIcon {
+  display: grid;
+  transform: rotate(180deg);
+}
+
+/* Webhook detail header */
+.webhookDetailHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.webhookDetailInfo {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.webhookDetailMeta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.webhookDetailActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Secret mask */
+.secretMask {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Deliveries table */
+.deliveriesTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.deliveriesTable th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--raised);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+
+.deliveriesTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.deliveriesTable tr:last-child td {
+  border-bottom: none;
+}
+
+.numCell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.actionsCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Access page */
+.accessTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.accessTable th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--raised);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+
+.accessTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.accessTable tr:last-child td {
+  border-bottom: none;
+}
+
+.personCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.personMeta {
+  display: grid;
+  gap: 1px;
+}
+
+.personEmail {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sourceCell {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Danger zone */
+.dangerCard {
+  border-color: rgba(248, 81, 73, 0.35);
+}
+
+.dangerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dangerRow:last-child {
+  border-bottom: none;
+}
+
+.dangerInfo {
+  display: grid;
+  gap: 2px;
+}
+
+.dangerTitle {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.dangerDesc {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* Webhook create dialog */
+.webhookForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.eventCheckboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  .content {
+    max-width: none;
+  }
+}

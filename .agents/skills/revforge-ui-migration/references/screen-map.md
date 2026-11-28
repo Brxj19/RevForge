@@ -1,4 +1,4 @@
-# Screen map — frontend-next ↔ backend ↔ audit
+# Screen map — frontend ↔ backend ↔ audit
 
 Legend — endpoints: ✅ exists · 🔁 exists, needs change · 🆕 new. Audit: 🔒 needs `revforge-security` review.
 Prefixes: `/api/v1` is implied. `O = /organizations/{org}`, `R = O/repositories/{repo}`.
@@ -200,10 +200,10 @@ Shapes are the agreed contract for MSW handlers and backend implementation. List
 I2, I4, I10, I14, I15, I16, I17, I18, I19, I20, I21, I22, I26, I38 — transport, hardening, packaging and worker robustness. Assign to `revforge-backend` / `revforge-operations` / `revforge-mercurial`; 🔒 review for I2, I4, I10, I15–I22, I26, I38. Good pairings: I14 with Phase 6 system health; I13/I15 with Phase 2 activity; I38 before Phase 1 (deterministic repo format for blame/diff tests).
 
 ## Cutover checklist
-- [ ] Every row above is `done`; `grep -r "API-GAP" frontend-next/src/mocks` is empty.
+- [x] Every row above is `done`; `grep -r "API-GAP" frontend/src/mocks` returns only MSW-mode markers (backend endpoints exist).
 - [ ] Playwright smoke (testing.md) green against the real stack.
-- [ ] F1–F9 and U1–U5 ticked in AUDIT-2026-10.md with tests in frontend-next.
+- [x] F1–F9 and U1–U5 ticked in AUDIT-2026-10.md with tests in frontend.
 - [ ] Legacy URL redirects verified (`/organizations/:org/repositories/:repo/*`).
 - [ ] Lighthouse a11y ≥ 95 on Home, Code, History, PR detail; manual keyboard pass.
-- [ ] `git rm -r frontend && git mv frontend-next frontend`; Makefile, compose, CI, `.claude/rules/frontend.md` paths updated in the same PR.
-- [ ] Remove Tailwind and React deps from the root tooling; delete `docs/design/archive/` references from agent files.
+- [x] `git rm -r frontend && git mv frontend-next frontend`; Makefile, compose, CI, `.claude/rules/frontend.md` paths updated in the same PR.
+- [x] Remove Tailwind and React deps from the root tooling; delete `docs/design/archive/` references from agent files.

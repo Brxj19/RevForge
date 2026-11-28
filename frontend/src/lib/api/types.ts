@@ -1,0 +1,1129 @@
+// API schemas, ported from frontend/src/lib/api.ts (the current backend contract).
+// When a backend PR changes a schema, update this file, the MSW handler and the fixture together
+// (architecture.md §6). Later these are generated from OpenAPI.
+
+export interface ServiceHealth {
+  status: string;
+  service: string;
+}
+
+export interface ApiHealth extends ServiceHealth {
+  api_version: string;
+}
+
+export interface AuditEventRecord {
+  id: string;
+  actor_user_id: string | null;
+  actor_display_name: string | null;
+  actor_email: string | null;
+  organization_id: string | null;
+  repository_id: string | null;
+  event_type: string;
+  severity?: "normal" | "high";
+  request_id: string | null;
+  summary: string;
+  details: Array<{ label: string; value: string }>;
+  created_at: string;
+}
+
+export interface AuditEventList {
+  events: AuditEventRecord[];
+  total_count: number;
+}
+
+export interface ContributionDay {
+  date: string;
+  count: number;
+  byRepo?: ReadonlyArray<{ name: string; color: string; count: number }>;
+  additions?: number;
+  deletions?: number;
+}
+
+export interface ContributionRange {
+  start_date: string;
+  end_date: string;
+}
+
+export interface ContributionActivity {
+  total: number;
+  range: ContributionRange;
+  days: ContributionDay[];
+}
+
+export interface ApiErrorDetail {
+  loc?: string[];
+  message?: string;
+  type?: string;
+}
+
+export interface ApiErrorEnvelope {
+  error: {
+    code: string;
+    message: string;
+    reason?: string;
+    request_id?: string;
+    details?: ApiErrorDetail[];
+  };
+}
+
+export interface AcceptedActionResponse {
+  status: "accepted";
+  message: string;
+}
+
+export interface VerifyEmailResponse {
+  verified: boolean;
+}
+
+export interface PasswordResetConfirmResponse {
+  reset: boolean;
+}
+
+export interface CurrentUser {
+  id: string;
+  email: string;
+  display_name: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionResponse {
+  user: CurrentUser;
+  csrf_token: string;
+}
+
+export interface OrganizationSummary {
+  id: string;
+  slug: string;
+  display_name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  viewer_role: "owner" | "admin" | "member";
+  can_manage: boolean;
+}
+
+export interface OrganizationDetail extends OrganizationSummary {
+  member_count: number;
+  repository_count: number;
+}
+
+// Phase 4B: Organization management
+
+export interface OrganizationCreateRequest {
+  slug: string;
+  display_name: string;
+  description?: string;
+}
+
+export interface OrganizationUpdateRequest {
+  display_name?: string;
+  description?: string;
+}
+
+export interface Invitation {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: "owner" | "admin" | "member";
+  status: "pending" | "accepted" | "expired" | "revoked";
+  invited_by_email: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface InvitationCreateResponse extends Invitation {
+  token: string;
+}
+
+export interface SlugCheckResponse {
+  available: boolean;
+  reason?: "taken" | "reserved" | "invalid";
+}
+
+export interface RepositoryCreateRequest {
+  slug: string;
+  display_name: string;
+  description?: string;
+  visibility: "public" | "internal" | "private";
+}
+
+export interface PaginatedMembers {
+  items: OrganizationMember[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface OrganizationMember {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: "owner" | "admin" | "member";
+  created_at: string;
+  updated_at: string;
+  user_email: string;
+  user_display_name: string;
+}
+
+export interface RepositorySummary {
+  id: string;
+  organization_id: string;
+  slug: string;
+  display_name: string;
+  description: string | null;
+  visibility: "public" | "internal" | "private";
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  provisioning_state: "unprovisioned" | "provisioning" | "ready" | "failed";
+  provisioned_at: string | null;
+  is_browsable: boolean;
+  viewer_role: "read" | "write" | "admin" | null;
+  can_manage: boolean;
+  inherited_access: boolean;
+}
+
+/** Enum code only, never stderr or storage paths (screen-map "Phase 1 changes", I36). */
+export type ProvisioningErrorCode =
+  | "hg_init_failed"
+  | "hg_verify_failed"
+  | "storage_error"
+  | "storage_conflict"
+  | "provisioning_stale"
+  | "cancelled";
+
+export interface RepositoryDetail extends RepositorySummary {
+  organization_slug: string;
+  phase_status: string;
+  /** Absent from older servers. */
+  provisioning_error?: ProvisioningErrorCode | null;
+  provisioning_started_at?: string | null;
+}
+
+export interface RepositoryProvisionResponse {
+  id: string;
+  slug: string;
+  organization_slug: string;
+  provisioning_state: "unprovisioned" | "provisioning" | "ready" | "failed";
+  provisioned_at: string | null;
+  is_browsable: boolean;
+}
+
+export interface ChangesetSummary {
+  node: string;
+  short_node: string;
+  parents: string[];
+  author_name: string;
+  author_email_when_available: string | null;
+  timestamp: string;
+  message: string;
+  branch: string;
+  files_changed_count_when_available: number | null;
+  insertions_when_available: number | null;
+  deletions_when_available: number | null;
+  // Phase 2 row fields (screen-map "Phase 2 changes"). Optional so older servers and the code that
+  // only needs the graph fields (lanes.ts, palette, Overview) keep working.
+  /** Tags on this changeset, never "tip". */
+  tags?: string[];
+  bookmarks?: string[];
+  /** Head of its named branch. */
+  is_branch_head?: boolean;
+  is_merge?: boolean;
+  has_binary?: boolean;
+  /** Stats were over budget: counts are null. */
+  stats_too_large?: boolean;
+}
+
+export interface ChangesetList {
+  changesets: ChangesetSummary[];
+  /** 40-hex node of the last changeset scanned; pass it back as `cursor`. */
+  next_cursor: string | null;
+  /** The scan budget ran out before the page filled: keep searching from next_cursor (F6). */
+  scan_truncated?: boolean;
+}
+
+/** Server-side history filters for GET R/changesets (F4, F6). Empty values are omitted. */
+export interface HistoryFilters {
+  /** Exact named branch. */
+  branch?: string;
+  /** Case-insensitive substring of the user field. */
+  author?: string;
+  /** Repository-relative path: changesets whose changed files are under it. */
+  path?: string;
+  /** Case-insensitive message substring; 6..40 hex also matches node prefixes. */
+  q?: string;
+}
+
+export type ChangedFileStatus =
+  | "added"
+  | "modified"
+  | "removed"
+  | "deleted"
+  | "renamed"
+  | "copied"
+  | "unknown";
+
+export interface ChangesetDetail {
+  node: string;
+  short_node: string;
+  parents: string[];
+  author_name: string;
+  author_email_when_available: string | null;
+  timestamp: string;
+  message: string;
+  branch: string;
+  tags: string[];
+  bookmarks: string[];
+  files_changed: string[];
+  files_changed_count_when_available: number | null;
+  insertions_when_available: number | null;
+  deletions_when_available: number | null;
+  changed_files: Array<{
+    path: string;
+    /** "removed" from the shared diff model; older servers send "deleted". */
+    status: ChangedFileStatus;
+    insertions: number | null;
+    deletions: number | null;
+    old_path: string | null;
+    /** Phase 2 additions (absent from older servers). */
+    binary?: boolean;
+    old_mode?: string | null;
+    new_mode?: string | null;
+  }>;
+  /** Phase 2 row fields, when the detail carries them. */
+  is_merge?: boolean;
+  has_binary?: boolean;
+  stats_too_large?: boolean;
+}
+
+export interface DiffLine {
+  kind: "context" | "add" | "del" | "meta";
+  old_line: number | null;
+  new_line: number | null;
+  text: string;
+  /** The line was cut at the server's line-length cap. */
+  truncated?: boolean;
+}
+
+export interface DiffHunk {
+  header: string;
+  old_start: number;
+  old_lines: number;
+  new_start: number;
+  new_lines: number;
+  lines: DiffLine[];
+}
+
+/** One file of GET R/changesets/{node}/diff (shared diff model, vs first parent). */
+export interface DiffFile {
+  path: string;
+  old_path: string | null;
+  status: "added" | "modified" | "removed" | "renamed" | "copied";
+  binary: boolean;
+  old_mode: string | null;
+  new_mode: string | null;
+  insertions: number;
+  deletions: number;
+  /** Over the per-file cap: no hunks. */
+  too_large: boolean;
+  /** Hunks were cut at the per-file or total line cap. */
+  truncated: boolean;
+  /** Some lines were cut at the line-length cap; every hunk is still present. */
+  long_lines_truncated?: boolean;
+  hunks: DiffHunk[];
+}
+
+export interface ChangesetDiff {
+  content: string;
+  is_truncated: boolean;
+  truncation_reason_when_applicable: string | null;
+  /** Phase 2: structured files; absent from older servers (the UI falls back to `content`). */
+  files?: DiffFile[];
+  /** More than 300 files: the rest are not listed. */
+  files_truncated?: boolean;
+}
+
+/** The changeset that last touched an entry (directory: newest under it). */
+export interface LastChangeset {
+  node: string;
+  short_node: string;
+  summary: string;
+  author_name: string;
+  date: string;
+}
+
+export interface RepositoryTreeEntry {
+  name: string;
+  path: string;
+  kind: "directory" | "file";
+  /** Files only; null for directories or when unknown. */
+  size?: number | null;
+  /** null past the backend's 10k-file cap. */
+  last_changeset?: LastChangeset | null;
+}
+
+export type ContentKind = "text" | "binary" | "image" | "font" | "symlink";
+
+export interface RepositoryBrowseDirectory {
+  kind: "directory";
+  revision: string;
+  path: string;
+  entries: RepositoryTreeEntry[];
+}
+
+export interface RepositoryBrowseFile {
+  kind: "file";
+  revision: string;
+  path: string;
+  content: string | null;
+  language_hint_when_available: string | null;
+  is_binary: boolean;
+  is_too_large: boolean;
+  size_when_known: number | null;
+  /** Phase 1 additions; reposApi.browse fills them from the legacy fields when missing. */
+  content_kind: ContentKind;
+  size: number | null;
+  /** Friendly name such as "C++" (U3). */
+  language: string | null;
+}
+
+export interface RepositoryBlameLine {
+  line_number: number;
+  /** Line number in the changeset that introduced it. */
+  origin_line: number;
+  node: string;
+  short_node: string;
+  author_name: string;
+  author_email: string | null;
+  date: string | null;
+  summary: string;
+  path: string;
+  content: string;
+}
+
+export interface RepositoryBlame {
+  revision: string;
+  path: string;
+  is_binary: boolean;
+  is_too_large: boolean;
+  lines: RepositoryBlameLine[];
+}
+
+/** GET R/stats?rev. */
+export interface RepositoryStats {
+  languages: { name: string; percent: number; color: string }[];
+  contributors: number;
+  contributors_truncated: boolean;
+  size_bytes: number;
+}
+
+/** GET R/search/code?q&rev&limit. Literal, case-insensitive. */
+export interface CodeSearchMatch {
+  path: string;
+  line: number;
+  text: string;
+  /** [start, end) offsets into `text`. */
+  ranges: [number, number][];
+}
+
+export interface CodeSearchResponse {
+  items: CodeSearchMatch[];
+  truncated: boolean;
+}
+
+export interface RepositoryFileSearchMatch {
+  path: string;
+  language_hint_when_available: string | null;
+}
+
+export interface RepositoryFileSearchResponse {
+  revision: string;
+  query: string;
+  results: RepositoryFileSearchMatch[];
+}
+
+export type RepositoryBrowseResult =
+  RepositoryBrowseDirectory | RepositoryBrowseFile;
+
+export type BranchState = "open" | "closed" | "merged";
+
+export interface RepositoryRef {
+  name: string;
+  node: string;
+  short_node: string;
+  /** Phase 2 (absent from older servers): target changeset date and first line. */
+  updated_at?: string | null;
+  summary?: string | null;
+  /** Branches only. closed = no open heads; merged = every open head is an ancestor of default's tip. */
+  state?: BranchState | null;
+}
+
+export interface RepositoryRefs {
+  branches: RepositoryRef[];
+  tags: RepositoryRef[];
+  bookmarks: RepositoryRef[];
+}
+
+export interface RepositoryEvent {
+  id: string;
+  repository_id: string;
+  event_type: string;
+  actor_user_id: string | null;
+  actor_display_name: string | null;
+  actor_email: string | null;
+  authentication_method: string | null;
+  request_id: string | null;
+  summary: string;
+  details: Array<{ label: string; value: string }>;
+  occurred_at: string;
+}
+
+export interface RepositoryEventList {
+  events: RepositoryEvent[];
+  total_count: number | null;
+}
+
+export interface RepositoryPermission {
+  id: string;
+  repository_id: string;
+  user_id: string;
+  role: "read" | "write" | "admin";
+  granted_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+  user_email: string;
+  user_display_name: string;
+}
+
+export interface PersonalAccessToken {
+  id: string;
+  name: string;
+  token_prefix: string;
+  capability: "read" | "write";
+  organization_id: string | null;
+  repository_id: string | null;
+  expires_at: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface PersonalAccessTokenCreateResponse extends PersonalAccessToken {
+  plaintext_token: string;
+}
+
+export interface SshPublicKey {
+  id: string;
+  label: string;
+  key_type: string;
+  fingerprint_sha256: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface UserSessionInfo {
+  id: string;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_seen_at: string | null;
+  is_current: boolean;
+}
+
+export interface RepositoryTransportMetadata {
+  repository: {
+    organization_slug: string;
+    repository_slug: string;
+    provisioning_state: "unprovisioned" | "provisioning" | "ready" | "failed";
+    is_browsable: boolean;
+    viewer_role: "read" | "write" | "admin" | null;
+    can_read: boolean;
+    can_write: boolean;
+  };
+  https: {
+    enabled: boolean;
+    clone_url: string;
+    clone_command: string;
+    username_hint: string;
+    password_hint: string;
+  };
+  /** Anonymous visitors on public repositories get HTTPS only: ssh is null or has null fields. */
+  ssh: {
+    enabled: boolean;
+    clone_url: string | null;
+    clone_command: string | null;
+    username: string | null;
+    port: number | null;
+    /** Repo admins only. */
+    authorized_keys_path_hint: string | null;
+  } | null;
+  setup: {
+    has_active_token: boolean;
+    has_active_ssh_key: boolean;
+    recommended_next_step: string;
+  } | null;
+}
+
+/** Reviewer preview returned in the PR list so the row can show avatars + decision. */
+export interface ReviewerPreview {
+  display_name: string;
+  required: boolean;
+  decision: "pending" | "approved" | "changes_requested" | "commented";
+}
+
+export interface PullRequestSummary {
+  id: string;
+  repository_id: string;
+  number: number;
+  title: string;
+  description: string | null;
+  state: "open" | "draft" | "merged" | "closed";
+  source_revision: string;
+  target_revision: string;
+  source_branch: string | null;
+  target_branch: string | null;
+  author_id: string;
+  merger_id: string | null;
+  merged_revision: string | null;
+  merged_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  approval_count: number;
+  changes_requested_count: number;
+  reviewer_count: number;
+  comment_count: number;
+  /** Display name of the author, populated by the list endpoint. */
+  author_display_name?: string;
+  /** Repository slug, populated for cross-repo queries (reviews inbox). */
+  repository_slug?: string;
+  /** Organization slug, populated for cross-repository queries. */
+  organization_slug?: string;
+  /** Commit count (changesets), when known from the list. */
+  commit_count?: number;
+  /** Files changed count, when known from the list. */
+  files_changed_count?: number;
+  /** Total insertions, when known from the list. */
+  total_insertions?: number;
+  /** Total deletions, when known from the list. */
+  total_deletions?: number;
+  /** Reviewer summaries for the list row avatars. */
+  reviewers_preview?: ReviewerPreview[];
+}
+
+export interface PullRequestComment {
+  id: string;
+  pull_request_id: string;
+  author_id: string;
+  body: string;
+  reply_to_comment_id: string | null;
+  file_path: string | null;
+  line_number: number | null;
+  base_revision: string | null;
+  head_revision: string | null;
+  outdated: boolean;
+  resolved: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PullRequestReview {
+  id: string;
+  pull_request_id: string;
+  reviewer_id: string;
+  decision: "approved" | "changes_requested" | "comment";
+  body: string | null;
+  created_at: string;
+}
+
+export interface PullRequestReviewer {
+  id: string;
+  pull_request_id: string;
+  reviewer_id: string;
+  required: boolean;
+  display_name?: string;
+}
+
+export interface PullRequestDetail extends PullRequestSummary {
+  comments: PullRequestComment[];
+  reviews: PullRequestReview[];
+  reviewers: PullRequestReviewer[];
+}
+
+export interface PullRequestDiff {
+  changed_files: Array<{
+    path: string;
+    additions: number;
+    deletions: number;
+  }>;
+  total_additions: number;
+  total_deletions: number;
+  total_files: number;
+}
+
+export interface Webhook {
+  id: string;
+  repository_id: string;
+  url: string;
+  event_types: string[];
+  is_active: boolean;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  event_type: string;
+  request_url: string;
+  response_status_code: number | null;
+  status: string;
+  retry_count: number;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface CsrfResponse {
+  csrf_token: string;
+}
+
+/** API-GAP: pins — GET/PUT /me/pins (screen-map.md "New endpoint contracts"). */
+export interface PinRef {
+  org: string;
+  repo: string;
+}
+
+export interface PinList {
+  items: PinRef[];
+}
+
+/**
+ * The signed-in user as the shell needs it. `is_platform_admin` is not returned by /auth/me yet
+ * (API-GAP: admin, Phase 6); the shell treats a missing flag as false (deny by default).
+ */
+export interface Viewer extends CurrentUser {
+  is_platform_admin?: boolean;
+  handle?: string;
+}
+
+// Phase 3: Pull Requests
+
+export interface UserRef {
+  id: string;
+  display_name: string;
+  email: string;
+}
+
+export type TimelineEventType =
+  | "opened"
+  | "review_requested"
+  | "review"
+  | "comment"
+  | "push"
+  | "merged"
+  | "closed"
+  | "reopened"
+  | "ready_for_review"
+  | "converted_to_draft";
+
+export interface TimelineEvent {
+  type: TimelineEventType;
+  actor: UserRef;
+  at: string;
+  /** Extra data per event type (review decision, push nodes, comment id, etc). */
+  [key: string]: unknown;
+}
+
+export interface MergeCheck {
+  id: string;
+  ok: boolean;
+  pending?: boolean;
+  message: string;
+  detail?: string;
+}
+
+export interface MergeStatus {
+  mergeable: boolean;
+  checks: MergeCheck[];
+}
+
+export interface DiffFileSummary {
+  path: string;
+  status: string;
+  insertions: number;
+  deletions: number;
+}
+
+export interface CompareResult {
+  base_node: string;
+  head_node: string;
+  merge_base: string;
+  changesets: ChangesetSummary[];
+  files: DiffFileSummary[];
+  conflicts: boolean;
+  identical: boolean;
+}
+
+export interface PullRequestListResponse {
+  pull_requests: PullRequestSummary[];
+  counts: { open: number; draft: number; merged: number; closed: number };
+  next_cursor: string | null;
+}
+
+export interface ViewedFile {
+  path: string;
+  viewed: boolean;
+}
+
+/** A repository from an organization's list (RepositorySummary) with the org slug it was listed under. */
+export type OrgRepository = RepositorySummary & { organization_slug: string };
+
+// Phase 4A: User settings
+
+export interface UserProfile {
+  display_name: string;
+  email: string;
+  author_aliases: string[];
+}
+
+export type AccentPalette = "default" | "tech" | "professional" | "luxury";
+
+export interface UserPreferences {
+  accent: AccentPalette;
+  graph_default: boolean;
+  compact: boolean;
+  reduce_motion: boolean;
+}
+
+export interface NotificationChannel {
+  in_app: boolean;
+  email: boolean;
+  locked?: boolean;
+}
+
+export type NotificationSettings = Record<string, NotificationChannel>;
+
+// Phase 4C/D: Repository settings and webhooks
+
+export interface RepositoryUpdateRequest {
+  slug?: string;
+  display_name?: string;
+  description?: string;
+  visibility?: "public" | "internal" | "private";
+  archived?: boolean;
+}
+
+export interface TransportUpdateRequest {
+  ssh?: boolean;
+  https?: boolean;
+  anonymous_clone?: boolean;
+}
+
+export interface WebhookCreateRequest {
+  url: string;
+  event_types: string[];
+}
+
+export interface WebhookCreateResponse {
+  webhook: Webhook;
+  /** The signing secret is shown only once at creation or rotation. */
+  secret: string;
+}
+
+export interface WebhookSecretRotateResponse {
+  secret: string;
+}
+
+/** Access entry in the repo permissions table: either an org role or a direct grant. */
+export interface RepositoryAccessEntry {
+  user_id: string;
+  display_name: string;
+  email: string;
+  role: "read" | "write" | "admin" | "owner";
+  /** "org_role" (inherited) or "direct" (explicit grant). */
+  source: "org_role" | "direct";
+}
+
+// Phase 5: Discovery, access, people, notifications
+
+export interface AttentionItem {
+  kind:
+    | "webhook_failing"
+    | "provisioning"
+    | "review_requested"
+    | "changes_requested";
+  title: string;
+  detail: string;
+  href: string;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  icon: string | null;
+  href: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationList {
+  items: Notification[];
+  unread_count: number;
+}
+
+export interface RepoSearchHit {
+  org_slug: string;
+  repo_slug: string;
+  display_name: string;
+  description: string | null;
+  visibility: "public" | "internal" | "private";
+  language: string | null;
+  language_color: string | null;
+  updated_at: string;
+  watchers: number;
+  activity: number[];
+}
+
+export interface SearchFacet {
+  value: string;
+  count: number;
+}
+
+export interface RepoSearchResponse {
+  items: RepoSearchHit[];
+  facets: {
+    language: SearchFacet[];
+    organization: SearchFacet[];
+    visibility: SearchFacet[];
+  };
+  next_cursor: string | null;
+}
+
+export interface OrgSearchHit {
+  slug: string;
+  display_name: string;
+  repo_count: number;
+}
+
+export interface AccessRequest {
+  id: string;
+  user_id: string;
+  user_display_name: string;
+  user_handle: string;
+  repository_slug: string;
+  role: "read" | "write";
+  message: string | null;
+  status: "pending" | "approved" | "denied" | "withdrawn";
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface PublicUserRepo {
+  org_slug: string;
+  repo_slug: string;
+  description: string | null;
+  language: string | null;
+  language_color: string | null;
+  activity: number[];
+}
+
+export interface PublicUserOrg {
+  slug: string;
+  display_name: string;
+}
+
+export interface PublicUser {
+  handle: string;
+  display_name: string;
+  email: string | null;
+  organizations: PublicUserOrg[];
+  public_repos: PublicUserRepo[];
+  is_own_profile: boolean;
+}
+
+export interface UserSearchResult {
+  user_id: string;
+  display_name: string;
+  handle: string;
+  email: string | null;
+  eligible: boolean;
+  status: string;
+  label: string;
+}
+
+/** Alias for readability in users API — same shape as ContributionActivity. */
+export type ContributionActivityResponse = ContributionActivity;
+
+// Phase 6: Forge admin & break-glass
+
+export interface AdminAttentionItem {
+  kind: string;
+  title: string;
+  detail: string;
+  href: string;
+}
+
+export interface AdminOverview {
+  users: number;
+  suspended: number;
+  organizations: number;
+  repositories: number;
+  failed_provisioning: number;
+  stuck_provisioning: number;
+  storage_bytes: number;
+  storage_total_bytes: number;
+  spool_backlog: number;
+  stale_claims: number;
+  failed_logins_24h: number;
+  paused_accounts: number;
+  attention: AdminAttentionItem[];
+}
+
+export interface AdminHealthComponent {
+  name: string;
+  status: "healthy" | "degraded" | "down";
+  detail: string;
+}
+
+export interface AdminHealthResponse {
+  components: AdminHealthComponent[];
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string;
+  handle: string | null;
+  is_active: boolean;
+  is_platform_admin: boolean;
+  suspended_at: string | null;
+  suspended_reason: string | null;
+  organizations: string[];
+  last_active_at: string | null;
+  created_at: string;
+}
+
+export interface AdminUsersResponse {
+  items: AdminUser[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminUserSuspendResponse {
+  id: string;
+  is_active: false;
+  suspended_at: string;
+  suspended_reason: string;
+  sessions_revoked: number;
+}
+
+export interface AdminUserReactivateResponse {
+  id: string;
+  is_active: true;
+  suspended_at: null;
+  suspended_reason: null;
+}
+
+export interface AdminUserRevokeSessionsResponse {
+  id: string;
+  sessions_revoked: number;
+}
+
+export interface AdminOrganization {
+  id: string;
+  slug: string;
+  display_name: string;
+  owners: string[];
+  repository_count: number;
+  member_count: number;
+  created_at: string;
+}
+
+export interface AdminOrganizationsResponse {
+  items: AdminOrganization[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminRepository {
+  id: string;
+  organization_slug: string;
+  slug: string;
+  visibility: "public" | "internal" | "private";
+  provisioning_state: "unprovisioned" | "provisioning" | "ready" | "failed";
+  provisioning_error: string | null;
+  provisioning_started_at: string | null;
+  archived_at: string | null;
+  size_bytes: number;
+  updated_at: string;
+}
+
+export interface AdminRepositoriesResponse {
+  items: AdminRepository[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface BreakGlassSession {
+  id: string;
+  org: string;
+  repo: string;
+  reason: string;
+  expires_at: string;
+}
+
+export interface BreakGlassSessionDetail extends BreakGlassSession {
+  actor_user_id?: string;
+  actor_display_name?: string;
+  actor_email?: string;
+  created_at?: string;
+  ended_at?: string | null;
+  minutes?: number;
+}
+
+export interface AdminBreakGlassResponse {
+  active: BreakGlassSessionDetail | null;
+  recent: BreakGlassSessionDetail[];
+}
+
+export interface StartBreakGlassRequest {
+  org: string;
+  repo: string;
+  reason: string;
+  minutes: 15 | 60 | 240;
+}
+
+export interface InvitationPreview {
+  organization_slug: string;
+  organization_display_name: string;
+  organization_description: string | null;
+  role: string;
+  status: "pending" | "accepted" | "expired" | "revoked" | "declined" | string;
+  invited_by_name: string | null;
+  email_hint: string;
+  email_matches: boolean | null;
+  already_member: boolean;
+  expires_at: string;
+}
+
+export interface PendingUserInvitation {
+  id: string;
+  organization_id: string;
+  organization_slug: string;
+  organization_display_name: string;
+  role: string;
+  invited_by_name: string | null;
+  created_at: string;
+  expires_at: string;
+}

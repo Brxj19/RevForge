@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-10)
+Accepted (2026-10). Cutover complete (2026-11): `frontend-next/` renamed to `frontend/`, old React app removed.
 
 ## Context
 

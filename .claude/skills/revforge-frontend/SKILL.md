@@ -1,11 +1,11 @@
 ---
 name: revforge-frontend
-description: Build, port or review RevForge web UI in SolidJS 1.9 (frontend-next/) — any screen, component, route, style, query, form, code viewer, diff, graph, palette, menu, dialog or empty state. Use this skill whenever a task touches frontend-next/, frontend/, DESIGN.md, the prototype (docs/design/revforge-prototype.html), UI tokens, accessibility, URL state or frontend tests — even if the user only says "the page", "the button", "the UI" or names a screen. Also use it before reviewing frontend diffs.
+description: Build or review RevForge web UI in SolidJS 1.9 (frontend/) — any screen, component, route, style, query, form, code viewer, diff, graph, palette, menu, dialog or empty state. Use this skill whenever a task touches frontend/, DESIGN.md, the prototype (docs/design/revforge-prototype.html), UI tokens, accessibility, URL state or frontend tests — even if the user only says "the page", "the button", "the UI" or names a screen. Also use it before reviewing frontend diffs.
 ---
 
 # RevForge frontend (SolidJS 1.9)
 
-You are building the new RevForge web app in `frontend-next/`. The old React app in `frontend/` is frozen except for security fixes and will be deleted at cutover (ADR-007).
+You are building the RevForge web app in `frontend/` (SolidJS 1.9).
 
 ## Sources of truth (read in this order)
 
@@ -17,7 +17,7 @@ You are building the new RevForge web app in `frontend-next/`. The old React app
 6. **`references/code-viewer.md`** — CodeMirror 6 setup for the code/blame/diff viewers.
 7. **`references/testing.md`** — what to test and how.
 
-Never follow `docs/design/archive/*`. Never copy patterns from `frontend/` (React) without translating them through `solid-patterns.md`.
+Never follow `docs/design/archive/*`.
 
 ## Workflow for any UI task
 
@@ -28,7 +28,7 @@ Never follow `docs/design/archive/*`. Never copy patterns from `frontend/` (Reac
 5. **Build the view** with tokens only. Match the prototype's spacing, sizes and copy. Workspace pages use `WorkspaceLayout` + `Pane` so panes scroll independently.
 6. **States:** loading = `Skeleton`; empty/error/denied = `EmptyState` with the right illustration id; 401 → session expiry dialog (global); 403 → denied; 404 → not-found (anonymous never learns a private repo exists).
 7. **Accessibility pass** (DESIGN.md §9): keyboard path, focus restore, labels, non-colour status.
-8. **Tests** (testing.md) and run: `cd frontend-next && npm run lint && npm run typecheck && npm run test`.
+8. **Tests** (testing.md) and run: `cd frontend && npm run lint && npm run typecheck && npm run test`.
 9. **Report:** route(s), components added, endpoints used (existing / changed / mocked gap), audit items closed, tests run, known gaps.
 
 ## Non-negotiables

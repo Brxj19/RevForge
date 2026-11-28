@@ -8,7 +8,7 @@ RevForge is not a Kallithea fork and not a custom version-control system. Use Ka
 
 ## Product and architecture baseline
 
-- **Frontend:** SolidJS 1.9, TypeScript, Vite, `@solidjs/router`, TanStack Solid Query, Kobalte, CSS Modules over design tokens, CodeMirror 6 (ADR-007). New work goes in `frontend-next/`; the React app in `frontend/` is frozen (security fixes only) until cutover.
+- **Frontend:** SolidJS 1.9, TypeScript, Vite, `@solidjs/router`, TanStack Solid Query, Kobalte, CSS Modules over design tokens, CodeMirror 6 (ADR-007). All frontend work goes in `frontend/`.
 - **Control plane:** Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, Pydantic.
 - **Protocol layer:** a dedicated WSGI-compatible Mercurial HTTP gateway; do not funnel native Mercurial wire-protocol requests through ad hoc FastAPI endpoints.
 - **SSH:** OpenSSH plus a constrained forced-command gateway; never use a general interactive shell account for repository access.
@@ -33,33 +33,40 @@ RevForge is not a Kallithea fork and not a custom version-control system. Use Ka
 
 ```text
 revforge/
-├── apps/
-│   ├── web/                       # web application (today: frontend-next/, SolidJS)
-│   ├── api/                       # FastAPI control plane
-│   ├── hg_http_gateway/           # WSGI-compatible Mercurial protocol gateway
-│   ├── ssh_gateway/               # OpenSSH forced-command executable
-│   └── worker/                    # asynchronous jobs
-├── packages/
-│   ├── domain/                    # roles, policy primitives, shared models
-│   ├── mercurial_adapter/         # narrow native-Hg integration boundary
-│   ├── audit/                     # event schema and writers
-│   └── ui/                        # shared frontend components/tokens
+├── frontend/                      # SolidJS 1.9 web app (Vite, TypeScript)
+│   └── src/
+│       ├── app/                   # providers, auth, shell, routes
+│       ├── features/              # one folder per area (repo, code, history, pulls, …)
+│       ├── ui/                    # design-system primitives
+│       ├── lib/                   # API client, query keys, utilities
+│       ├── mocks/                 # MSW handlers and fixtures
+│       └── styles/                # global CSS tokens, reset, base, code
+├── backend/                       # FastAPI control plane
+│   ├── app/
+│   │   ├── api/v1/               # route modules
+│   │   ├── services/             # use-case logic
+│   │   ├── models/               # SQLAlchemy ORM
+│   │   ├── schemas/              # Pydantic request/response
+│   │   ├── mercurial/            # hg adapter, HTTP gateway, SSH gateway, hooks
+│   │   ├── domain/               # roles, policy primitives
+│   │   ├── repositories/         # data-access layer
+│   │   └── worker.py             # async jobs
+│   ├── alembic/                   # migrations
+│   └── tests/
 ├── infra/
-│   ├── compose/
-│   ├── caddy/
-│   ├── postgres/
-│   ├── scripts/
-│   └── systemd/
+│   ├── docker-compose.yml
+│   ├── backend/                   # backend Dockerfile
+│   ├── frontend/                  # frontend Dockerfile
+│   └── ssh/                       # sshd config and Dockerfile
 ├── docs/
-├── tests/
-│   ├── integration/
-│   ├── e2e/
-│   └── security/
+│   ├── decisions/                 # ADRs
+│   ├── audit/                     # security audit
+│   └── design/                    # prototype HTML
+├── scripts/
 ├── AGENTS.md
+├── CLAUDE.md
 └── DESIGN.md
 ```
-
-Create this structure only when it serves the current milestone; do not create empty directories solely to resemble this diagram.
 
 ## Quality gates
 
@@ -142,7 +149,7 @@ For large work, record the decision in `docs/adr/` before implementation.
 Spawn no more than two write-capable agents in parallel unless their file ownership is completely disjoint.
 
 - **`backend-platform-engineer`** owns API, domain, migrations, policy code, and worker changes.
-- **`frontend-product-engineer`** owns `frontend-next/` (SolidJS), design-system components, interactions, accessibility, MSW mocks, and frontend tests.
+- **`frontend-product-engineer`** owns `frontend/` (SolidJS), design-system components, interactions, accessibility, MSW mocks, and frontend tests.
 - **`mercurial-protocol-expert`** owns `mercurial_adapter`, HTTP gateway, SSH gateway, hook, and native-client integration changes.
 - **`platform-operations-engineer`** owns Docker Compose, proxy configuration, runbooks, backups, observability, and deployment scripts.
 
@@ -197,7 +204,7 @@ Spawn the codebase explorer, mercurial protocol expert, and security reviewer in
 
 - Follow `DESIGN.md` (v3) and the prototype `docs/design/revforge-prototype.html`; never follow `docs/design/archive/`.
 - Use the `revforge-frontend` skill for how to build UI and the `revforge-ui-migration` skill for what to build next and which audit items pair with it.
-- Build from primitives in `frontend-next/src/ui/` rather than duplicating them.
+- Build from primitives in `frontend/src/ui/` rather than duplicating them.
 - Optimize for dense code/history information, not marketing-dashboard aesthetics.
 - Keep primary actions obvious: Clone, Browse, Compare, Create review, Push guidance, Settings.
 - Provide an accessible non-colour indicator for state; status colour alone is insufficient.
