@@ -201,7 +201,7 @@ async def register_user(
                 build_verification_email(
                     normalized_email,
                     token=raw_reissue_token,
-                    public_base_url=settings.public_base_url,
+                    public_base_url=settings.email_link_base_url,
                 )
             )
         return None
@@ -263,7 +263,7 @@ async def register_user(
         build_verification_email(
             normalized_email,
             token=raw_token,
-            public_base_url=settings.public_base_url,
+            public_base_url=settings.email_link_base_url,
         )
     )
     return user
@@ -585,7 +585,7 @@ async def resend_verification_email(
         build_verification_email(
             normalized_email,
             token=raw_token,
-            public_base_url=settings.public_base_url,
+            public_base_url=settings.email_link_base_url,
         )
     )
 
@@ -659,7 +659,7 @@ async def request_password_reset(
         build_password_reset_email(
             normalized_email,
             token=raw_token,
-            public_base_url=settings.public_base_url,
+            public_base_url=settings.email_link_base_url,
         )
     )
 

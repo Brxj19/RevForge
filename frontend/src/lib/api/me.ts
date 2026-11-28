@@ -1,8 +1,10 @@
-import { request, withQuery } from "./client";
+import { path, request, withQuery } from "./client";
 import type {
   AttentionItem,
   ContributionActivity,
   NotificationList,
+  OrganizationSummary,
+  PendingUserInvitation,
   PinList,
   PinRef,
 } from "./types";
@@ -60,6 +62,17 @@ export const meApi = {
     request<undefined>("/me/notifications/read", {
       method: "POST",
       json: ids ? { ids } : {},
+      csrf,
+    }),
+  invitations: () => request<PendingUserInvitation[]>("/me/invitations"),
+  acceptInvitation: (invitationId: string, csrf: string | null) =>
+    request<{ organization: OrganizationSummary; role: string }>(
+      path`/me/invitations/${invitationId}/accept`,
+      { method: "POST", csrf },
+    ),
+  declineInvitation: (invitationId: string, csrf: string | null) =>
+    request<undefined>(path`/me/invitations/${invitationId}/decline`, {
+      method: "POST",
       csrf,
     }),
 };

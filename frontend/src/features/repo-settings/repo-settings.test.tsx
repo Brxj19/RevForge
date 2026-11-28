@@ -50,6 +50,9 @@ describe("RepoGeneralPage", () => {
     expect(screen.getByLabelText("Display name")).toBeInTheDocument();
     expect(screen.getByLabelText("Slug")).toBeInTheDocument();
     expect(screen.getByLabelText("Description")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Default branch/i }),
+    ).not.toBeDisabled();
     expect(screen.getByText("Visibility")).toBeInTheDocument();
   });
 
@@ -127,6 +130,19 @@ describe("RepoAccessPage", () => {
     });
     // Arjun's row should show "Organization role" and no revoke
     expect(screen.getAllByText("Organization role").length).toBeGreaterThan(0);
+  });
+
+  it("enables Add person button and opens the grant access dialog", async () => {
+    renderApp("/sigma/sigma-reckitt/settings/access");
+    const addButton = await screen.findByRole("button", {
+      name: /Add person/i,
+    });
+    expect(addButton).not.toBeDisabled();
+    fireEvent.click(addButton);
+    expect(
+      await screen.findByText(/Add person to sigma-reckitt/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Grant access" })).toBeDisabled();
   });
 });
 

@@ -251,15 +251,37 @@ export const reposApi = {
       csrf,
     }),
 
-  /** List who can access a repository: org roles + direct grants. I29. */
-  permissions: (org: string, repo: string) =>
-    request<RepositoryAccessEntry[]>(`${R(org, repo)}/permissions`),
+  /** List who can access a repository: direct grants (backend) or org roles + direct grants (fixtures). */
+  permissions: async (
+    org: string,
+    repo: string,
+  ): Promise<RepositoryAccessEntry[]> => {
+    type RawPermission = Partial<RepositoryAccessEntry> & {
+      user_id: string;
+      role: RepositoryAccessEntry["role"];
+      user_display_name?: string;
+      user_email?: string;
+    };
+    const raw = await request<RawPermission[]>(`${R(org, repo)}/permissions`);
+    return (Array.isArray(raw) ? raw : []).map((entry) => ({
+      user_id: entry.user_id,
+      display_name:
+        entry.display_name ??
+        entry.user_display_name ??
+        entry.email ??
+        entry.user_email ??
+        entry.user_id,
+      email: entry.email ?? entry.user_email ?? "",
+      role: entry.role,
+      source: entry.source ?? "direct",
+    }));
+  },
 
-  /** Update a user's direct grant. */
+  /** Grant or update a user's direct repository permission (user may be email or user UUID). */
   updatePermission: (
     org: string,
     repo: string,
-    data: { user_id: string; role: string },
+    data: { user: string; role: "read" | "write" | "admin" },
     csrf: string | null,
   ) =>
     request(`${R(org, repo)}/permissions`, {

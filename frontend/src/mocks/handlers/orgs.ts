@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import type { OrganizationSummary } from "~/lib/api/types";
-import { db, ORGS, REPOS } from "../db";
+import { db, ORGS, REPOS, USERS } from "../db";
 import { SIGMA_INVITATIONS, SIGMA_MEMBERS } from "../fixtures/orgs";
 import { API, apiError, csrfFailure, notFound, unauthorized } from "./util";
 
@@ -222,16 +222,18 @@ export const orgHandlers = [
     },
   ),
 
-  // API-GAP: phase-4b-org-management — GET /organizations/{org}/invitations
   http.get(`${API}/organizations/:org/invitations`, ({ params }) => {
     if (!db.session) return unauthorized();
     const o = ORGS.find((x) => x.slug === params.org);
     if (!o || !o.members[db.session]) return notFound();
+    if (o.members[db.session] !== "owner") {
+      return apiError(403, "Only organization owners can view invitations.");
+    }
     const items =
       params.org === "sigma"
         ? SIGMA_INVITATIONS.filter((i) => i.status === "pending")
         : [];
-    return HttpResponse.json({ items });
+    return HttpResponse.json(items);
   }),
 
   // API-GAP: phase-4b-org-management — POST /organizations/{org}/invitations
@@ -285,15 +287,53 @@ export const orgHandlers = [
     },
   ),
 
-  // API-GAP: phase-4b-org-management — POST /invitations/{token}/accept
+  http.get(`${API}/invitations/:token`, ({ params }) => {
+    const tok = String(params.token ?? "");
+    if (tok === "not-found") return notFound();
+    const signedInUser = db.session ? USERS[db.session] : null;
+    const invitedEmail = "tatwa@sigma.dev";
+    const emailMatches = signedInUser
+      ? signedInUser.email.toLowerCase() === invitedEmail
+      : null;
+    return HttpResponse.json({
+      organization_slug: "sigma",
+      organization_display_name: "Sigma",
+      organization_description: "Core Mercurial engineering organization.",
+      role: "member",
+      status: tok === "expired-token" ? "expired" : "pending",
+      invited_by_name: "Brajesh",
+      email_hint: emailMatches ? invitedEmail : "t***@sigma.dev",
+      email_matches: emailMatches,
+      already_member: false,
+      expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+    });
+  }),
+
+  // POST /invitations/{token}/accept
   http.post(`${API}/invitations/:token/accept`, async ({ request }) => {
     if (!db.session) return unauthorized();
     const fail = csrfFailure(request);
     if (fail) return fail;
     return HttpResponse.json({
-      organization: { slug: "sigma", display_name: "Sigma" },
+      organization: {
+        id: "org-sigma",
+        slug: "sigma",
+        display_name: "Sigma",
+        description: "Core Mercurial engineering organization.",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        viewer_role: "member",
+        can_manage: false,
+      },
       role: "member",
     });
+  }),
+
+  http.post(`${API}/invitations/:token/decline`, async ({ request }) => {
+    if (!db.session) return unauthorized();
+    const fail = csrfFailure(request);
+    if (fail) return fail;
+    return new HttpResponse(null, { status: 204 });
   }),
 
   // API-GAP: phase-4b-org-management — GET /organizations/{org}/repositories/check-slug?s=

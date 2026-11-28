@@ -78,6 +78,9 @@ export const ICON_PATHS = {
   server:
     '<rect x="3" y="4" width="18" height="7" rx="1"/><rect x="3" y="13" width="18" height="7" rx="1"/><path d="M7 7.5h.01M7 16.5h.01"/>',
   map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
+  circle: '<circle cx="12" cy="12" r="8"/>',
+  login:
+    '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 7l5 5-5 5M15 12H3"/>',
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

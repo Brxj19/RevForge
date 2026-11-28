@@ -112,13 +112,22 @@ describe("OrgMembersPage", () => {
     });
   });
 
-  it("shows pending invitations", async () => {
+  it("shows pending invitations for owners", async () => {
     renderApp("/org/sigma/members");
     expect(await screen.findByText("Pending invitations")).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText("sana@sigma.dev")).toBeInTheDocument();
       expect(screen.getByText("arjun.nair@outlook.com")).toBeInTheDocument();
     });
+  });
+
+  it("hides Invite button and Pending invitations for non-owner members", async () => {
+    renderApp("/org/sigma/members", { user: "tatwa" });
+    expect(await screen.findByText("Brxj19")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Invite/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Pending invitations")).not.toBeInTheDocument();
   });
 
   it("opens the invite dialog", async () => {

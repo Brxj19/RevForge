@@ -1,4 +1,4 @@
-import { useParams } from "@solidjs/router";
+import { A, useParams } from "@solidjs/router";
 import { For, lazy, Match, Suspense, Switch } from "solid-js";
 import { useRepo } from "~/features/repo";
 import { Card, CardBody } from "~/ui/Card";
@@ -59,7 +59,7 @@ export default function RepoSettingsLayout() {
           <div class={styles.subnav}>
             <For each={NAV_ITEMS}>
               {(item) => (
-                <a
+                <A
                   href={`${ctx.base()}/settings/${item.key}`}
                   class={`${styles.navLink} ${item.danger ? styles.navLinkDanger : ""}`}
                   data-active={section() === item.key ? "" : undefined}
@@ -67,7 +67,7 @@ export default function RepoSettingsLayout() {
                 >
                   <Icon name={item.icon} size={15} />
                   {item.label}
-                </a>
+                </A>
               )}
             </For>
           </div>

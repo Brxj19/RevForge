@@ -110,4 +110,35 @@ export const meHandlers = [
     db.pins[user] = items;
     return HttpResponse.json({ items });
   }),
+
+  http.get(`${API}/me/invitations`, () => {
+    if (!db.session) return unauthorized();
+    return HttpResponse.json([]);
+  }),
+
+  http.post(`${API}/me/invitations/:id/accept`, ({ request }) => {
+    if (!db.session) return unauthorized();
+    const bad = csrfFailure(request);
+    if (bad) return bad;
+    return HttpResponse.json({
+      organization: {
+        id: "org-sigma",
+        slug: "sigma",
+        display_name: "Sigma",
+        description: null,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        viewer_role: "member",
+        can_manage: false,
+      },
+      role: "member",
+    });
+  }),
+
+  http.post(`${API}/me/invitations/:id/decline`, ({ request }) => {
+    if (!db.session) return unauthorized();
+    const bad = csrfFailure(request);
+    if (bad) return bad;
+    return new HttpResponse(null, { status: 204 });
+  }),
 ];

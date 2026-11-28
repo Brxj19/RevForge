@@ -36,6 +36,9 @@ const ReviewsInboxPage = lazy(
 );
 const SettingsLayout = lazy(() => import("~/features/settings/SettingsLayout"));
 const OrgLayout = lazy(() => import("~/features/orgs/OrgLayout"));
+const InvitationAcceptPage = lazy(
+  () => import("~/features/orgs/InvitationAcceptPage"),
+);
 const NewOrgPage = lazy(() => import("~/features/new-org/NewOrgPage"));
 const NewRepoPage = lazy(() => import("~/features/new-repo/NewRepoPage"));
 const RepoSettingsLayout = lazy(
@@ -122,6 +125,7 @@ export const TOP_LEVEL_SEGMENTS = [
   "reset-password",
   "suspended",
   "error",
+  "invitations",
   "org",
   "orgs",
   "settings",
@@ -152,6 +156,7 @@ export function AppRoutes(): JSX.Element {
       <Route path="/error/:code" component={ErrorPage} />
 
       <Route path="/org/:org/:section?" component={authed(OrgLayout)} />
+      <Route path="/invitations/:token" component={InvitationAcceptPage} />
       <Route path="/orgs/new" component={authed(NewOrgPage)} />
       <Route path="/settings/:section?" component={authed(SettingsLayout)} />
       <Route

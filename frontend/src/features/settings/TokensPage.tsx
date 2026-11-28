@@ -154,7 +154,7 @@ const TokensPage: Component = () => {
               </Button>
             </CardHeader>
             <Show
-              when={tokens.data && tokens.data.items.length > 0}
+              when={tokens.data && tokens.data.length > 0}
               fallback={
                 <EmptyState
                   art="no-tokens"
@@ -183,7 +183,7 @@ const TokensPage: Component = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    <For each={tokens.data?.items}>
+                    <For each={tokens.data}>
                       {(token) => {
                         const expired = () => isExpired(token);
                         const expiry = () => expiryLabel(token.expires_at);

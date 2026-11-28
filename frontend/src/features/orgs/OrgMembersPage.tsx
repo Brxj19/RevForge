@@ -23,6 +23,7 @@ import { Skeleton } from "~/ui/Skeleton";
 import { Tooltip } from "~/ui/Tooltip";
 import {
   useCreateInvitation,
+  useOrgDetail,
   useOrgInvitations,
   useOrgMembers,
   useRemoveMember,
@@ -50,8 +51,12 @@ const OrgMembersPage: Component = () => {
   const [inviteEmail, setInviteEmail] = createSignal("");
   const [inviteRole, setInviteRole] = createSignal("member");
 
+  const orgQuery = useOrgDetail(() => params.org);
+  const isOwner = () => loaded(orgQuery)?.viewer_role === "owner";
+  const canManage = () => Boolean(loaded(orgQuery)?.can_manage);
+
   const membersQuery = useOrgMembers(() => params.org, page);
-  const invitationsQuery = useOrgInvitations(() => params.org);
+  const invitationsQuery = useOrgInvitations(() => params.org, isOwner);
   const updateRole = useUpdateMemberRole(() => params.org);
   const removeMember = useRemoveMember(() => params.org);
   const createInvitation = useCreateInvitation(() => params.org);
@@ -111,14 +116,16 @@ const OrgMembersPage: Component = () => {
               <Match when={true}>Members</Match>
             </Switch>
           </h2>
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => setInviteOpen(true)}
-          >
-            <Icon name="plus" size={13} />
-            Invite
-          </Button>
+          <Show when={isOwner()}>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => setInviteOpen(true)}
+            >
+              <Icon name="plus" size={13} />
+              Invite
+            </Button>
+          </Show>
         </CardHeader>
         <Switch>
           <Match when={membersQuery.isPending}>
@@ -138,7 +145,7 @@ const OrgMembersPage: Component = () => {
               />
             </CardBody>
           </Match>
-          <Match when={membersQuery.data}>
+          <Match when={loaded(membersQuery)}>
             {(data) => (
               <>
                 <div style={{ "overflow-x": "auto" }}>
@@ -149,7 +156,9 @@ const OrgMembersPage: Component = () => {
                         <th>Role</th>
                         <th>Joined</th>
                         <th style={{ "text-align": "right" }}>Last active</th>
-                        <th />
+                        <Show when={canManage()}>
+                          <th />
+                        </Show>
                       </tr>
                     </thead>
                     <tbody>
@@ -171,25 +180,33 @@ const OrgMembersPage: Component = () => {
                               </div>
                             </td>
                             <td>
-                              <Show
-                                when={!isLastOwner(member)}
-                                fallback={
+                              <Switch>
+                                <Match when={!canManage()}>
+                                  <span class={styles.lockedRole}>
+                                    {member.role[0]?.toUpperCase()}
+                                    {member.role.slice(1)}
+                                  </span>
+                                </Match>
+                                <Match when={isLastOwner(member)}>
                                   <Tooltip content="An organization needs at least one owner">
                                     <span class={styles.lockedRole}>
                                       Owner
                                       <Icon name="lock" size={12} />
                                     </span>
                                   </Tooltip>
-                                }
-                              >
-                                <Select
-                                  label="Role"
-                                  size="sm"
-                                  options={ROLE_OPTIONS}
-                                  value={member.role}
-                                  onChange={(v) => handleRoleChange(member, v)}
-                                />
-                              </Show>
+                                </Match>
+                                <Match when={true}>
+                                  <Select
+                                    label="Role"
+                                    size="sm"
+                                    options={ROLE_OPTIONS}
+                                    value={member.role}
+                                    onChange={(v) =>
+                                      handleRoleChange(member, v)
+                                    }
+                                  />
+                                </Match>
+                              </Switch>
                             </td>
                             <td style={{ color: "var(--muted)" }}>
                               {relativeTime(member.created_at)}
@@ -197,18 +214,20 @@ const OrgMembersPage: Component = () => {
                             <td class={styles.numCell}>
                               {relativeTime(member.updated_at)}
                             </td>
-                            <td class={styles.actionsCell}>
-                              <Show when={!isLastOwner(member)}>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleRemove(member)}
-                                  style={{ color: "var(--red)" }}
-                                >
-                                  Remove
-                                </Button>
-                              </Show>
-                            </td>
+                            <Show when={canManage()}>
+                              <td class={styles.actionsCell}>
+                                <Show when={!isLastOwner(member)}>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleRemove(member)}
+                                    style={{ color: "var(--red)" }}
+                                  >
+                                    Remove
+                                  </Button>
+                                </Show>
+                              </td>
+                            </Show>
                           </tr>
                         )}
                       </For>
@@ -231,76 +250,81 @@ const OrgMembersPage: Component = () => {
         </Switch>
       </Card>
 
-      {/* Pending invitations */}
-      <Card>
-        <CardHeader>
-          <h2 class="h2">Pending invitations</h2>
-          <Show when={loaded(invitationsQuery)}>
-            {(data) => (
-              <span class={styles.countBadge}>{data().items.length}</span>
-            )}
-          </Show>
-        </CardHeader>
-        <Switch>
-          <Match when={invitationsQuery.isPending}>
-            <CardBody>
-              <Skeleton width="100%" height={60} />
-            </CardBody>
-          </Match>
-          <Match when={invitationsQuery.isError}>
-            <CardBody>
-              <ErrorState
-                error={invitationsQuery.error}
-                what="pending invitations"
+      {/* Pending invitations — owners only */}
+      <Show when={isOwner()}>
+        <Card>
+          <CardHeader>
+            <h2 class="h2">Pending invitations</h2>
+            <Show when={loaded(invitationsQuery)}>
+              {(data) => <span class={styles.countBadge}>{data().length}</span>}
+            </Show>
+          </CardHeader>
+          <Switch>
+            <Match when={invitationsQuery.isPending}>
+              <CardBody>
+                <Skeleton width="100%" height={60} />
+              </CardBody>
+            </Match>
+            <Match when={invitationsQuery.isError}>
+              <CardBody>
+                <ErrorState
+                  error={invitationsQuery.error}
+                  what="pending invitations"
+                  size="inline"
+                  compact
+                  level={3}
+                  onRetry={() => void invitationsQuery.refetch()}
+                />
+              </CardBody>
+            </Match>
+            <Match when={loaded(invitationsQuery)?.length === 0}>
+              <EmptyState
+                art="no-invitations"
                 size="inline"
                 compact
                 level={3}
-                onRetry={() => void invitationsQuery.refetch()}
               />
-            </CardBody>
-          </Match>
-          <Match when={invitationsQuery.data?.items.length === 0}>
-            <EmptyState art="no-invitations" size="inline" compact level={3} />
-          </Match>
-          <Match when={invitationsQuery.data}>
-            {(data) => (
-              <For each={data().items}>
-                {(invitation) => (
-                  <div class={styles.invitationRow}>
-                    <div class={styles.invitationInfo}>
-                      <span class={styles.emailAvatar}>@</span>
-                      <div class={styles.invitationMeta}>
-                        <span>{invitation.email}</span>
-                        <span class={styles.invitationDetail}>
-                          invited as {invitation.role}{" "}
-                          {relativeTime(invitation.created_at)}
-                        </span>
+            </Match>
+            <Match when={loaded(invitationsQuery)}>
+              {(data) => (
+                <For each={data()}>
+                  {(invitation) => (
+                    <div class={styles.invitationRow}>
+                      <div class={styles.invitationInfo}>
+                        <span class={styles.emailAvatar}>@</span>
+                        <div class={styles.invitationMeta}>
+                          <span>{invitation.email}</span>
+                          <span class={styles.invitationDetail}>
+                            invited as {invitation.role}{" "}
+                            {relativeTime(invitation.created_at)}
+                          </span>
+                        </div>
                       </div>
+                      <span class={styles.invitationActions}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleResend(invitation)}
+                        >
+                          Resend
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRevoke(invitation)}
+                          style={{ color: "var(--red)" }}
+                        >
+                          Revoke
+                        </Button>
+                      </span>
                     </div>
-                    <span class={styles.invitationActions}>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleResend(invitation)}
-                      >
-                        Resend
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRevoke(invitation)}
-                        style={{ color: "var(--red)" }}
-                      >
-                        Revoke
-                      </Button>
-                    </span>
-                  </div>
-                )}
-              </For>
-            )}
-          </Match>
-        </Switch>
-      </Card>
+                  )}
+                </For>
+              )}
+            </Match>
+          </Switch>
+        </Card>
+      </Show>
 
       {/* Invite dialog */}
       <Dialog

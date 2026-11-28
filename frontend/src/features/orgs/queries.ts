@@ -25,10 +25,11 @@ export function useOrgMembers(org: () => string, page: () => number) {
   }));
 }
 
-export function useOrgInvitations(org: () => string) {
+export function useOrgInvitations(org: () => string, enabled?: () => boolean) {
   return createQuery(() => ({
     queryKey: qk.orgInvitations(org()),
     queryFn: () => orgsApi.listInvitations(org()),
+    enabled: enabled ? enabled() : true,
     retry: (count: number, err: unknown) => count < 2 && isRetryable(err),
   }));
 }

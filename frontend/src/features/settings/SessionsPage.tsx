@@ -25,7 +25,7 @@ const SessionsPage: Component = () => {
   const [confirmOpen, setConfirmOpen] = createSignal(false);
 
   const otherSessions = () =>
-    (sessions.data?.items ?? []).filter((s) => !s.is_current);
+    (sessions.data ?? []).filter((s) => !s.is_current);
 
   return (
     <>
@@ -77,11 +77,11 @@ const SessionsPage: Component = () => {
               </Show>
             </CardHeader>
             <Show
-              when={sessions.data && sessions.data.items.length > 0}
+              when={sessions.data && sessions.data.length > 0}
               fallback={<EmptyState art="no-sessions" size="card" />}
             >
               <div>
-                <For each={sessions.data?.items}>
+                <For each={sessions.data}>
                   {(session) => (
                     <div class={styles.sessionRow}>
                       <div class={styles.sessionMeta}>

@@ -150,19 +150,7 @@ const OrgLayout: Component = () => {
                         <OrgOverviewPage />
                       </Match>
                       <Match when={section() === "members"}>
-                        <Show
-                          when={org().can_manage}
-                          fallback={
-                            <EmptyState
-                              art="permission-denied"
-                              title="Members"
-                              body="You need to be an owner or admin to manage members."
-                              size="card"
-                            />
-                          }
-                        >
-                          <OrgMembersPage />
-                        </Show>
+                        <OrgMembersPage />
                       </Match>
                       <Match when={section() === "general"}>
                         <Show

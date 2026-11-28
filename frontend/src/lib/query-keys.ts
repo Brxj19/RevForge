@@ -66,6 +66,8 @@ export const qk = {
   // Phase 4B: Organization management
   orgMembers: (o: string, page: number) => ["org", o, "members", page] as const,
   orgInvitations: (o: string) => ["org", o, "invitations"] as const,
+  myInvitations: ["me", "invitations"] as const,
+  invitationPreview: (token: string) => ["invitations", token] as const,
   orgSlugCheck: (slug: string) => ["org-slug-check", slug] as const,
   repoSlugCheck: (o: string, slug: string) =>
     ["repo-slug-check", o, slug] as const,

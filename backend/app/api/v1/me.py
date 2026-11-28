@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +15,7 @@ from app.api.deps import (
     require_csrf,
     require_platform_admin,
 )
-from app.domain.enums import ReviewDecision
+from app.domain.enums import OrganizationRole, ReviewDecision
 from app.models.user import User
 from app.schemas.admin import BreakGlassSessionResponse
 from app.schemas.contributions import (
@@ -24,6 +25,9 @@ from app.schemas.contributions import (
 )
 from app.schemas.me import (
     NotificationSettingsResponse,
+    PinListRequest,
+    PinListResponse,
+    PinRef,
     UserPreferences,
     UserProfileResponse,
     UserUpdateRequest,
@@ -34,6 +38,11 @@ from app.schemas.notifications import (
     NotificationListResponse,
     NotificationResponse,
 )
+from app.schemas.organizations import (
+    InvitationAcceptResponse,
+    OrganizationSummary,
+    PendingUserInvitationResponse,
+)
 from app.schemas.pull_requests import (
     MyPullRequestsResponse,
     PullRequestSummaryResponse,
@@ -42,6 +51,11 @@ from app.schemas.pull_requests import (
 from app.services.admin_service import get_active_break_glass_for_actor
 from app.services.contribution_activity import list_user_contribution_activity
 from app.services.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailure
+from app.services.invitation_service import (
+    accept_invitation_by_id,
+    decline_invitation_by_id,
+    list_pending_invitations_for_user,
+)
 from app.services.notification_service import (
     get_unread_count,
     list_notifications,
@@ -51,9 +65,11 @@ from app.services.pull_request_service import MyPullRequestFilter, list_my_pull_
 from app.services.repository_service import get_repository_access_for_actor
 from app.services.user_settings import (
     get_notification_settings,
+    get_user_pins,
     get_user_preferences,
     get_user_profile,
     update_notification_settings,
+    update_user_pins,
     update_user_preferences,
     update_user_profile,
 )
@@ -214,6 +230,31 @@ async def put_preferences(
     return await update_user_preferences(session, user=identity.user, preferences=preferences)
 
 
+@router.get("/pins", response_model=PinListResponse)
+async def get_pins(
+    identity: SessionIdentity = Depends(get_current_identity),
+) -> PinListResponse:
+    raw = get_user_pins(identity.user)
+    return PinListResponse(items=[PinRef(**p) for p in raw])
+
+
+@router.put("/pins", response_model=PinListResponse)
+async def put_pins(
+    payload: PinListRequest,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+) -> PinListResponse:
+    pin_dicts = [p.model_dump() for p in payload.items]
+    try:
+        raw = await update_user_pins(session, user=identity.user, pins=pin_dicts)
+    except ValidationFailure as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    return PinListResponse(items=[PinRef(**p) for p in raw])
+
+
 @router.get("/notification-settings", response_model=NotificationSettingsResponse)
 async def get_notification_settings_route(
     identity: SessionIdentity = Depends(get_current_identity),
@@ -286,6 +327,103 @@ async def mark_notifications_read_route(
     marked = await mark_notifications_read(session, user_id=identity.user.id, ids=payload.ids)
     await session.commit()
     return MarkReadResponse(marked=marked)
+
+
+# ---------------------------------------------------------------------------
+# Pending organization invitations for the signed-in user
+# ---------------------------------------------------------------------------
+
+
+@router.get("/invitations", response_model=list[PendingUserInvitationResponse])
+async def list_my_invitations_route(
+    identity: SessionIdentity = Depends(get_current_identity),
+    session: AsyncSession = Depends(get_session),
+) -> list[PendingUserInvitationResponse]:
+    invitations = await list_pending_invitations_for_user(session, user=identity.user)
+    return [
+        PendingUserInvitationResponse(
+            id=inv.id,
+            organization_id=inv.organization_id,
+            organization_slug=inv.organization.slug,
+            organization_display_name=inv.organization.display_name,
+            role=inv.role,
+            invited_by_name=(
+                inv.invited_by_user.display_name if inv.invited_by_user is not None else None
+            ),
+            created_at=inv.created_at,
+            expires_at=inv.expires_at,
+        )
+        for inv in invitations
+    ]
+
+
+@router.post("/invitations/{invitation_id}/accept", response_model=InvitationAcceptResponse)
+async def accept_my_invitation_route(
+    invitation_id: UUID,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> InvitationAcceptResponse:
+    try:
+        invitation, _membership = await accept_invitation_by_id(
+            session,
+            invitation_id=invitation_id,
+            user=identity.user,
+            request_id=request_id,
+        )
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ForbiddenError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ConflictError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    org = invitation.organization
+    return InvitationAcceptResponse(
+        organization=OrganizationSummary(
+            id=org.id,
+            slug=org.slug,
+            display_name=org.display_name,
+            description=org.description,
+            created_at=org.created_at,
+            updated_at=org.updated_at,
+            viewer_role=OrganizationRole(invitation.role),
+            can_manage=invitation.role in {"owner", "admin"},
+        ),
+        role=invitation.role,
+    )
+
+
+@router.post(
+    "/invitations/{invitation_id}/decline",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
+async def decline_my_invitation_route(
+    invitation_id: UUID,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    request_id: str | None = Depends(get_request_id),
+) -> None:
+    try:
+        await decline_invitation_by_id(
+            session,
+            invitation_id=invitation_id,
+            user=identity.user,
+            request_id=request_id,
+        )
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ForbiddenError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ConflictError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------

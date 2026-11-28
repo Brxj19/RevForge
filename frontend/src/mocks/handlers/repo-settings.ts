@@ -78,6 +78,38 @@ export const repoSettingsHandlers = [
     return HttpResponse.json(REPO_PERMISSIONS);
   }),
 
+  // PUT /organizations/:org/repositories/:repo/permissions
+  http.put(`${R}/permissions`, async ({ request, params }) => {
+    const csrf = csrfFailure(request);
+    if (csrf) return csrf;
+    const denied = requireAdmin(params);
+    if (denied) return denied;
+    const body = (await request.json()) as {
+      user: string;
+      role: "read" | "write" | "admin";
+    };
+    return HttpResponse.json({
+      id: `perm-${Date.now()}`,
+      repository_id: `repo-${String(params.repo)}`,
+      user_id: `u-${body.user}`,
+      role: body.role,
+      granted_by_user_id: "u-admin",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      user_email: body.user,
+      user_display_name: body.user,
+    });
+  }),
+
+  // DELETE /organizations/:org/repositories/:repo/permissions/:userId
+  http.delete(`${R}/permissions/:userId`, ({ request, params }) => {
+    const csrf = csrfFailure(request);
+    if (csrf) return csrf;
+    const denied = requireAdmin(params);
+    if (denied) return denied;
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   // PATCH /organizations/:org/repositories/:repo/transport — API-GAP: transport-toggle
   http.patch(`${R}/transport`, async ({ request, params }) => {
     const csrf = csrfFailure(request);

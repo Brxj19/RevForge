@@ -340,6 +340,66 @@
   color: var(--muted);
 }
 
+/* Invitation accept page (/invitations/:token) */
+.invitePageWrap {
+  max-width: 520px;
+  margin: 32px auto 0;
+}
+
+.invitePageHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.invitePageTitleWrap {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.invitePageBody {
+  display: grid;
+  gap: 14px;
+}
+
+.inviteLead {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.inviteDesc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.inviteMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.inviteMetaRow > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.invitePageActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
 @media (max-width: 860px) {
   .content {
     max-width: none;

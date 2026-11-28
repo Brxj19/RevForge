@@ -16,7 +16,7 @@ export const settingsApi = {
     request<UserProfile>("/me/profile", { method: "PATCH", json: data, csrf }),
 
   // SSH keys
-  listSshKeys: () => request<{ items: SshPublicKey[] }>("/me/ssh-keys"),
+  listSshKeys: () => request<SshPublicKey[]>("/me/ssh-keys"),
   addSshKey: (
     data: { label: string; public_key: string },
     csrf: string | null,
@@ -35,7 +35,7 @@ export const settingsApi = {
     }),
 
   // Access tokens
-  listTokens: () => request<{ items: PersonalAccessToken[] }>("/me/tokens"),
+  listTokens: () => request<PersonalAccessToken[]>("/me/tokens"),
   createToken: (
     data: {
       name: string;
@@ -53,7 +53,7 @@ export const settingsApi = {
     request<undefined>(path`/me/tokens/${id}`, { method: "DELETE", csrf }),
 
   // Sessions
-  listSessions: () => request<{ items: UserSessionInfo[] }>("/sessions"),
+  listSessions: () => request<UserSessionInfo[]>("/sessions"),
   revokeOtherSessions: (csrf: string | null) =>
     request<undefined>("/sessions/revoke-others", { method: "POST", csrf }),
   revokeSession: (id: string, csrf: string | null) =>

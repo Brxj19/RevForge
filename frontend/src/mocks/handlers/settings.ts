@@ -62,7 +62,7 @@ export const settingsHandlers = [
   // API-GAP: phase-4a-settings — GET /me/ssh-keys
   http.get(`${API}/me/ssh-keys`, () => {
     if (!db.session) return unauthorized();
-    return HttpResponse.json({ items: sshKeys });
+    return HttpResponse.json(sshKeys);
   }),
 
   // API-GAP: phase-4a-settings — POST /me/ssh-keys
@@ -123,7 +123,7 @@ export const settingsHandlers = [
         ? (ORG_NAMES[t.organization_id] ?? null)
         : null,
     }));
-    return HttpResponse.json({ items: withOrg });
+    return HttpResponse.json(withOrg);
   }),
 
   // API-GAP: phase-4a-settings — POST /me/tokens
@@ -171,7 +171,7 @@ export const settingsHandlers = [
   // API-GAP: phase-4a-settings — GET /sessions
   http.get(`${API}/sessions`, () => {
     if (!db.session) return unauthorized();
-    return HttpResponse.json({ items: SESSIONS });
+    return HttpResponse.json(SESSIONS);
   }),
 
   // API-GAP: phase-4a-settings — POST /sessions/revoke-others

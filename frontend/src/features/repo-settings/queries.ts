@@ -111,6 +111,21 @@ export function useUpdateTransport(org: () => string, repo: () => string) {
   }));
 }
 
+export function useUpsertPermission(org: () => string, repo: () => string) {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: (data: { user: string; role: "read" | "write" | "admin" }) =>
+      reposApi.updatePermission(org(), repo(), data, auth.csrf()),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: qk.repoPermissions(org(), repo()),
+      });
+      showToast({ message: "Access granted", tone: "ok" });
+    },
+  }));
+}
+
 export function useRevokePermission(org: () => string, repo: () => string) {
   const auth = useAuth();
   const queryClient = useQueryClient();

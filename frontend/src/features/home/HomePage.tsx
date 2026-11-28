@@ -1,27 +1,31 @@
-import { createQuery } from "@tanstack/solid-query";
-import { A } from "@solidjs/router";
+import {
+  createMutation,
+  createQuery,
+  useQueryClient,
+} from "@tanstack/solid-query";
+import { A, useNavigate } from "@solidjs/router";
 import { createMemo, For, Match, Show, Switch } from "solid-js";
 import { useAuth } from "~/app/auth";
 import { ActivityFeedItem } from "~/features/activity";
-import { orgsApi, searchApi } from "~/lib/api";
+import { ApiError, meApi, orgsApi, searchApi } from "~/lib/api";
 import { absoluteTime, shortAge } from "~/lib/format";
 import { qk } from "~/lib/query-keys";
 import { AvatarStack } from "~/ui/Avatar";
-import { ButtonLink } from "~/ui/Button";
+import { Button, ButtonLink } from "~/ui/Button";
 import { Card, CardBody, CardHeader } from "~/ui/Card";
-import { CopyLine } from "~/ui/CopyButton";
 import { EmptyState, ErrorState } from "~/ui/EmptyState";
 import { Heatmap } from "~/ui/Heatmap";
 import { Pill, type PillTone } from "~/ui/Pill";
-import { Progress } from "~/ui/Progress";
 import { Skeleton, SkeletonText } from "~/ui/Skeleton";
 import { Sparkline } from "~/ui/Sparkline";
+import { showToast } from "~/ui/Toast";
 import { Icon, type IconName } from "~/ui/icons";
 import { Pane, Panes, WsBody, Workspace } from "~/ui/WorkspaceLayout";
 import {
   createAttentionQuery,
   createContributionsQuery,
   createHomeActivityQuery,
+  createMyInvitationsQuery,
 } from "./queries";
 import styles from "./home.module.css";
 
@@ -58,39 +62,103 @@ const STATE_TONE: Record<string, PillTone> = {
   archived: "neutral",
 };
 
-const FALLBACK_PEOPLE = [
-  { name: "Brxj19" },
-  { name: "Tatwa Prasad" },
-  { name: "Bhuvnesh Kumar" },
-  { name: "Kushwah Dheeraj" },
-  { name: "Akhil Goyal" },
-];
+function readLastOrg(): string | null {
+  try {
+    return localStorage.getItem("revforge.lastOrg");
+  } catch {
+    return null;
+  }
+}
 
 /** Signed-in home page (prototype pageHome, DESIGN.md §2.2 & §8). */
 export default function HomePage() {
   const auth = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const name = () => auth.user()?.display_name ?? "there";
   const attention = createAttentionQuery();
+  const myInvitations = createMyInvitationsQuery();
   const contributions = createContributionsQuery();
   const activityFeed = createHomeActivityQuery();
+
+  const acceptInvite = createMutation(() => ({
+    mutationFn: (invitationId: string) =>
+      meApi.acceptInvitation(invitationId, auth.csrf()),
+    onSuccess: (res) => {
+      try {
+        localStorage.setItem("revforge.lastOrg", res.organization.slug);
+      } catch {
+        // ignore storage errors
+      }
+      void queryClient.invalidateQueries({ queryKey: qk.myInvitations });
+      void queryClient.invalidateQueries({ queryKey: qk.orgs });
+      void queryClient.invalidateQueries({ queryKey: qk.allRepos });
+      void queryClient.invalidateQueries({ queryKey: qk.notifications });
+      showToast({
+        message: `Joined ${res.organization.display_name}`,
+        tone: "ok",
+      });
+      navigate(`/org/${encodeURIComponent(res.organization.slug)}`);
+    },
+    onError: (err: unknown) => {
+      showToast({
+        message:
+          err instanceof ApiError
+            ? err.message
+            : "Could not accept invitation.",
+        tone: "err",
+      });
+    },
+  }));
+
+  const declineInvite = createMutation(() => ({
+    mutationFn: (invitationId: string) =>
+      meApi.declineInvitation(invitationId, auth.csrf()),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.myInvitations });
+      void queryClient.invalidateQueries({ queryKey: qk.notifications });
+      showToast({ message: "Invitation declined", tone: "info" });
+    },
+    onError: (err: unknown) => {
+      showToast({
+        message:
+          err instanceof ApiError
+            ? err.message
+            : "Could not decline invitation.",
+        tone: "err",
+      });
+    },
+  }));
+
+  const pendingInvites = () =>
+    !myInvitations.isPending ? (myInvitations.data ?? []) : [];
 
   const orgs = createQuery(() => ({
     queryKey: qk.orgs,
     queryFn: () => orgsApi.list(),
     staleTime: 60_000,
   }));
-  const orgSlug = () => (!orgs.isPending && orgs.data?.[0]?.slug) || "sigma";
+
+  const activeOrg = createMemo(() => {
+    const list = !orgs.isPending ? (orgs.data ?? []) : [];
+    if (list.length === 0) return undefined;
+    const saved = readLastOrg();
+    return (saved ? list.find((o) => o.slug === saved) : undefined) ?? list[0];
+  });
+  const orgSlug = () => activeOrg()?.slug;
+  const isOrgOwner = () => activeOrg()?.viewer_role === "owner";
 
   const orgMembers = createQuery(() => ({
-    queryKey: qk.orgMembers(orgSlug(), 1),
-    queryFn: () => orgsApi.listMembers(orgSlug(), 1),
-    enabled: !orgs.isPending && Boolean(orgs.data?.[0]?.slug),
+    queryKey: qk.orgMembers(orgSlug() ?? "", 1),
+    queryFn: () => orgsApi.listMembers(orgSlug() ?? "", 1),
+    enabled: Boolean(orgSlug()),
     staleTime: 60_000,
   }));
 
   const repos = createQuery(() => ({
-    queryKey: ["home", "repos", orgSlug()],
+    queryKey: ["home", "repos", orgSlug() ?? "all"],
     queryFn: () => searchApi.repositories({ sort: "updated", org: orgSlug() }),
+    enabled: !orgs.isPending,
     staleTime: 60_000,
   }));
 
@@ -101,21 +169,11 @@ export default function HomePage() {
   const attentionCount = () => attentionItems().length;
 
   const people = createMemo(() => {
-    if (!orgMembers.isPending) {
-      const list = orgMembers.data?.items;
-      if (list && list.length > 0) {
-        return list.map((m) => ({ name: m.user_display_name }));
-      }
-    }
-    return FALLBACK_PEOPLE;
+    if (orgMembers.isPending) return [];
+    return (orgMembers.data?.items ?? []).map((m) => ({
+      name: m.user_display_name,
+    }));
   });
-
-  const primaryCloneRepo = () => {
-    const first = topRepos()[0];
-    return first
-      ? `${first.org_slug}/${first.repo_slug}`
-      : `${orgSlug()}/sigma-reckitt`;
-  };
 
   return (
     <Workspace>
@@ -256,7 +314,11 @@ export default function HomePage() {
 
             <Card as="section">
               <CardHeader>
-                <h2 class="h2">Activity across {orgSlug()}</h2>
+                <h2 class="h2">
+                  <Show when={orgSlug()} fallback="Recent activity">
+                    {(slug) => <>Activity across {slug()}</>}
+                  </Show>
+                </h2>
                 <ButtonLink variant="ghost" size="sm" href="/activity">
                   Open log
                 </ButtonLink>
@@ -292,7 +354,9 @@ export default function HomePage() {
                   {(feed) => (
                     <div>
                       <For each={feed().items.slice(0, 6)}>
-                        {(e) => <ActivityFeedItem event={e} org={orgSlug()} />}
+                        {(e) => (
+                          <ActivityFeedItem event={e} org={orgSlug() ?? ""} />
+                        )}
                       </For>
                     </div>
                   )}
@@ -333,6 +397,69 @@ export default function HomePage() {
           </Pane>
 
           <Pane as="aside" class={styles.stack}>
+            <Show when={pendingInvites().length > 0}>
+              <Card as="section">
+                <CardHeader>
+                  <h2 class="h2">Pending invitations</h2>
+                  <Pill tone="blue">{pendingInvites().length}</Pill>
+                </CardHeader>
+                <div class={styles.inviteList}>
+                  <For each={pendingInvites()}>
+                    {(inv) => (
+                      <div class={styles.inviteRow}>
+                        <div>
+                          <div class={styles.inviteHead}>
+                            <span class={styles.inviteOrg}>
+                              {inv.organization_display_name}
+                            </span>
+                            <Pill>{inv.role}</Pill>
+                          </div>
+                          <div class={styles.inviteSub}>
+                            <Show
+                              when={inv.invited_by_name}
+                              fallback={`@${inv.organization_slug}`}
+                            >
+                              {(by) => (
+                                <>
+                                  Invited by {by()} · @{inv.organization_slug}
+                                </>
+                              )}
+                            </Show>
+                          </div>
+                        </div>
+                        <div class={styles.inviteBtns}>
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            loading={
+                              acceptInvite.isPending &&
+                              acceptInvite.variables === inv.id
+                            }
+                            disabled={declineInvite.isPending}
+                            onClick={() => acceptInvite.mutate(inv.id)}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            loading={
+                              declineInvite.isPending &&
+                              declineInvite.variables === inv.id
+                            }
+                            disabled={acceptInvite.isPending}
+                            onClick={() => declineInvite.mutate(inv.id)}
+                          >
+                            Decline
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Card>
+            </Show>
+
             <Card as="section">
               <CardHeader>
                 <h2 class="h2">Needs attention</h2>
@@ -389,75 +516,64 @@ export default function HomePage() {
               </Switch>
             </Card>
 
-            <Card as="section">
-              <CardHeader>
-                <h2 class="h2">Set up this machine</h2>
-                <span class="muted" style={{ "font-size": "12px" }}>
-                  2 of 3
-                </span>
-              </CardHeader>
-              <CardBody>
-                <div class={styles.setup}>
-                  <Progress value={66} label="Setup progress" />
-                  <div class={styles.checkRow}>
-                    <span class={styles.checkLabel}>
-                      <span class={styles.checkDone}>
-                        <Icon name="check" size={15} />
-                      </span>
-                      Account created
-                    </span>
-                  </div>
-                  <div class={styles.checkRow}>
-                    <span class={styles.checkLabel}>
-                      <span class={styles.checkDone}>
-                        <Icon name="check" size={15} />
-                      </span>
-                      SSH key added
-                    </span>
-                    <span class="muted" style={{ "font-size": "12px" }}>
-                      MacBook Pro
-                    </span>
-                  </div>
-                  <div class={styles.checkRow}>
-                    <span class={`${styles.checkLabel} muted`}>
-                      <Icon name="key" size={15} />
-                      Access token for HTTPS
-                    </span>
-                    <ButtonLink size="sm" href="/settings/tokens">
-                      Create
+            <Show when={activeOrg()}>
+              {(org) => (
+                <Card as="section">
+                  <CardHeader>
+                    <h2 class="h2">People in {org().slug}</h2>
+                    <ButtonLink
+                      variant="ghost"
+                      size="sm"
+                      href={`/org/${encodeURIComponent(org().slug)}/members`}
+                    >
+                      Members
                     </ButtonLink>
-                  </div>
-                  <CopyLine
-                    text={`hg clone ssh://hg@revforge.sigma.dev/${primaryCloneRepo()}`}
-                    label="Copy clone command"
-                  />
-                </div>
-              </CardBody>
-            </Card>
-
-            <Card as="section">
-              <CardHeader>
-                <h2 class="h2">People in {orgSlug()}</h2>
-                <ButtonLink
-                  variant="ghost"
-                  size="sm"
-                  href={`/org/${encodeURIComponent(orgSlug())}/members`}
-                >
-                  Members
-                </ButtonLink>
-              </CardHeader>
-              <CardBody>
-                <div class={styles.between}>
-                  <AvatarStack people={people()} size={30} />
-                  <ButtonLink
-                    size="sm"
-                    href={`/org/${encodeURIComponent(orgSlug())}/members`}
-                  >
-                    Invite
-                  </ButtonLink>
-                </div>
-              </CardBody>
-            </Card>
+                  </CardHeader>
+                  <CardBody>
+                    <Switch>
+                      <Match when={orgMembers.isPending}>
+                        <Skeleton height={30} radius={6} />
+                      </Match>
+                      <Match when={orgMembers.isError}>
+                        <ErrorState
+                          error={orgMembers.error}
+                          what="organization members"
+                          size="inline"
+                          compact
+                          level={3}
+                          onRetry={() => void orgMembers.refetch()}
+                        />
+                      </Match>
+                      <Match when={true}>
+                        <div class={styles.between}>
+                          <Show
+                            when={people().length > 0}
+                            fallback={
+                              <span
+                                class="muted"
+                                style={{ "font-size": "13px" }}
+                              >
+                                No members yet
+                              </span>
+                            }
+                          >
+                            <AvatarStack people={people()} size={30} />
+                          </Show>
+                          <Show when={isOrgOwner()}>
+                            <ButtonLink
+                              size="sm"
+                              href={`/org/${encodeURIComponent(org().slug)}/members`}
+                            >
+                              Invite
+                            </ButtonLink>
+                          </Show>
+                        </div>
+                      </Match>
+                    </Switch>
+                  </CardBody>
+                </Card>
+              )}
+            </Show>
           </Pane>
         </Panes>
       </WsBody>

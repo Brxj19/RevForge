@@ -132,9 +132,7 @@ describe("SshKeysPage", () => {
   it("shows empty state when no keys exist", async () => {
     const { http, HttpResponse } = await import("msw");
     const { server } = await import("~/mocks/server");
-    server.use(
-      http.get("*/api/v1/me/ssh-keys", () => HttpResponse.json({ items: [] })),
-    );
+    server.use(http.get("*/api/v1/me/ssh-keys", () => HttpResponse.json([])));
     renderApp("/settings/ssh-keys");
     expect(await screen.findByText("No SSH keys yet")).toBeInTheDocument();
   });
@@ -192,9 +190,7 @@ describe("TokensPage", () => {
   it("shows empty state when no tokens exist", async () => {
     const { http, HttpResponse } = await import("msw");
     const { server } = await import("~/mocks/server");
-    server.use(
-      http.get("*/api/v1/me/tokens", () => HttpResponse.json({ items: [] })),
-    );
+    server.use(http.get("*/api/v1/me/tokens", () => HttpResponse.json([])));
     renderApp("/settings/tokens");
     expect(await screen.findByText("No access tokens yet")).toBeInTheDocument();
   });
@@ -227,6 +223,76 @@ describe("SessionsPage", () => {
         name: "Sign out other sessions?",
       }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("Settings pages handle plain-array API responses", () => {
+  it("SSH keys page renders when backend returns a plain array", async () => {
+    const { http, HttpResponse } = await import("msw");
+    const { server } = await import("~/mocks/server");
+    server.use(
+      http.get("*/api/v1/me/ssh-keys", () =>
+        HttpResponse.json([
+          {
+            id: "k1",
+            label: "Test key",
+            key_type: "ed25519",
+            fingerprint_sha256: "SHA256:abc",
+            created_at: new Date().toISOString(),
+            last_used_at: null,
+            revoked_at: null,
+          },
+        ]),
+      ),
+    );
+    renderApp("/settings/ssh-keys");
+    expect(await screen.findByText("Test key")).toBeInTheDocument();
+  });
+
+  it("tokens page renders when backend returns a plain array", async () => {
+    const { http, HttpResponse } = await import("msw");
+    const { server } = await import("~/mocks/server");
+    server.use(
+      http.get("*/api/v1/me/tokens", () =>
+        HttpResponse.json([
+          {
+            id: "t1",
+            name: "Regression token",
+            token_prefix: "rf_…x",
+            capability: "read",
+            organization_id: null,
+            repository_id: null,
+            expires_at: null,
+            created_at: new Date().toISOString(),
+            last_used_at: null,
+            revoked_at: null,
+          },
+        ]),
+      ),
+    );
+    renderApp("/settings/tokens");
+    expect(await screen.findByText("Regression token")).toBeInTheDocument();
+  });
+
+  it("sessions page renders when backend returns a plain array", async () => {
+    const { http, HttpResponse } = await import("msw");
+    const { server } = await import("~/mocks/server");
+    server.use(
+      http.get("*/api/v1/sessions", () =>
+        HttpResponse.json([
+          {
+            id: "s1",
+            created_at: new Date().toISOString(),
+            expires_at: null,
+            revoked_at: null,
+            last_seen_at: new Date().toISOString(),
+            is_current: true,
+          },
+        ]),
+      ),
+    );
+    renderApp("/settings/sessions");
+    expect(await screen.findByText("This device")).toBeInTheDocument();
   });
 });
 

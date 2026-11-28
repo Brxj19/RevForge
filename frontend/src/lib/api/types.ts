@@ -1103,3 +1103,27 @@ export interface StartBreakGlassRequest {
   reason: string;
   minutes: 15 | 60 | 240;
 }
+
+export interface InvitationPreview {
+  organization_slug: string;
+  organization_display_name: string;
+  organization_description: string | null;
+  role: string;
+  status: "pending" | "accepted" | "expired" | "revoked" | "declined" | string;
+  invited_by_name: string | null;
+  email_hint: string;
+  email_matches: boolean | null;
+  already_member: boolean;
+  expires_at: string;
+}
+
+export interface PendingUserInvitation {
+  id: string;
+  organization_id: string;
+  organization_slug: string;
+  organization_display_name: string;
+  role: string;
+  invited_by_name: string | null;
+  created_at: string;
+  expires_at: string;
+}

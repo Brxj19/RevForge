@@ -111,7 +111,7 @@ const SshKeysPage: Component = () => {
               </Button>
             </CardHeader>
             <Show
-              when={keys.data && keys.data.items.length > 0}
+              when={keys.data && keys.data.length > 0}
               fallback={
                 <EmptyState
                   art="no-ssh-keys"
@@ -125,7 +125,7 @@ const SshKeysPage: Component = () => {
               }
             >
               <div>
-                <For each={keys.data?.items}>
+                <For each={keys.data}>
                   {(key) => (
                     <div
                       class={styles.keyRow}

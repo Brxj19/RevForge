@@ -88,7 +88,7 @@ export function TopBar(props: TopBarProps) {
           icon: "org",
           onSelect: () => navigate("/orgs/new"),
         },
-        ...(current.slug()
+        ...(current.slug() && current.org()?.viewer_role === "owner"
           ? [
               {
                 label: "Invite member",

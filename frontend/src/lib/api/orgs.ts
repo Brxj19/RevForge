@@ -1,6 +1,7 @@
 import { path, request, withQuery } from "./client";
 import type {
   Invitation,
+  InvitationPreview,
   OrganizationCreateRequest,
   OrganizationDetail,
   OrganizationSummary,
@@ -66,8 +67,12 @@ export const orgsApi = {
       method: "DELETE",
       csrf,
     }),
-  listInvitations: (org: string) =>
-    request<{ items: Invitation[] }>(path`/organizations/${org}/invitations`),
+  listInvitations: async (org: string): Promise<Invitation[]> => {
+    const raw = await request<Invitation[] | { items: Invitation[] }>(
+      path`/organizations/${org}/invitations`,
+    );
+    return Array.isArray(raw) ? raw : (raw?.items ?? []);
+  },
   createInvitation: (
     org: string,
     data: { email: string; role: string },
@@ -88,11 +93,18 @@ export const orgsApi = {
       path`/organizations/${org}/invitations/${invitationId}`,
       { method: "DELETE", csrf },
     ),
+  getInvitation: (token: string) =>
+    request<InvitationPreview>(path`/invitations/${token}`),
   acceptInvitation: (token: string, csrf: string | null) =>
     request<{ organization: OrganizationSummary; role: string }>(
       path`/invitations/${token}/accept`,
       { method: "POST", csrf },
     ),
+  declineInvitation: (token: string, csrf: string | null) =>
+    request<undefined>(path`/invitations/${token}/decline`, {
+      method: "POST",
+      csrf,
+    }),
   checkRepoSlug: (org: string, slug: string) =>
     request<SlugCheckResponse>(
       withQuery(path`/organizations/${org}/repositories/check-slug`, {

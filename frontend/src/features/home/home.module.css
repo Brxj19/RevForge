@@ -135,24 +135,36 @@
   color: var(--muted);
 }
 
-/* Setup checklist (prototype Set up this machine). */
-.setup {
+/* Pending organization invitations card in right sidebar */
+.inviteList {
   display: grid;
-  gap: 12px;
 }
-.checkRow {
+.inviteRow {
+  display: grid;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.inviteRow:last-child {
+  border-bottom: 0;
+}
+.inviteHead {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 13.5px;
 }
-.checkLabel {
+.inviteOrg {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.inviteSub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.inviteBtns {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.checkDone {
-  color: var(--green);
-  display: grid;
 }

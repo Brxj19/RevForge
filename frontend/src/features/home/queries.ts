@@ -12,6 +12,14 @@ export function createAttentionQuery() {
   }));
 }
 
+export function createMyInvitationsQuery() {
+  return createQuery(() => ({
+    queryKey: qk.myInvitations,
+    queryFn: () => meApi.invitations(),
+    staleTime: 30_000,
+  }));
+}
+
 export function createContributionsQuery() {
   return createQuery(() => ({
     queryKey: qk.contributions,

@@ -66,16 +66,37 @@
   border-radius: 0 0 var(--r-card) var(--r-card);
 }
 
+/* Default branch selector (matches prototype max-width: 320px dropdown) */
+.branchSelectWrap {
+  max-width: 320px;
+}
+
+.branchSelect {
+  width: 100%;
+}
+
+.branchDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 /* Visibility radio cards (prototype .vis-opt) */
 .visOpt {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: var(--raised);
   cursor: pointer;
-  transition: border-color 120ms ease-out;
+  transition:
+    border-color 120ms ease-out,
+    box-shadow 120ms ease-out;
 }
 
 .visOpt:hover {
@@ -84,7 +105,18 @@
 
 .visOpt[data-active] {
   border-color: var(--accent);
-  background: var(--accent-bg);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.visHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.visHint > svg {
+  flex-shrink: 0;
 }
 
 .visOptIcon {

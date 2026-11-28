@@ -1,10 +1,19 @@
-import { createEffect, createSignal, For, on, type Component } from "solid-js";
-import { useRepo } from "~/features/repo";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  type Component,
+} from "solid-js";
+import { createRefsQuery, useRepo } from "~/features/repo";
+import { loaded } from "~/lib/query";
 import { Button } from "~/ui/Button";
 import { Card, CardHeader } from "~/ui/Card";
 import { Field, Input, InputGroup, Textarea } from "~/ui/Field";
 import { Icon } from "~/ui/icons";
 import { Pill } from "~/ui/Pill";
+import { Select, type SelectOption } from "~/ui/Select";
 import { useUpdateRepo } from "./queries";
 import styles from "./repo-settings.module.css";
 
@@ -40,11 +49,25 @@ const VISIBILITY_OPTIONS: {
 const RepoGeneralPage: Component = () => {
   const ctx = useRepo();
   const updateRepo = useUpdateRepo(ctx.org, ctx.repo);
+  const refsQuery = createRefsQuery(
+    ctx.org,
+    ctx.repo,
+    () => ctx.detail().is_browsable,
+  );
 
   const [displayName, setDisplayName] = createSignal("");
   const [slug, setSlug] = createSignal("");
   const [description, setDescription] = createSignal("");
+  const [defaultBranch, setDefaultBranch] = createSignal("default");
   const [visibility, setVisibility] = createSignal<Visibility>("private");
+
+  const branchOptions = createMemo<SelectOption[]>(() => {
+    const branches = loaded(refsQuery)?.branches ?? [];
+    const names = Array.from(
+      new Set(["default", ...branches.map((b) => b.name)]),
+    );
+    return names.map((name) => ({ value: name, label: name }));
+  });
 
   // Sync form from server data
   createEffect(
@@ -126,19 +149,16 @@ const RepoGeneralPage: Component = () => {
           />
         </Field>
         <Field label="Default branch" kind="group">
-          <Button variant="secondary" size="sm" disabled>
-            <span
-              style={{
-                width: "8px",
-                height: "8px",
-                "border-radius": "50%",
-                background: "var(--accent)",
-                display: "inline-block",
-                "margin-right": "6px",
-              }}
+          <div class={styles.branchSelectWrap}>
+            <Select
+              label="Default branch"
+              class={styles.branchSelect}
+              lead={<i class={styles.branchDot} aria-hidden="true" />}
+              options={branchOptions()}
+              value={defaultBranch()}
+              onChange={setDefaultBranch}
             />
-            default
-          </Button>
+          </div>
         </Field>
         <Field label="Visibility" kind="group">
           <For each={VISIBILITY_OPTIONS}>
@@ -180,10 +200,12 @@ const RepoGeneralPage: Component = () => {
               );
             }}
           </For>
-          <span class="hint" style={{ "margin-top": "6px" }}>
-            <Icon name="info" size={12} /> Making a repository public needs an
-            organization owner or admin. Repository admins can switch between
-            internal and private.
+          <span class={`hint ${styles.visHint}`}>
+            <Icon name="info" size={12} />
+            <span>
+              Making a repository public needs an organization owner or admin.
+              Repository admins can switch between internal and private.
+            </span>
           </span>
         </Field>
       </div>

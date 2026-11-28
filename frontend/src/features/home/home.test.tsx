@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { screen } from "@solidjs/testing-library";
+import { screen, waitFor } from "@solidjs/testing-library";
+import { http, HttpResponse } from "msw";
+import { server } from "~/mocks/server";
 import { renderWithProviders, fixtureUsers } from "~/test/render";
 import HomePage from "./HomePage";
 
 // MSW handlers serve the fixture data for /me/attention, /me/contributions,
-// /search/repositories, and /activity.
+// /search/repositories, /organizations, /organizations/:org/members, and /activity.
 
 describe("HomePage", () => {
   it("shows greeting with user name", async () => {
@@ -54,30 +56,84 @@ describe("HomePage", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders attention sidebar", async () => {
+  it("renders attention sidebar and omits 'Set up this machine'", async () => {
     renderWithProviders(() => <HomePage />, {
       user: fixtureUsers.brxj19,
       route: "/",
     });
     expect(await screen.findByText("Needs attention")).toBeInTheDocument();
+    expect(screen.queryByText("Set up this machine")).not.toBeInTheDocument();
   });
 
-  it("shows setup checklist", async () => {
-    renderWithProviders(() => <HomePage />, {
-      user: fixtureUsers.brxj19,
-      route: "/",
-    });
-    expect(await screen.findByText("Set up this machine")).toBeInTheDocument();
-    expect(screen.getByText("Account created")).toBeInTheDocument();
-    expect(screen.getByText("SSH key added")).toBeInTheDocument();
-  });
-
-  it("renders people section with avatar stack", async () => {
+  it("renders dynamic organization members and Invite button for org owners", async () => {
     renderWithProviders(() => <HomePage />, {
       user: fixtureUsers.brxj19,
       route: "/",
     });
     expect(await screen.findByText(/People in sigma/)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Invite" })).toHaveAttribute(
+      "href",
+      "/org/sigma/members",
+    );
+  });
+
+  it("hides organization members card when the user has no organizations", async () => {
+    server.use(http.get("*/api/v1/organizations", () => HttpResponse.json([])));
+    renderWithProviders(() => <HomePage />, {
+      user: fixtureUsers.brxj19,
+      route: "/",
+    });
+    expect(await screen.findByText("Recent activity")).toBeInTheDocument();
+    expect(screen.queryByText(/People in /)).not.toBeInTheDocument();
+  });
+
+  it("shows dynamic members without Invite button for non-owner org members", async () => {
+    server.use(
+      http.get("*/api/v1/organizations", () =>
+        HttpResponse.json([
+          {
+            id: "org-beta",
+            slug: "beta-team",
+            display_name: "Beta Team",
+            description: null,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            viewer_role: "member",
+            can_manage: false,
+          },
+        ]),
+      ),
+      http.get("*/api/v1/organizations/beta-team/members", () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: "m1",
+              organization_id: "org-beta",
+              user_id: "u1",
+              role: "owner",
+              created_at: "2026-01-01T00:00:00Z",
+              updated_at: "2026-01-01T00:00:00Z",
+              user_email: "lead@beta.dev",
+              user_display_name: "Meera Nair",
+            },
+          ],
+          total: 1,
+          page: 1,
+          per_page: 20,
+        }),
+      ),
+    );
+    renderWithProviders(() => <HomePage />, {
+      user: fixtureUsers.tatwa,
+      route: "/",
+    });
+    expect(await screen.findByText("People in beta-team")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTitle("Meera Nair")).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByRole("link", { name: "Invite" }),
+    ).not.toBeInTheDocument();
   });
 
   it("links 'All repositories' to /repos", async () => {
@@ -96,5 +152,53 @@ describe("HomePage", () => {
     });
     const link = await screen.findByText("Open log");
     expect(link.closest("a")).toHaveAttribute("href", "/activity");
+  });
+
+  it("shows pending organization invitations on Home and accepts them inline", async () => {
+    let accepted = false;
+    server.use(
+      http.get("*/api/v1/me/invitations", () =>
+        HttpResponse.json(
+          accepted
+            ? []
+            : [
+                {
+                  id: "inv-home-1",
+                  organization_id: "org-impact",
+                  organization_slug: "impact-analytics",
+                  organization_display_name: "Impact Analytics",
+                  role: "member",
+                  invited_by_name: "Alice",
+                  created_at: "2026-01-01T00:00:00Z",
+                  expires_at: "2026-01-08T00:00:00Z",
+                },
+              ],
+        ),
+      ),
+      http.post("*/api/v1/me/invitations/inv-home-1/accept", () => {
+        accepted = true;
+        return HttpResponse.json({
+          organization: {
+            id: "org-impact",
+            slug: "impact-analytics",
+            display_name: "Impact Analytics",
+            description: null,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            viewer_role: "member",
+            can_manage: false,
+          },
+          role: "member",
+        });
+      }),
+    );
+    renderWithProviders(() => <HomePage />, {
+      user: fixtureUsers.tatwa,
+      route: "/",
+    });
+    expect(await screen.findByText("Pending invitations")).toBeInTheDocument();
+    expect(screen.getByText("Impact Analytics")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
   });
 });

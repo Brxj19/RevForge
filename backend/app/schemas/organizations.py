@@ -105,3 +105,27 @@ class InvitationCreateResponse(InvitationResponse):
 class InvitationAcceptResponse(BaseModel):
     organization: OrganizationSummary
     role: str
+
+
+class InvitationPreviewResponse(BaseModel):
+    organization_slug: str
+    organization_display_name: str
+    organization_description: str | None
+    role: str
+    status: str
+    invited_by_name: str | None
+    email_hint: str
+    email_matches: bool | None
+    already_member: bool
+    expires_at: datetime
+
+
+class PendingUserInvitationResponse(BaseModel):
+    id: UUID
+    organization_id: UUID
+    organization_slug: str
+    organization_display_name: str
+    role: str
+    invited_by_name: str | None
+    created_at: datetime
+    expires_at: datetime

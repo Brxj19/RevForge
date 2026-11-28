@@ -449,10 +449,10 @@ async def get_invitations(
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    if membership.role not in {OrganizationRole.OWNER, OrganizationRole.ADMIN}:
+    if membership.role != OrganizationRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to view invitations.",
+            detail="Only organization owners can view invitations.",
         )
 
     invitations = await list_invitations(session, organization_id=organization.id)
@@ -524,10 +524,10 @@ async def resend_invitation_route(
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    if membership.role not in {OrganizationRole.OWNER, OrganizationRole.ADMIN}:
+    if membership.role != OrganizationRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to resend invitations.",
+            detail="Only organization owners can resend invitations.",
         )
 
     try:
@@ -571,10 +571,10 @@ async def delete_invitation_route(
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    if membership.role not in {OrganizationRole.OWNER, OrganizationRole.ADMIN}:
+    if membership.role != OrganizationRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to revoke invitations.",
+            detail="Only organization owners can revoke invitations.",
         )
 
     try:

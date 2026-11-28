@@ -20,6 +20,23 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REVFORGE_REDIS_URL")
     repository_root: str = Field(default="./.local/repositories", alias="REVFORGE_REPOSITORY_ROOT")
     public_base_url: str = Field(default="http://localhost:8000", alias="REVFORGE_PUBLIC_BASE_URL")
+    frontend_base_url: str | None = Field(
+        default=None,
+        alias="REVFORGE_FRONTEND_BASE_URL",
+    )
+    email_backend: Literal["console", "smtp"] = Field(
+        default="console", alias="REVFORGE_EMAIL_BACKEND"
+    )
+    email_from: str = Field(
+        default="RevForge <no-reply@revforge.local>", alias="REVFORGE_EMAIL_FROM"
+    )
+    smtp_host: str = Field(default="localhost", alias="REVFORGE_SMTP_HOST")
+    smtp_port: int = Field(default=1025, alias="REVFORGE_SMTP_PORT")
+    smtp_username: str | None = Field(default=None, alias="REVFORGE_SMTP_USERNAME")
+    smtp_password: str | None = Field(default=None, alias="REVFORGE_SMTP_PASSWORD")
+    smtp_use_tls: bool = Field(default=False, alias="REVFORGE_SMTP_USE_TLS")
+    smtp_use_ssl: bool = Field(default=False, alias="REVFORGE_SMTP_USE_SSL")
+    smtp_timeout_seconds: float = Field(default=10.0, alias="REVFORGE_SMTP_TIMEOUT_SECONDS")
     hg_http_base_path: str = Field(default="/hg", alias="REVFORGE_HG_HTTP_BASE_PATH")
     hg_http_public_base_url: str | None = Field(
         default=None,
@@ -195,7 +212,9 @@ class Settings(BaseSettings):
             raise ValueError("Mercurial HTTP base path must start with '/'.")
         return normalized.rstrip("/") or "/"
 
-    @field_validator("public_base_url", "hg_http_public_base_url", mode="before")
+    @field_validator(
+        "public_base_url", "frontend_base_url", "hg_http_public_base_url", mode="before"
+    )
     @classmethod
     def normalize_public_urls(cls, value: str | None) -> str | None:
         if value is None:
@@ -295,11 +314,32 @@ class Settings(BaseSettings):
             ipaddress.ip_network(cleaned, strict=False)
         return value
 
+    @field_validator("email_from")
+    @classmethod
+    def validate_email_from(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned or "\r" in cleaned or "\n" in cleaned:
+            raise ValueError("REVFORGE_EMAIL_FROM must be a single-line sender address.")
+        return cleaned
+
+    @field_validator("smtp_port")
+    @classmethod
+    def validate_smtp_port(cls, value: int) -> int:
+        if value < 1 or value > 65535:
+            raise ValueError("smtp_port must be between 1 and 65535.")
+        return value
+
     @model_validator(mode="after")
     def validate_session_idle_within_ttl(self) -> Settings:
         if self.session_idle_minutes > self.session_ttl_minutes:
             raise ValueError("session_idle_minutes must not exceed session_ttl_minutes.")
+        if self.smtp_use_tls and self.smtp_use_ssl:
+            raise ValueError("smtp_use_tls and smtp_use_ssl cannot both be enabled.")
         return self
+
+    @property
+    def email_link_base_url(self) -> str:
+        return self.frontend_base_url or self.public_base_url
 
     @property
     def parsed_trusted_proxy_networks(
@@ -314,7 +354,10 @@ class Settings(BaseSettings):
         return tuple(networks)
 
     @field_validator(
-        "code_search_timeout_seconds", "history_scan_timeout_seconds", "diff_timeout_seconds"
+        "code_search_timeout_seconds",
+        "history_scan_timeout_seconds",
+        "diff_timeout_seconds",
+        "smtp_timeout_seconds",
     )
     @classmethod
     def validate_positive_float(cls, value: float) -> float:

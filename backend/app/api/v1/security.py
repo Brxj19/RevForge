@@ -27,6 +27,7 @@ from app.services.transport_credentials import (
     create_ssh_public_key,
     list_personal_access_tokens,
     list_ssh_public_keys,
+    restore_ssh_public_key,
     revoke_personal_access_token,
     revoke_ssh_public_key,
 )
@@ -163,3 +164,30 @@ async def revoke_ssh_key(
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/ssh-keys/{key_id}/restore", response_model=SshPublicKeyResponse)
+async def restore_ssh_key(
+    key_id: UUID,
+    identity: SessionIdentity = Depends(require_csrf),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    request_id: str | None = Depends(get_request_id),
+) -> SshPublicKeyResponse:
+    try:
+        key = await restore_ssh_public_key(
+            session,
+            user=identity.user,
+            key_id=key_id,
+            request_id=request_id,
+            authorized_keys_output_path=Path(settings.ssh_authorized_keys_path),
+        )
+    except NotFoundError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationFailure as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    return SshPublicKeyResponse.model_validate(key)
